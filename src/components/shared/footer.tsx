@@ -1,87 +1,52 @@
 import Link from "next/link"
 
-const footerLinks = {
-  produits: [
-    { href: "/produits", label: "Tous les produits" },
-    { href: "/produits?categorie=particuliers", label: "Particuliers" },
-    { href: "/produits?categorie=professionnel", label: "Professionnels" },
-    { href: "/produits?categorie=evenementiel", label: "Événementiel" },
-  ],
-  entreprise: [
-    { href: "/a-propos", label: "À propos" },
-    { href: "/contact", label: "Contact" },
-    { href: "/a-propos#production", label: "Notre production" },
-  ],
-  aide: [
-    { href: "/contact", label: "Service client" },
-    { href: "/a-propos#livraison", label: "Livraison" },
-    { href: "/contact", label: "Réclamation" },
-  ],
-}
-
 export function Footer() {
   return (
     <footer className="bg-[#0f172a] text-white/60">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 pb-10 border-b border-white/10">
           <div>
-            <h3 className="text-white text-base font-bold mb-2">LCG</h3>
+            <div className="flex items-center gap-2 mb-3">
+              <img src="/logo-lcg.jpeg" alt="LCG" className="h-8 w-auto brightness-0 invert" />
+              <span className="text-white font-bold text-sm">LCG</span>
+            </div>
             <p className="text-sm leading-relaxed max-w-xs">
-              La Congolaise des Glaçons — producteur et livreur de glaçons haut de gamme
-              à Brazzaville. Eau minérale, hygiène irréprochable, livraison réfrigérée.
+              La Congolaise des Glaçons<br />
+              Production et vente de glaçons à base d&apos;eau minérale.
+              Fraîcheur, pureté et professionnalisme à Brazzaville.
             </p>
           </div>
           <div>
-            <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">
-              Produits
-            </h4>
+            <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">Navigation</h4>
             <div className="space-y-2">
-              {footerLinks.produits.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="block text-sm hover:text-white transition-colors"
-                >
-                  {link.label}
-                </Link>
-              ))}
+              <Link href="/produits" className="block text-sm hover:text-white transition-colors">Nos produits</Link>
+              <Link href="/professionnels" className="block text-sm hover:text-white transition-colors">Professionnels</Link>
+              <Link href="/zones-livraison" className="block text-sm hover:text-white transition-colors">Zones de livraison</Link>
+              <Link href="/a-propos" className="block text-sm hover:text-white transition-colors">Qui sommes-nous</Link>
+              <Link href="/faq" className="block text-sm hover:text-white transition-colors">FAQ</Link>
+              <Link href="/contact" className="block text-sm hover:text-white transition-colors">Contact</Link>
+              <Link href="/panier" className="block text-sm hover:text-white transition-colors">Mon panier</Link>
             </div>
           </div>
           <div>
-            <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">
-              Entreprise
-            </h4>
-            <div className="space-y-2">
-              {footerLinks.entreprise.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="block text-sm hover:text-white transition-colors"
-                >
-                  {link.label}
-                </Link>
-              ))}
+            <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">Contact</h4>
+            <div className="space-y-2 text-sm">
+              <p>97 Rue EWO, Ouenzé — Brazzaville</p>
+              <p>République du Congo</p>
+              <p className="mt-2">Commandes par téléphone et en ligne</p>
+              <p>Production · Eau minérale · Glaçons · PET · Livraison</p>
             </div>
           </div>
           <div>
-            <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">
-              Aide
-            </h4>
-            <div className="space-y-2">
-              {footerLinks.aide.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="block text-sm hover:text-white transition-colors"
-                >
-                  {link.label}
-                </Link>
-              ))}
+            <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">Horaires</h4>
+            <div className="space-y-2 text-sm">
+              <p>Lun – Sam : 7h00 – 19h00</p>
+              <p>Dim : 8h00 – 13h00</p>
             </div>
           </div>
         </div>
         <div className="pt-6 text-center text-xs">
-          &copy; {new Date().getFullYear()} LCG — La Congolaise des Glaçons. Tous droits réservés.
+          &copy; {new Date().getFullYear()} LCG-SARL — La Congolaise des Glaçons. Tous droits réservés.
         </div>
       </div>
     </footer>
