@@ -1,8 +1,6 @@
 "use client"
 
-import { useState } from "react"
 import {
-  LayoutDashboard,
   Package,
   ShoppingCart,
   Truck,
@@ -12,6 +10,9 @@ import {
   Plus,
   Eye,
   ArrowRight,
+  BarChart3,
+  Clock,
+  BadgeCheck,
 } from "lucide-react"
 import {
   BarChart,
@@ -31,32 +32,22 @@ const statsCards = [
     value: "485 000 F",
     change: "+15%",
     icon: DollarSign,
-    color: "text-green-600",
-    bg: "bg-green-100",
   },
   {
     title: "Commandes (jour)",
     value: "12",
     change: "+3",
     icon: ShoppingCart,
-    color: "text-blue-600",
-    bg: "bg-blue-100",
   },
   {
     title: "Produits actifs",
     value: "8",
-    change: "",
     icon: Package,
-    color: "text-purple-600",
-    bg: "bg-purple-100",
   },
   {
     title: "Livraisons en cours",
     value: "5",
-    change: "",
     icon: Truck,
-    color: "text-orange-600",
-    bg: "bg-orange-100",
   },
 ]
 
@@ -71,195 +62,155 @@ const revenueData = [
 ]
 
 const recentOrders = [
-  {
-    id: "LCG-A3F2-1B9C",
-    customer: "Jean-Paul M.",
-    status: "DELIVERED",
-    total: 15000,
-    date: "08/07/2026",
-  },
-  {
-    id: "LCG-B4E1-2C8D",
-    customer: "Marie K.",
-    status: "OUT_FOR_DELIVERY",
-    total: 4000,
-    date: "08/07/2026",
-  },
-  {
-    id: "LCG-C5D0-3D7E",
-    customer: "Hôtel Émeraude",
-    status: "PROCESSING",
-    total: 35000,
-    date: "07/07/2026",
-  },
-  {
-    id: "LCG-D6C9-4E6F",
-    customer: "Restaurant Le Palais",
-    status: "CONFIRMED",
-    total: 22000,
-    date: "07/07/2026",
-  },
-  {
-    id: "LCG-E7B8-5F5G",
-    customer: "Café Central",
-    status: "PENDING",
-    total: 8500,
-    date: "06/07/2026",
-  },
+  { id: "LCG-A3F2-1B9C", customer: "Jean-Paul M.", status: "DELIVERED", total: 15000, date: "08/07/2026" },
+  { id: "LCG-B4E1-2C8D", customer: "Marie K.", status: "OUT_FOR_DELIVERY", total: 4000, date: "08/07/2026" },
+  { id: "LCG-C5D0-3D7E", customer: "Hôtel Émeraude", status: "PROCESSING", total: 35000, date: "07/07/2026" },
+  { id: "LCG-D6C9-4E6F", customer: "Restaurant Le Palais", status: "CONFIRMED", total: 22000, date: "07/07/2026" },
+  { id: "LCG-E7B8-5F5G", customer: "Café Central", status: "PENDING", total: 8500, date: "06/07/2026" },
 ]
+
+const quickActions = [
+  { href: "/admin/produits", label: "Ajouter un produit", desc: "Nouveau produit", icon: Plus, color: "primary" },
+  { href: "/admin/stock", label: "Gérer le stock", desc: "Mouvements", icon: ClipboardList, color: "accent" },
+  { href: "/admin/commandes", label: "Voir commandes", desc: "Gestion", icon: Eye, color: "blue" },
+  { href: "/admin/rapports", label: "Voir rapports", desc: "Statistiques", icon: TrendingUp, color: "purple" },
+]
+
+const colorMap: Record<string, { ring: string; bg: string; text: string }> = {
+  primary: { ring: "ring-primary/20", bg: "bg-primary/10", text: "text-primary" },
+  accent: { ring: "ring-accent/20", bg: "bg-accent/10", text: "text-accent" },
+  blue: { ring: "ring-blue-200", bg: "bg-blue-100", text: "text-blue-600" },
+  purple: { ring: "ring-purple-200", bg: "bg-purple-100", text: "text-purple-600" },
+}
+
+const iconMap: Record<string, { ring: string; bg: string; text: string }> = {
+  DollarSign: { ring: "ring-green-200", bg: "bg-green-100", text: "text-green-600" },
+  ShoppingCart: { ring: "ring-blue-200", bg: "bg-blue-100", text: "text-blue-600" },
+  Package: { ring: "ring-purple-200", bg: "bg-purple-100", text: "text-purple-600" },
+  Truck: { ring: "ring-orange-200", bg: "bg-orange-100", text: "text-orange-600" },
+}
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
-        <p className="text-sm text-gray-500">{new Date().toLocaleDateString("fr-FR")}</p>
+        <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Tableau de bord</h1>
+        <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString("fr-FR")}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {statsCards.map((card) => {
           const Icon = card.icon
+          const colors = iconMap[card.icon.name] || { ring: "ring-gray-200", bg: "bg-gray-100", text: "text-gray-600" }
           return (
             <div
               key={card.title}
-              className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-sm transition-shadow"
+              className="relative rounded-2xl border-2 border-primary/20 bg-card p-5 shadow-card-soft"
             >
-              <div className="flex items-center justify-between mb-3">
-                <div className={`p-2.5 rounded-lg ${card.bg}`}>
-                  <Icon className={`h-5 w-5 ${card.color}`} />
+              <div className="flex items-start justify-between">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${colors.bg} ${colors.text} ring-2 ${colors.ring}`}>
+                  <Icon className="h-5 w-5" />
                 </div>
                 {card.change && (
-                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-bold text-green-700">
                     +{card.change}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500 font-medium">{card.title}</p>
-              <p className="text-xl font-bold text-gray-900 mt-0.5">{card.value}</p>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{card.title}</p>
+              <p className="mt-0.5 font-display text-2xl font-extrabold tracking-tight text-foreground">{card.value}</p>
             </div>
           )
         })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Revenus (7 derniers jours)</h3>
-          <div className="h-64">
+        <div className="relative rounded-2xl border-2 border-primary/20 bg-card p-6 shadow-card-soft">
+          <div className="absolute -top-3 left-6 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1 text-xs font-bold text-primary-foreground shadow-frost">
+            <BarChart3 className="h-3.5 w-3.5" />
+            Revenus (7 jours)
+          </div>
+          <div className="mt-5 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={revenueData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                <CartesianGrid strokeDasharray="3 3" stroke="oklch(92% 0 0)" />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: "oklch(63% 0 0)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: "oklch(63% 0 0)" }} axisLine={false} tickLine={false} />
                 <Tooltip
                   formatter={(value: any) => [formatPrice(Number(value)), "Revenu"]}
                   contentStyle={{
-                    borderRadius: "8px",
-                    border: "1px solid #e5e7eb",
+                    borderRadius: "12px",
+                    border: "1px solid oklch(92% 0 0)",
                     boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                   }}
                 />
-                <Bar dataKey="revenu" fill="#1f4fa3" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenu" fill="oklch(55% 0.15 262)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-900">Dernières commandes</h3>
-            <Link
-              href="/admin/commandes"
-              className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
-            >
-              Voir tout <ArrowRight className="h-3 w-3" />
-            </Link>
+        <div className="relative rounded-2xl border-2 border-primary/20 bg-card p-6 shadow-card-soft">
+          <div className="absolute -top-3 left-6 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1 text-xs font-bold text-primary-foreground shadow-frost">
+            <Clock className="h-3.5 w-3.5" />
+            Dernières commandes
           </div>
-          <div className="space-y-3">
+          <div className="mt-5 space-y-2">
             {recentOrders.map((order) => (
               <div
                 key={order.id}
-                className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-between rounded-xl border border-border/50 p-3 transition-colors hover:bg-muted/50"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{order.customer}</p>
-                  <p className="text-xs text-gray-500">{order.id}</p>
+                  <p className="text-sm font-semibold text-foreground truncate">{order.customer}</p>
+                  <p className="text-xs text-muted-foreground">{order.id}</p>
                 </div>
                 <div className="text-right flex-shrink-0 ml-3">
-                  <p className="text-sm font-semibold text-gray-900">
-                    {formatPrice(order.total)}
-                  </p>
-                  <p className="text-xs text-gray-500">{order.date}</p>
+                  <p className="text-sm font-bold text-foreground">{formatPrice(order.total)}</p>
+                  <p className="text-xs text-muted-foreground">{order.date}</p>
                 </div>
-                <span
-                  className={`ml-3 px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}
-                >
+                <span className={`ml-3 shrink-0 px-2.5 py-0.5 text-xs font-bold rounded-full ${getStatusColor(order.status)}`}>
                   {getStatusLabel(order.status)}
                 </span>
               </div>
             ))}
           </div>
+          <div className="mt-4 text-right">
+            <Link
+              href="/admin/commandes"
+              className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:text-primary/80 transition-colors"
+            >
+              Voir toutes les commandes <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Actions rapides</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <Link
-            href="/admin/produits"
-            className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50/50 transition-all group"
-          >
-            <div className="p-2 rounded-lg bg-primary-100">
-              <Plus className="h-4 w-4 text-primary-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 group-hover:text-primary-700">
-                Ajouter un produit
-              </p>
-              <p className="text-xs text-gray-500">Nouveau produit</p>
-            </div>
-          </Link>
-          <Link
-            href="/admin/stock"
-            className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-accent-300 hover:bg-accent-50/50 transition-all group"
-          >
-            <div className="p-2 rounded-lg bg-accent-100">
-              <ClipboardList className="h-4 w-4 text-accent-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 group-hover:text-accent-700">
-                Gérer le stock
-              </p>
-              <p className="text-xs text-gray-500">Mouvements</p>
-            </div>
-          </Link>
-          <Link
-            href="/admin/commandes"
-            className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all group"
-          >
-            <div className="p-2 rounded-lg bg-blue-100">
-              <Eye className="h-4 w-4 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 group-hover:text-blue-700">
-                Voir commandes
-              </p>
-              <p className="text-xs text-gray-500">Gestion</p>
-            </div>
-          </Link>
-          <Link
-            href="/admin/rapports"
-            className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-purple-300 hover:bg-purple-50/50 transition-all group"
-          >
-            <div className="p-2 rounded-lg bg-purple-100">
-              <TrendingUp className="h-4 w-4 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 group-hover:text-purple-700">
-                Voir rapports
-              </p>
-              <p className="text-xs text-gray-500">Statistiques</p>
-            </div>
-          </Link>
+      <div className="relative rounded-2xl border-2 border-primary/20 bg-card p-6 shadow-card-soft">
+        <div className="absolute -top-3 left-6 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1 text-xs font-bold text-primary-foreground shadow-frost">
+          <BadgeCheck className="h-3.5 w-3.5" />
+          Actions rapides
+        </div>
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {quickActions.map((action) => {
+            const Icon = action.icon
+            const c = colorMap[action.color]
+            return (
+              <Link
+                key={action.href}
+                href={action.href}
+                className={`flex items-center gap-3 rounded-xl border-2 border-border/50 p-4 transition-all hover:shadow-sm ${c.ring.replace("ring-", "hover:ring-2 hover:")} hover:${c.bg.replace("bg-", "")} group`}
+              >
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${c.bg} ${c.text}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">{action.label}</p>
+                  <p className="text-xs text-muted-foreground">{action.desc}</p>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </div>
     </div>

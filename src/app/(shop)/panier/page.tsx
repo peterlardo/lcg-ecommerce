@@ -1,55 +1,74 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
-import { formatPrice } from "@/lib/utils"
-import { Trash2, Minus, Plus, ShoppingCart, ArrowRight, Package, CalendarRange, Check, Truck, BadgeCheck, Sparkles, Clock, Users } from "lucide-react"
+import { formatPrice, generateOrderNumber } from "@/lib/utils"
+import { Trash2, Minus, Plus, ShoppingCart, ArrowRight, CreditCard, Smartphone, Banknote } from "lucide-react"
 
-const eventTypes = [
-  "Mariage",
-  "Anniversaire",
-  "Soirée privée",
-  "Séminaire",
-  "Fête publique",
-  "Autre",
+const paymentMethods = [
+  { id: "card", label: "Carte bancaire", icon: CreditCard },
+  { id: "mobile", label: "Mobile Money", icon: Smartphone },
+  { id: "cod", label: "Paiement à la livraison", icon: Banknote },
 ]
 
+interface OrderForm {
+  name: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  district: string
+  notes: string
+}
+
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, subtotal, clearCart } = useCart()
-  const [reservationSent, setReservationSent] = useState(false)
-  const [resForm, setResForm] = useState({
-    client: "",
-    telephone: "",
-    email: "",
-    type: "Mariage",
-    date: "",
-    heure: "",
-    inviteCount: 50,
-    notes: "",
+  const router = useRouter()
+  const { items, subtotal, clearCart, removeItem, updateQuantity } = useCart()
+
+  // Commande form state
+  const [paymentMethod, setPaymentMethod] = useState("cod")
+  const [submitting, setSubmitting] = useState(false)
+  const [orderForm, setOrderForm] = useState<OrderForm>({
+    name: "", email: "", phone: "", address: "", city: "Brazzaville", district: "", notes: "",
   })
+
+  // Contact form state
+  const [contactForm, setContactForm] = useState({
+    nom: "", telephone: "", email: "", objet: "Réservation événement", message: "",
+  })
+  const [sent, setSent] = useState(false)
 
   const deliveryFee = 0
   const total = subtotal + deliveryFee
 
-  const handleReservation = async (e: React.FormEvent) => {
+  const handleOrderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    const order = {
+      number: generateOrderNumber(), items, subtotal, deliveryFee, total, paymentMethod, customer: orderForm,
+      createdAt: new Date().toISOString(),
+    }
+    console.log("Nouvelle commande :", order)
+    await new Promise((r) => setTimeout(r, 1000))
+    clearCart()
+    router.push(`/commande/succes?order=${order.number}`)
+  }
+
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await fetch("/api/messages", {
+      const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nom: resForm.client,
-          telephone: resForm.telephone,
-          email: resForm.email,
-          objet: `Réservation ${resForm.type} — ${resForm.date} à ${resForm.heure} (${resForm.inviteCount} invités)`,
-          message: resForm.notes || "Aucune note",
-        }),
+        body: JSON.stringify(contactForm),
       })
-      setReservationSent(true)
-      setResForm({ client: "", telephone: "", email: "", type: "Mariage", date: "", heure: "", inviteCount: 50, notes: "" })
-      setTimeout(() => setReservationSent(false), 4000)
+      if (!res.ok) throw new Error("Erreur lors de l'envoi")
+      setSent(true)
+      setContactForm({ nom: "", telephone: "", email: "", objet: "Réservation événement", message: "" })
+      setTimeout(() => setSent(false), 3000)
     } catch (err) {
       console.error("Erreur:", err)
     }
@@ -121,167 +140,148 @@ export default function CartPage() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* COLONNE COMMANDE */}
-        <div className="rounded-2xl border-2 border-primary/20 bg-card p-6 shadow-card-soft relative">
-          <div className="absolute -top-3 left-6 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1 text-xs font-bold text-primary-foreground shadow-frost">
-            <Package className="h-3.5 w-3.5" />
-            Commande
+      <div className="grid gap-8 lg:grid-cols-2">
+        {/* COMMANDE */}
+        <div className="rounded-2xl border-2 border-primary/20 bg-card p-6 shadow-card-soft">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <ShoppingCart className="h-4 w-4" />
+            </div>
+            <h2 className="font-display text-lg font-extrabold tracking-tight">Commande</h2>
           </div>
-          <div className="mt-3 space-y-4">
-            <div>
-              <h3 className="font-display text-lg font-extrabold tracking-tight">Acheter maintenant</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Commandez vos glaçons et recevez-les rapidement à votre adresse.
-              </p>
+          <form onSubmit={handleOrderSubmit} className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-semibold mb-1">Nom complet *</label>
+                <input required value={orderForm.name} onChange={(e) => setOrderForm({ ...orderForm, name: e.target.value })}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Votre nom" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Email *</label>
+                <input required type="email" value={orderForm.email} onChange={(e) => setOrderForm({ ...orderForm, email: e.target.value })}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="votre@email.com" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Téléphone *</label>
+                <input required type="tel" value={orderForm.phone} onChange={(e) => setOrderForm({ ...orderForm, phone: e.target.value })}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="+242 XX XXX XXX" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Ville *</label>
+                <input required value={orderForm.city} onChange={(e) => setOrderForm({ ...orderForm, city: e.target.value })}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Brazzaville" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-semibold mb-1">Adresse *</label>
+                <input required value={orderForm.address} onChange={(e) => setOrderForm({ ...orderForm, address: e.target.value })}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Numéro, rue, quartier" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Quartier</label>
+                <input value={orderForm.district} onChange={(e) => setOrderForm({ ...orderForm, district: e.target.value })}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Ex : Moungali" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Notes</label>
+                <input value={orderForm.notes} onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Instructions" />
+              </div>
             </div>
 
-            <ul className="space-y-2 text-sm">
-              {[
-                { icon: Truck, text: "Livraison rapide à Brazzaville" },
-                { icon: BadgeCheck, text: "Paiement sécurisé" },
-                { icon: Clock, text: "Livraison en 24h – 48h" },
-              ].map((feat) => {
-                const Icon = feat.icon
-                return (
-                  <li key={feat.text} className="flex items-center gap-2.5">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Icon className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="text-muted-foreground">{feat.text}</span>
-                  </li>
-                )
-              })}
-            </ul>
+            <div>
+              <p className="text-sm font-semibold mb-2">Moyen de paiement</p>
+              <div className="space-y-2">
+                {paymentMethods.map((method) => {
+                  const Icon = method.icon
+                  return (
+                    <label key={method.id}
+                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                        paymentMethod === method.id ? "border-primary/40 bg-primary/5" : "border-border hover:border-muted-foreground/30"
+                      }`}>
+                      <input type="radio" name="payment" value={method.id} checked={paymentMethod === method.id}
+                        onChange={(e) => setPaymentMethod(e.target.value)} className="accent-primary" />
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">{method.label}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
 
             <hr className="border-border" />
 
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Sous-total</span>
-                <span className="font-semibold text-foreground">{formatPrice(subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Livraison</span>
-                <span className="font-semibold text-green-600">Gratuite</span>
-              </div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Sous-total</span><span className="font-semibold text-foreground">{formatPrice(subtotal)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Livraison</span><span className="font-semibold text-green-600">Gratuite</span></div>
               <hr className="border-border" />
-              <div className="flex justify-between text-base">
-                <span className="font-bold text-foreground">Total</span>
-                <span className="font-bold text-foreground">{formatPrice(total)}</span>
-              </div>
+              <div className="flex justify-between text-base"><span className="font-bold text-foreground">Total</span><span className="font-bold text-foreground">{formatPrice(total)}</span></div>
             </div>
 
-            <Link
-              href="/commande"
-              className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
-            >
-              Commander
+            <button type="submit" disabled={submitting}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03] disabled:opacity-50">
+              {submitting ? "Traitement..." : "Confirmer la commande"}
               <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+            </button>
+          </form>
         </div>
 
-        {/* COLONNE RÉSERVATION */}
-        <div className="rounded-2xl border-2 border-accent/20 bg-card p-6 shadow-card-soft relative">
-          <div className="absolute -top-3 left-6 inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1 text-xs font-bold text-accent-foreground shadow-frost">
-            <CalendarRange className="h-3.5 w-3.5" />
-            Réservation
-          </div>
-          <div className="mt-3 space-y-4">
-            <div>
-              <h3 className="font-display text-lg font-extrabold tracking-tight">Réserver pour un événement</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Vous organisez un événement ? Réservez vos glaçons à l&apos;avance et obtenez un devis personnalisé.
-              </p>
+        {/* RÉSERVATION */}
+        <div className="rounded-2xl border-2 border-accent/20 bg-card p-6 shadow-card-soft">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent">
+              <ShoppingCart className="h-4 w-4" />
             </div>
-
-            <ul className="space-y-2 text-sm">
-              {[
-                { icon: Users, text: "Mariages, anniversaires, séminaires…" },
-                { icon: Sparkles, text: "Devis personnalisé selon vos besoins" },
-                { icon: CalendarRange, text: "Planifiez jusqu&apos;à plusieurs semaines" },
-              ].map((feat) => {
-                const Icon = feat.icon
-                return (
-                  <li key={feat.text} className="flex items-center gap-2.5">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent/10 text-accent">
-                      <Icon className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="text-muted-foreground">{feat.text}</span>
-                  </li>
-                )
-              })}
-            </ul>
-
-            <hr className="border-border" />
-
-            {reservationSent ? (
-              <div className="flex flex-col items-center justify-center rounded-xl bg-green-50 p-6 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
-                  <Check className="h-6 w-6" />
-                </div>
-                <p className="mt-3 font-display text-sm font-bold text-green-800">Demande envoyée ✓</p>
-                <p className="text-xs text-green-600 mt-1">Nous vous recontacterons rapidement.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleReservation} className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="block text-sm font-semibold">
-                    Nom complet *
-                    <input required value={resForm.client} onChange={(e) => setResForm({ ...resForm, client: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                      placeholder="Votre nom" />
-                  </label>
-                  <label className="block text-sm font-semibold">
-                    Téléphone *
-                    <input required type="tel" value={resForm.telephone} onChange={(e) => setResForm({ ...resForm, telephone: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                      placeholder="+242 …" />
-                  </label>
-                  <label className="block text-sm font-semibold">
-                    Email
-                    <input type="email" value={resForm.email} onChange={(e) => setResForm({ ...resForm, email: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                      placeholder="vous@exemple.com" />
-                  </label>
-                  <label className="block text-sm font-semibold">
-                    Type d&apos;événement
-                    <select value={resForm.type} onChange={(e) => setResForm({ ...resForm, type: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none ring-ring transition-shadow focus:ring-2">
-                      {eventTypes.map((t) => <option key={t}>{t}</option>)}
-                    </select>
-                  </label>
-                  <label className="block text-sm font-semibold">
-                    Date *
-                    <input required type="date" value={resForm.date} onChange={(e) => setResForm({ ...resForm, date: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none ring-ring transition-shadow focus:ring-2" />
-                  </label>
-                  <label className="block text-sm font-semibold">
-                    Heure
-                    <input type="time" value={resForm.heure} onChange={(e) => setResForm({ ...resForm, heure: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none ring-ring transition-shadow focus:ring-2" />
-                  </label>
-                  <label className="block text-sm font-semibold sm:col-span-2">
-                    Nombre d&apos;invités
-                    <input type="number" min={1} value={resForm.inviteCount} onChange={(e) => setResForm({ ...resForm, inviteCount: Number(e.target.value) })}
-                      className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none ring-ring transition-shadow focus:ring-2" />
-                  </label>
-                  <label className="block text-sm font-semibold sm:col-span-2">
-                    Notes / Besoins spécifiques
-                    <textarea rows={3} value={resForm.notes} onChange={(e) => setResForm({ ...resForm, notes: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none ring-ring transition-shadow focus:ring-2 resize-none"
-                      placeholder="Dites-nous en plus sur votre événement…" />
-                  </label>
-                </div>
-                <button type="submit"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-bold text-accent-foreground shadow-frost transition-transform hover:scale-[1.03]">
-                  <CalendarRange className="h-4 w-4" />
-                  Envoyer la demande
-                </button>
-              </form>
-            )}
+            <h2 className="font-display text-lg font-extrabold tracking-tight">Réservation événement</h2>
           </div>
+          <form onSubmit={handleContactSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className="block text-sm font-semibold sm:col-span-2">
+                Nom complet *
+                <input required value={contactForm.nom} onChange={(e) => setContactForm({ ...contactForm, nom: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Votre nom" />
+              </label>
+              <label className="block text-sm font-semibold">
+                Téléphone *
+                <input required type="tel" value={contactForm.telephone} onChange={(e) => setContactForm({ ...contactForm, telephone: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="+242 …" />
+              </label>
+              <label className="block text-sm font-semibold">
+                E-mail
+                <input type="email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="vous@exemple.com" />
+              </label>
+              <label className="block text-sm font-semibold sm:col-span-2">
+                Objet
+                <select value={contactForm.objet} onChange={(e) => setContactForm({ ...contactForm, objet: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2">
+                  <option>Question générale</option>
+                  <option>Devis professionnel</option>
+                  <option>Réservation événement</option>
+                  <option>Suivi de commande</option>
+                </select>
+              </label>
+              <label className="block text-sm font-semibold sm:col-span-2">
+                Message *
+                <textarea required rows={5} value={contactForm.message} onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2 resize-none"
+                  placeholder="Votre message…" />
+              </label>
+            </div>
+            <button type="submit"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]">
+              {sent ? "Message envoyé ✓" : "Envoyer le message"}
+            </button>
+          </form>
         </div>
       </div>
     </div>
