@@ -32,10 +32,10 @@ export function AdminSidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen">
-      <div className="p-4 border-b border-gray-200">
-        <Link href="/admin" className="flex items-center gap-2 font-bold text-gray-900">
-          <img src="/logo.jpeg" alt="LCG" className="h-7 w-auto" />
+    <aside className="w-64 bg-primary min-h-screen">
+      <div className="p-4 border-b border-white/10">
+        <Link href="/admin" className="flex items-center gap-2 font-bold text-primary-foreground">
+          <img src="/logo.jpeg" alt="LCG" className="h-7 w-auto rounded-full" />
           <span>LCG Admin</span>
         </Link>
       </div>
@@ -51,8 +51,8 @@ export function AdminSidebar() {
               href={link.href}
               className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                 isActive
-                  ? "bg-primary-50 text-primary-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  ? "bg-white/15 text-primary-foreground"
+                  : "text-primary-foreground/70 hover:bg-white/10 hover:text-primary-foreground"
               }`}
             >
               <Icon className="h-4 w-4" />
