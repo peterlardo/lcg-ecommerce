@@ -1,74 +1,66 @@
-import Link from "next/link"
-import Image from "next/image"
+"use client"
+
 import { ProductCard } from "@/components/shared/product-card"
 import { products, categories } from "@/data/products"
-import { cn } from "@/lib/utils"
+import { useState } from "react"
 
-export default async function ProduitsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ categorie?: string }>
-}) {
-  const params = await searchParams
-  const activeCategory = params.categorie ?? "all"
-  const filteredProducts = activeCategory === "all"
+export default function ProduitsPage() {
+  const [activeCategory, setActiveCategory] = useState("all")
+
+  const filtered = activeCategory === "all"
     ? products
     : products.filter((p) => p.categorySlug === activeCategory)
 
-  const filterLinks = [
+  const filterButtons = [
     { slug: "all", label: "Tous les produits" },
     ...categories.map((c) => ({ slug: c.slug, label: c.name })),
   ]
 
   return (
-    <div>
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 text-white py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <span className="text-xs font-semibold uppercase tracking-widest text-blue-200">Nos produits</span>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold mt-2 mb-4">
-            Le catalogue LCG
-          </h1>
-          <p className="text-blue-100 text-lg max-w-2xl mx-auto">
-            Tous nos glaçons sont fabriqués à partir d&apos;eau minérale contrôlée et livrés en conditionnement scellé. Ajoutez vos produits au panier puis choisissez livraison immédiate ou réservation à une date donnée.
-          </p>
-        </div>
-      </section>
+    <div className="mx-auto max-w-6xl px-4 py-16">
+      <div className="max-w-2xl">
+        <p className="text-xs font-bold uppercase tracking-widest text-primary">Nos produits</p>
+        <h1 className="mt-2 font-display text-4xl font-extrabold tracking-tight">Le catalogue LCG</h1>
+        <p className="mt-4 leading-relaxed text-muted-foreground">
+          Tous nos glaçons sont fabriqués à partir d&apos;eau minérale contrôlée et livrés en conditionnement scellé. Ajoutez vos produits au panier puis choisissez livraison immédiate ou réservation à une date donnée.
+        </p>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        {/* Filters */}
-        <div className="flex flex-wrap gap-2 mb-8">
-          {filterLinks.map((f) => (
-            <Link
-              key={f.slug}
-              href={f.slug === "all" ? "/produits" : `/produits?categorie=${f.slug}`}
-              className={cn(
-                "px-4 py-2 text-sm font-medium rounded-lg border transition-colors",
-                activeCategory === f.slug
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600"
-              )}
-            >
-              {f.label}
-            </Link>
+      <div className="mt-10 flex flex-wrap gap-2">
+        {filterButtons.map((f) => (
+          <button
+            key={f.slug}
+            type="button"
+            onClick={() => setActiveCategory(f.slug)}
+            className={`rounded-full px-5 py-2.5 text-sm font-bold transition-colors ${
+              activeCategory === f.slug
+                ? "bg-primary text-primary-foreground shadow-frost"
+                : "border border-border bg-card font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length > 0 ? (
+        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((product) => (
+            <ProductCard key={product.id} product={product as any} />
           ))}
         </div>
-
-        {filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-16 text-gray-400">
-            <p className="text-lg">Aucun produit trouvé</p>
-            <Link href="/produits" className="text-sm text-blue-600 hover:underline mt-2 inline-block">
-              Voir tous les produits
-            </Link>
-          </div>
-        )}
-      </div>
+      ) : (
+        <div className="text-center py-16 text-muted-foreground">
+          <p className="text-lg">Aucun produit trouvé</p>
+          <button
+            type="button"
+            onClick={() => setActiveCategory("all")}
+            className="mt-2 text-sm font-bold text-primary hover:text-primary-glow transition-colors"
+          >
+            Voir tous les produits
+          </button>
+        </div>
+      )}
     </div>
   )
 }

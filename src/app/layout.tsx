@@ -3,9 +3,9 @@ import "./globals.css"
 import { Providers } from "./providers"
 
 export const metadata: Metadata = {
-  title: "LCG – La Congolaise des Glaçons",
+  title: "LCG — La Congolaise des Glaçons | Glaçons en eau minérale",
   description:
-    "Producteur et livreur de glaçons haut de gamme à Brazzaville. Eau minérale, hygiène irréprochable, livraison réfrigérée.",
+    "Commandez et réservez vos glaçons en eau minérale à Brazzaville : cubes, glace pilée, sphères, blocs. Livraison rapide pour particuliers et professionnels.",
   icons: {
     icon: "/logo.jpeg",
   },
@@ -22,11 +22,11 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen bg-white text-[#0f172a] antialiased">
+      <body className="min-h-screen flex flex-col bg-background text-foreground antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

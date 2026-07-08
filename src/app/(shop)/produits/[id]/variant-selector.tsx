@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { ShoppingCart, Check } from "lucide-react"
 import { useCart } from "@/contexts/cart-context"
-import { formatPrice, cn } from "@/lib/utils"
+import { formatPrice } from "@/lib/utils"
 import type { Product } from "@/data/products"
 
 interface Props {
@@ -32,25 +32,24 @@ export function ProductVariantSelector({ product }: Props) {
   }
 
   if (product.variants.length === 0) {
-    return <p className="text-gray-400 text-sm">Ce produit est momentanément indisponible.</p>
+    return <p className="text-muted-foreground text-sm">Ce produit est momentanément indisponible.</p>
   }
 
   return (
     <div className="space-y-6">
       {/* Format Selector */}
       <div>
-        <p className="text-sm font-medium text-gray-900 mb-3">Choisir un format :</p>
+        <p className="text-sm font-semibold text-foreground mb-3">Choisir un format :</p>
         <div className="flex flex-wrap gap-2">
           {product.variants.map((variant) => (
             <button
               key={variant.id}
               onClick={() => setSelectedVariantId(variant.id)}
-              className={cn(
-                "px-4 py-3 text-sm font-medium rounded-lg border transition-all",
+              className={`px-4 py-3 text-sm font-semibold rounded-xl border transition-all ${
                 selectedVariantId === variant.id
-                  ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-500"
-                  : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"
-              )}
+                  ? "border-primary bg-primary/10 text-primary ring-1 ring-primary"
+                  : "border-border bg-card text-muted-foreground hover:border-primary hover:text-primary"
+              }`}
             >
               <div className="flex items-center gap-2">
                 {selectedVariantId === variant.id && <Check className="h-3.5 w-3.5" />}
@@ -64,22 +63,19 @@ export function ProductVariantSelector({ product }: Props) {
       {/* Price */}
       {selectedVariant && (
         <div>
-          <p className="text-sm text-gray-500 mb-1">Prix</p>
-          <p className="text-3xl font-bold text-gray-900">{formatPrice(selectedVariant.price)}</p>
+          <p className="text-sm text-muted-foreground mb-1">Prix</p>
+          <p className="font-display text-3xl font-bold text-primary">{formatPrice(selectedVariant.price)}</p>
         </div>
       )}
 
       {/* Add to Cart */}
       <button
         onClick={handleAddToCart}
-        className={cn(
-          "w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 font-semibold rounded-xl transition-all text-base",
-          added
-            ? "bg-green-500 text-white"
-            : "bg-blue-600 text-white hover:bg-blue-700"
-        )}
+        className={`inline-flex items-center gap-2 rounded-full px-8 py-3.5 font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03] text-base ${
+          added ? "bg-green-600" : "bg-primary"
+        }`}
       >
-        <ShoppingCart className={cn("h-5 w-5", added && "hidden")} />
+        <ShoppingCart className={`h-5 w-5 ${added ? "hidden" : ""}`} />
         {added ? "Ajouté au panier !" : "Ajouter au panier"}
       </button>
     </div>

@@ -4,7 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
 import { formatPrice } from "@/lib/utils"
-import { Trash2, Minus, Plus, ShoppingBag } from "lucide-react"
+import { Trash2, Minus, Plus, ShoppingCart, ArrowRight } from "lucide-react"
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, subtotal, clearCart } = useCart()
@@ -13,25 +13,28 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 text-center">
-        <ShoppingBag className="h-16 w-16 mx-auto text-gray-300 mb-6" />
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Votre panier est vide</h1>
-        <p className="text-gray-500 mb-8">Parcourez notre catalogue de glaçons en eau minérale et ajoutez vos produits.</p>
+      <div className="mx-auto flex max-w-xl flex-col items-center px-4 py-24 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-ice-gradient text-primary">
+          <ShoppingCart className="h-7 w-7" />
+        </div>
+        <h1 className="mt-6 font-display text-3xl font-extrabold tracking-tight">Votre panier est vide</h1>
+        <p className="mt-3 text-muted-foreground">Parcourez notre catalogue de glaçons en eau minérale et ajoutez vos produits.</p>
         <Link
           href="/produits"
-          className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+          className="mt-8 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 font-display text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
         >
           Voir le catalogue
+          <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Mon panier</h1>
-        <button onClick={clearCart} className="text-sm text-gray-400 hover:text-red-500 transition-colors">
+        <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight">Mon panier</h1>
+        <button onClick={clearCart} className="text-sm text-muted-foreground hover:text-destructive transition-colors">
           Vider le panier
         </button>
       </div>
@@ -39,34 +42,34 @@ export default function CartPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 space-y-4">
           {items.map((item) => (
-            <div key={item.id} className="flex gap-4 bg-white border border-gray-200 rounded-xl p-4">
-              <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+            <div key={item.id} className="flex gap-4 rounded-2xl border border-border bg-card p-4 shadow-card-soft">
+              <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-xl overflow-hidden bg-ice-gradient flex-shrink-0">
                 {item.image ? (
                   <Image src={item.image} alt={item.name} fill className="object-cover" />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-300 text-xs">N/A</div>
+                  <div className="flex items-center justify-center h-full text-muted-foreground text-xs">N/A</div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
                 <Link
                   href={`/produits/${item.productId}`}
-                  className="font-semibold text-sm sm:text-base text-gray-900 hover:text-blue-600 line-clamp-1"
+                  className="font-display text-sm sm:text-base font-bold text-foreground hover:text-primary leading-snug"
                 >
                   {item.name}
                 </Link>
-                <p className="text-xs sm:text-sm text-gray-500 mt-0.5">{item.format}</p>
-                <p className="text-sm font-semibold text-gray-900 mt-2">{formatPrice(item.price)}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{item.format}</p>
+                <p className="text-sm font-bold text-primary mt-2">{formatPrice(item.price)}</p>
               </div>
               <div className="flex flex-col items-end gap-3">
-                <button onClick={() => removeItem(item.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" aria-label="Supprimer">
+                <button onClick={() => removeItem(item.id)} className="p-1.5 text-muted-foreground hover:text-destructive transition-colors" aria-label="Supprimer">
                   <Trash2 className="h-4 w-4" />
                 </button>
-                <div className="flex items-center border border-gray-200 rounded-lg">
-                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors" aria-label="Diminuer">
+                <div className="flex items-center rounded-lg border border-border">
+                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors" aria-label="Diminuer">
                     <Minus className="h-3.5 w-3.5" />
                   </button>
-                  <span className="w-8 text-center text-sm font-medium text-gray-900">{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors" aria-label="Augmenter">
+                  <span className="w-8 text-center text-sm font-semibold text-foreground">{item.quantity}</span>
+                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors" aria-label="Augmenter">
                     <Plus className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -76,28 +79,29 @@ export default function CartPage() {
         </div>
 
         <div className="lg:col-span-1">
-          <div className="bg-white border border-gray-200 rounded-xl p-6 sticky top-24">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Résumé de la commande</h2>
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-card-soft sticky top-24">
+            <h2 className="font-display text-lg font-bold mb-4">Résumé de la commande</h2>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Sous-total</span>
-                <span className="font-medium text-gray-900">{formatPrice(subtotal)}</span>
+                <span className="text-muted-foreground">Sous-total</span>
+                <span className="font-semibold text-foreground">{formatPrice(subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Livraison</span>
-                <span className="font-medium text-green-600">Gratuite</span>
+                <span className="text-muted-foreground">Livraison</span>
+                <span className="font-semibold text-green-600">Gratuite</span>
               </div>
-              <hr className="border-gray-200" />
+              <hr className="border-border" />
               <div className="flex justify-between text-base">
-                <span className="font-semibold text-gray-900">Total</span>
-                <span className="font-bold text-gray-900">{formatPrice(total)}</span>
+                <span className="font-bold text-foreground">Total</span>
+                <span className="font-bold text-foreground">{formatPrice(total)}</span>
               </div>
             </div>
             <Link
               href="/commande"
-            className="mt-6 w-full flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
-          >
-            Commander
+              className="mt-6 w-full inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
+            >
+              Commander
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>

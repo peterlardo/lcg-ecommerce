@@ -141,23 +141,7 @@ export const products: Product[] = [
       { id: "var-7-1", format: "big bag 25 kg", price: 15000, stock: 20, unit: "big bag" },
     ],
   },
-  {
-    id: "prod-8",
-    name: "Pack Événementiel",
-    subtitle: "Pack complet pour vos fêtes : cubes, cylindres et glace pilée.",
-    description: "Pack complet pour vos événements : 5 kg de glaçons standards, 2 kg de glace pilée et 1 kg de glaçons cylindriques. Livraison incluse.",
-    image: "/assets/product-cubes.jpg",
-    categoryId: "cat-3",
-    categorySlug: "evenementiel",
-    categoryName: "Événementiel",
-    isFeatured: true,
-    badge: null,
-    variants: [
-      { id: "var-8-1", format: "pack Standard", price: 12000, stock: 15, unit: "pack" },
-      { id: "var-8-2", format: "pack Premium", price: 20000, stock: 10, unit: "pack" },
-      { id: "var-8-3", format: "pack VIP", price: 35000, stock: 5, unit: "pack" },
-    ],
-  },
+
 ]
 
 export function getProductById(id: string): Product | undefined {

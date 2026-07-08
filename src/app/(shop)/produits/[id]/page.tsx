@@ -22,42 +22,45 @@ export default async function ProductDetailPage({
   ).slice(0, 4)
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500 mb-8">
-        <Link href="/" className="hover:text-blue-600 transition-colors">Accueil</Link>
+      <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
+        <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>
         <span>/</span>
-        <Link href="/produits" className="hover:text-blue-600 transition-colors">Produits</Link>
+        <Link href="/produits" className="hover:text-primary transition-colors">Produits</Link>
         <span>/</span>
-        <span className="text-gray-900 font-medium">{product.name}</span>
+        <span className="text-foreground font-semibold">{product.name}</span>
       </nav>
 
       {/* Product Detail */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-16">
-        <div className="relative h-72 sm:h-96 lg:h-[500px] rounded-xl overflow-hidden bg-gray-100">
+        <div className="overflow-hidden rounded-3xl shadow-frost">
           {product.image ? (
             <Image
               src={product.image}
               alt={product.name}
-              fill
-              className="object-cover"
+              width="1200"
+              height="1200"
+              className="h-full w-full object-cover"
               priority
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-gray-300 text-lg">
+            <div className="flex items-center justify-center h-96 text-muted-foreground text-lg bg-muted">
               Image non disponible
             </div>
           )}
         </div>
 
         <div className="flex flex-col">
-          <p className="text-sm text-blue-600 font-medium mb-2">{product.categoryName}</p>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">{product.name}</h1>
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">{product.categoryName}</p>
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground mb-3">
+            {product.name}
+          </h1>
           {product.subtitle && (
-            <p className="text-gray-500 mb-6">{product.subtitle}</p>
+            <p className="text-muted-foreground mb-6">{product.subtitle}</p>
           )}
           {product.description && (
-            <p className="text-gray-600 leading-relaxed mb-8">{product.description}</p>
+            <p className="text-muted-foreground leading-relaxed mb-8">{product.description}</p>
           )}
 
           <ProductVariantSelector product={product} />
@@ -67,7 +70,7 @@ export default async function ProductDetailPage({
       {/* Related Products */}
       {related.length > 0 && (
         <section>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">
+          <h2 className="font-display text-xl sm:text-2xl font-bold text-foreground mb-6">
             Produits associés
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

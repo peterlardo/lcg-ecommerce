@@ -1,102 +1,118 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
-import { Send } from "lucide-react"
+import { MapPin, Phone, Mail, Clock } from "lucide-react"
+
+const contactCards = [
+  { icon: MapPin, title: "Adresse", text: "97 Rue EWO, Ouenzé — Brazzaville, République du Congo" },
+  { icon: Phone, title: "Téléphone", text: "Numéro à venir — commandes en ligne disponibles 24h/24" },
+  { icon: Mail, title: "E-mail", text: "contact@lcg-glacons.cg (à confirmer)" },
+  { icon: Clock, title: "Horaires", text: "Lun – Sam : 7h00 – 19h00 · Dim : 8h00 – 13h00" },
+]
 
 export default function ContactPage() {
-  const [form, setForm] = useState({ name: "", phone: "", email: "", subject: "", message: "" })
+  const [form, setForm] = useState({ nom: "", telephone: "", email: "", objet: "Question générale", message: "" })
   const [sent, setSent] = useState(false)
-
-  const handleChange = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
-  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Message de contact :", form)
+    console.log("Contact message:", form)
     setSent(true)
-    setForm({ name: "", phone: "", email: "", subject: "", message: "" })
+    setForm({ nom: "", telephone: "", email: "", objet: "Question générale", message: "" })
     setTimeout(() => setSent(false), 3000)
   }
 
   return (
-    <div>
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 text-white py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <span className="text-xs font-semibold uppercase tracking-widest text-blue-200">Contact</span>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold mt-2 mb-4">
-            Parlons froid
-          </h1>
-          <p className="text-blue-100 text-lg max-w-xl mx-auto">
-            Une question, un devis professionnel ou un événement à préparer ? Écrivez-nous, nous répondons rapidement.
-          </p>
+    <div className="mx-auto max-w-6xl px-4 py-16">
+      <p className="text-xs font-bold uppercase tracking-widest text-primary">Contact</p>
+      <h1 className="mt-2 font-display text-4xl font-extrabold tracking-tight">Parlons froid</h1>
+      <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+        Une question, un devis professionnel ou un événement à préparer ? Écrivez-nous, nous répondons rapidement.
+      </p>
+
+      <div className="mt-12 grid gap-12 lg:grid-cols-5">
+        {/* Contact info cards */}
+        <div className="space-y-6 lg:col-span-2">
+          {contactCards.map((c, i) => (
+            <div key={i} className="flex items-start gap-4 rounded-2xl border border-border bg-card p-5 shadow-card-soft">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ice-gradient text-primary">
+                <c.icon className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-display text-sm font-bold">{c.title}</h2>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{c.text}</p>
+              </div>
+            </div>
+          ))}
         </div>
-      </section>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* Contact Info */}
-          <div className="space-y-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-1">Adresse</h3>
-              <p className="text-sm text-gray-600">97 Rue EWO, Ouenzé — Brazzaville, République du Congo</p>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-1">Téléphone</h3>
-              <p className="text-sm text-gray-600">Numéro à venir — commandes en ligne disponibles 24h/24</p>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-1">E-mail</h3>
-              <p className="text-sm text-gray-600">contact@lcg-glacons.cg (à confirmer)</p>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-1">Horaires</h3>
-              <p className="text-sm text-gray-600">Lun – Sam : 7h00 – 19h00 · Dim : 8h00 – 13h00</p>
-            </div>
-          </div>
-
-          {/* Form */}
-          <div className="lg:col-span-2">
-            <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-6 sm:p-8 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Nom complet *</label>
-                  <input id="name" required value={form.name} onChange={(e) => handleChange("name", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Votre nom" />
-                </div>
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Téléphone *</label>
-                  <input id="phone" type="tel" required value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="+242 XX XXX XX XX" />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
-                <input id="email" type="email" value={form.email} onChange={(e) => handleChange("email", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="votre@email.com" />
-              </div>
-              <div>
-                <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">Objet</label>
-                <select id="subject" value={form.subject} onChange={(e) => handleChange("subject", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="">Sélectionnez un objet</option>
-                  <option value="Question générale">Question générale</option>
-                  <option value="Devis professionnel">Devis professionnel</option>
-                  <option value="Réservation événement">Réservation événement</option>
-                  <option value="Suivi de commande">Suivi de commande</option>
+        {/* Form */}
+        <div className="lg:col-span-3">
+          <form onSubmit={handleSubmit} className="rounded-3xl border border-border bg-card p-8 shadow-card-soft">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <label className="block text-sm font-semibold">
+                Nom complet *
+                <input
+                  required
+                  value={form.nom}
+                  onChange={(e) => setForm({ ...form, nom: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Votre nom"
+                />
+              </label>
+              <label className="block text-sm font-semibold">
+                Téléphone *
+                <input
+                  required
+                  type="tel"
+                  value={form.telephone}
+                  onChange={(e) => setForm({ ...form, telephone: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="+242 …"
+                />
+              </label>
+              <label className="block text-sm font-semibold sm:col-span-2">
+                E-mail
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="vous@exemple.com"
+                />
+              </label>
+              <label className="block text-sm font-semibold sm:col-span-2">
+                Objet
+                <select
+                  value={form.objet}
+                  onChange={(e) => setForm({ ...form, objet: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                >
+                  <option>Question générale</option>
+                  <option>Devis professionnel</option>
+                  <option>Réservation événement</option>
+                  <option>Suivi de commande</option>
                 </select>
-              </div>
-              <div>
-                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">Message *</label>
-                <textarea id="message" required rows={5} value={form.message} onChange={(e) => handleChange("message", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" placeholder="Votre message..." />
-              </div>
-              <button type="submit" className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors">
-                {sent ? "Message envoyé !" : (
-                  <>
-                    Envoyer le message <Send className="h-4 w-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
+              </label>
+              <label className="block text-sm font-semibold sm:col-span-2">
+                Message *
+                <textarea
+                  required
+                  rows={5}
+                  value={form.message}
+                  onChange={(e) => setForm({ ...form, message: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2 resize-none"
+                  placeholder="Votre message…"
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
+            >
+              {sent ? "Message envoyé ✓" : "Envoyer le message"}
+            </button>
+          </form>
         </div>
       </div>
     </div>

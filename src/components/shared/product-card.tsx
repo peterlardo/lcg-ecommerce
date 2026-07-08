@@ -1,10 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
 import { formatPrice } from "@/lib/utils"
 import { useState } from "react"
+import { Plus } from "lucide-react"
 
 interface ProductCardProps {
   product: {
@@ -37,60 +37,50 @@ export function ProductCard({ product }: ProductCardProps) {
     setTimeout(() => setAdded(false), 1500)
   }
 
-  const badgeClass = product.badge === "Best-seller"
-    ? "bg-amber-100 text-amber-800"
-    : product.badge === "Premium"
-    ? "bg-purple-100 text-purple-800"
-    : product.badge === "Pro"
-    ? "bg-blue-100 text-blue-800"
-    : ""
-
   return (
     <Link
       href={`/produits/${product.id}`}
-      className="group flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card-soft transition-all hover:-translate-y-1 hover:shadow-frost"
     >
-      <div className="relative h-48 bg-gray-50 overflow-hidden">
+      <div className="relative aspect-square overflow-hidden bg-ice-gradient">
         {product.image ? (
-          <Image
+          <img
             src={product.image}
             alt={product.name}
-            fill
-            className="object-contain p-4"
+            width="800"
+            height="800"
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="flex items-center justify-center h-full text-gray-300 text-4xl">🧊</div>
         )}
         {product.badge && (
-          <span className={`absolute top-3 left-3 px-2 py-0.5 text-xs font-semibold rounded-full ${badgeClass}`}>
+          <span className="absolute left-3 top-3 rounded-full bg-primary px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-primary-foreground">
             {product.badge}
           </span>
         )}
       </div>
-      <div className="flex flex-col flex-1 p-4">
-        <h3 className="font-semibold text-sm text-gray-900 leading-snug mb-1">
-          {product.name}
-        </h3>
+      <div className="flex flex-1 flex-col p-5">
+        <h3 className="font-display text-base font-bold leading-snug">{product.name}</h3>
         {product.subtitle && (
-          <p className="text-xs text-gray-500 line-clamp-2 mb-3 flex-1">
-            {product.subtitle}
-          </p>
+          <p className="mt-1.5 flex-1 text-sm leading-relaxed text-muted-foreground">{product.subtitle}</p>
         )}
-        <div className="flex items-center justify-between">
+        <div className="mt-4 flex items-center justify-between gap-3">
           <div>
-            <span className="font-bold text-sm text-gray-900">
-              {formatPrice(firstVar.price)}
-            </span>
-            <span className="block text-xs text-gray-400">{firstVar.format}</span>
+            <p className="font-display text-lg font-bold text-primary">{formatPrice(firstVar.price)}</p>
+            <p className="text-xs text-muted-foreground">{firstVar.format}</p>
           </div>
           <button
+            type="button"
             onClick={handleAdd}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-semibold transition-transform hover:scale-105 ${
               added
-                ? "bg-green-500 text-white"
-                : "bg-blue-600 text-white hover:bg-blue-700"
+                ? "bg-green-600 text-white"
+                : "bg-primary text-primary-foreground"
             }`}
           >
+            <Plus className="h-4 w-4" />
             {added ? "Ajouté ✓" : "Ajouter"}
           </button>
         </div>

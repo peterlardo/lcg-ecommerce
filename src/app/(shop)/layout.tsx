@@ -9,7 +9,7 @@ export default function ShopLayout({
   return (
     <>
       <Header />
-      <main className="min-h-screen pt-16">{children}</main>
+      <main className="flex-1">{children}</main>
       <Footer />
     </>
   )

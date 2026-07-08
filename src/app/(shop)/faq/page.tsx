@@ -1,4 +1,7 @@
-import Link from "next/link"
+"use client"
+
+import { useState } from "react"
+import { ChevronDown } from "lucide-react"
 
 const faqItems = [
   {
@@ -36,39 +39,37 @@ const faqItems = [
 ]
 
 export default function FaqPage() {
-  return (
-    <div>
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 text-white py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <span className="text-xs font-semibold uppercase tracking-widest text-blue-200">FAQ</span>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold mt-2 mb-4">
-            Questions fréquentes
-          </h1>
-          <p className="text-blue-100 text-lg max-w-xl mx-auto">
-            Délais, conservation, hygiène, paiement… tout ce qu&apos;il faut savoir avant de commander.
-          </p>
-        </div>
-      </section>
+  const [openIndex, setOpenIndex] = useState<number | null>(0)
 
-      {/* FAQ */}
-      <section className="py-16 sm:py-20">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="space-y-3">
-            {faqItems.map((item, i) => (
-              <details key={i} className="group bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors">
-                  <span>{item.q}</span>
-                  <span className="text-gray-400 group-open:rotate-180 transition-transform text-lg shrink-0 ml-4">▾</span>
-                </summary>
-                <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-3">
-                  {item.a}
-                </div>
-              </details>
-            ))}
+  const toggle = (i: number) => setOpenIndex(openIndex === i ? null : i)
+
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-16">
+      <p className="text-xs font-bold uppercase tracking-widest text-primary">FAQ</p>
+      <h1 className="mt-2 font-display text-4xl font-extrabold tracking-tight">Questions fréquentes</h1>
+      <p className="mt-4 leading-relaxed text-muted-foreground">
+        Délais, conservation, hygiène, paiement… tout ce qu&apos;il faut savoir avant de commander.
+      </p>
+      <div className="mt-10 space-y-3">
+        {faqItems.map((item, i) => (
+          <div key={i} className="overflow-hidden rounded-2xl border border-border bg-card shadow-card-soft">
+            <button
+              type="button"
+              onClick={() => toggle(i)}
+              className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left font-display text-sm font-bold"
+              aria-expanded={openIndex === i}
+            >
+              {item.q}
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 text-primary transition-transform ${openIndex === i ? "rotate-180" : ""}`}
+              />
+            </button>
+            {openIndex === i && (
+              <p className="px-6 pb-5 text-sm leading-relaxed text-muted-foreground">{item.a}</p>
+            )}
           </div>
-        </div>
-      </section>
+        ))}
+      </div>
     </div>
   )
 }
