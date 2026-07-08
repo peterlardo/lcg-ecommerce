@@ -62,7 +62,9 @@ export const ModelName = {
   Order: 'Order',
   OrderItem: 'OrderItem',
   Delivery: 'Delivery',
-  StockMovement: 'StockMovement'
+  StockMovement: 'StockMovement',
+  Message: 'Message',
+  Reservation: 'Reservation'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -253,6 +255,37 @@ export const StockMovementScalarFieldEnum = {
 } as const
 
 export type StockMovementScalarFieldEnum = (typeof StockMovementScalarFieldEnum)[keyof typeof StockMovementScalarFieldEnum]
+
+
+export const MessageScalarFieldEnum = {
+  id: 'id',
+  nom: 'nom',
+  telephone: 'telephone',
+  email: 'email',
+  objet: 'objet',
+  message: 'message',
+  lu: 'lu',
+  createdAt: 'createdAt'
+} as const
+
+export type MessageScalarFieldEnum = (typeof MessageScalarFieldEnum)[keyof typeof MessageScalarFieldEnum]
+
+
+export const ReservationScalarFieldEnum = {
+  id: 'id',
+  client: 'client',
+  telephone: 'telephone',
+  email: 'email',
+  type: 'type',
+  date: 'date',
+  heure: 'heure',
+  inviteCount: 'inviteCount',
+  notes: 'notes',
+  status: 'status',
+  createdAt: 'createdAt'
+} as const
+
+export type ReservationScalarFieldEnum = (typeof ReservationScalarFieldEnum)[keyof typeof ReservationScalarFieldEnum]
 
 
 export const SortOrder = {

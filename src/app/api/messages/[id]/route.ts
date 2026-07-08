@@ -3,7 +3,7 @@ import { getMessageById, markMessageAsRead, deleteMessage } from "@/data/store"
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/messages/[id]">) {
   const { id } = await ctx.params
-  const msg = getMessageById(id)
+  const msg = await getMessageById(id)
   if (!msg) {
     return NextResponse.json({ error: "Message introuvable" }, { status: 404 })
   }
@@ -12,7 +12,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/messages/[id]">
 
 export async function PATCH(_req: Request, ctx: RouteContext<"/api/messages/[id]">) {
   const { id } = await ctx.params
-  const success = markMessageAsRead(id)
+  const success = await markMessageAsRead(id)
   if (!success) {
     return NextResponse.json({ error: "Message introuvable" }, { status: 404 })
   }
@@ -21,7 +21,7 @@ export async function PATCH(_req: Request, ctx: RouteContext<"/api/messages/[id]
 
 export async function DELETE(_req: Request, ctx: RouteContext<"/api/messages/[id]">) {
   const { id } = await ctx.params
-  const success = deleteMessage(id)
+  const success = await deleteMessage(id)
   if (!success) {
     return NextResponse.json({ error: "Message introuvable" }, { status: 404 })
   }

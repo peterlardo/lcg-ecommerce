@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react"
 import { Package, Plus, Edit, Trash2, Search, Filter, ChevronDown, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
-import { categories } from "@/data/store"
-import type { Product, ProductVariant } from "@/data/store"
+import { categories } from "@/data/products"
+import type { Product, ProductVariant } from "@/data/products"
 
 const emptyVariant = { format: "", price: 0, stock: 0, unit: "" }
 

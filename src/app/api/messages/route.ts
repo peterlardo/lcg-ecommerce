@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getMessages, addMessage } from "@/data/store"
 
 export async function GET() {
-  const messages = getMessages()
+  const messages = await getMessages()
   return NextResponse.json(messages)
 }
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nom, téléphone et message sont requis" }, { status: 400 })
     }
 
-    const newMsg = addMessage({
+    const newMsg = await addMessage({
       nom,
       telephone,
       email: email || "",

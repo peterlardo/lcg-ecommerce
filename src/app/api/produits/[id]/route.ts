@@ -3,7 +3,7 @@ import { getProductById, updateProduct, deleteProduct } from "@/data/store"
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/produits/[id]">) {
   const { id } = await ctx.params
-  const product = getProductById(id)
+  const product = await getProductById(id)
   if (!product) {
     return NextResponse.json({ error: "Produit introuvable" }, { status: 404 })
   }
@@ -14,7 +14,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/produits/[id]"
   try {
     const { id } = await ctx.params
     const body = await req.json()
-    const success = updateProduct(id, body)
+    const success = await updateProduct(id, body)
     if (!success) {
       return NextResponse.json({ error: "Produit introuvable" }, { status: 404 })
     }
@@ -27,7 +27,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/produits/[id]"
 
 export async function DELETE(_req: Request, ctx: RouteContext<"/api/produits/[id]">) {
   const { id } = await ctx.params
-  const success = deleteProduct(id)
+  const success = await deleteProduct(id)
   if (!success) {
     return NextResponse.json({ error: "Produit introuvable" }, { status: 404 })
   }

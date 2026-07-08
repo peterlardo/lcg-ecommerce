@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getProducts, createProduct } from "@/data/store"
 
 export async function GET() {
-  const products = getProducts()
+  const products = await getProducts()
   return NextResponse.json(products)
 }
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nom et au moins une variante sont requis" }, { status: 400 })
     }
 
-    const product = createProduct({
+    const product = await createProduct({
       name,
       subtitle: subtitle || null,
       description: description || null,

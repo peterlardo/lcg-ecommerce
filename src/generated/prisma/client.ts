@@ -101,3 +101,13 @@ export type Delivery = Prisma.DeliveryModel
  * 
  */
 export type StockMovement = Prisma.StockMovementModel
+/**
+ * Model Message
+ * 
+ */
+export type Message = Prisma.MessageModel
+/**
+ * Model Reservation
+ * 
+ */
+export type Reservation = Prisma.ReservationModel
