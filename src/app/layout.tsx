@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description:
     "Commandez et réservez vos glaçons en eau minérale à Brazzaville : cubes, glace pilée, sphères, blocs. Livraison rapide pour particuliers et professionnels.",
   icons: {
-    icon: "/logo.jpeg",
+    icon: "/favicon.jpg",
   },
 }
 
