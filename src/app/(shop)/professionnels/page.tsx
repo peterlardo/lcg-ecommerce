@@ -72,7 +72,7 @@ export default function ProfessionnelsPage() {
               </ul>
               <Link
                 href="/contact"
-                className="mt-8 inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors text-sm"
+                className="mt-8 inline-flex items-center px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors text-sm"
               >
                 Demander un devis pro
               </Link>

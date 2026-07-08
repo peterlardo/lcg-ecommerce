@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useCart } from "@/contexts/cart-context"
-import { ShoppingCart, Menu, X, ChevronDown } from "lucide-react"
+import { Menu, X, ChevronDown } from "lucide-react"
 import { useState, useEffect } from "react"
 
 const navLinks = [
@@ -43,7 +43,7 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <img src="/logo-lcg.jpeg" alt="Logo LCG" className="h-9 w-auto" />
+            <img src="/logo-lcg.jpeg" alt="Logo LCG — La Congolaise des Glaçons" className="h-9 w-auto" />
             <div className="flex flex-col">
               <span className={`text-sm font-bold leading-tight ${transparent ? "text-white" : "text-gray-900"}`}>LCG</span>
               <span className={`text-[10px] leading-tight ${transparent ? "text-white/70" : "text-gray-500"}`}>La Congolaise des Glaçons</span>
@@ -72,15 +72,15 @@ export function Header() {
           <div className="flex items-center gap-2">
             <Link
               href="/panier"
-              className={`relative flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              className={`relative text-sm font-medium transition-colors ${
                 transparent
-                  ? "text-white/80 hover:text-white hover:bg-white/10"
-                  : "text-gray-700 hover:text-blue-600"
-              }`}
+                  ? "text-white/80 hover:text-white"
+                  : "text-gray-600 hover:text-blue-600"
+              } ${itemCount > 0 ? "pr-4" : ""}`}
             >
-              <ShoppingCart className="h-4 w-4" />
+              Panier
               {itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-blue-600 rounded-full">
+                <span className="absolute -top-2 -right-0 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-blue-600 rounded-full">
                   {itemCount}
                 </span>
               )}
@@ -88,8 +88,8 @@ export function Header() {
 
             {session?.user ? (
               <div className="relative group">
-                <button className={`flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  transparent ? "text-white/80 hover:text-white hover:bg-white/10" : "text-gray-700 hover:border-blue-500 border border-gray-200"
+                <button className={`flex items-center gap-1 text-sm font-medium transition-colors ${
+                  transparent ? "text-white/80 hover:text-white" : "text-gray-600 hover:text-blue-600"
                 }`}>
                   <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-semibold">
                     {session.user.name?.charAt(0) || "U"}
@@ -111,10 +111,10 @@ export function Header() {
             ) : (
               <Link
                 href="/auth/connexion"
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                className={`text-sm font-medium transition-colors ${
                   transparent
-                    ? "text-white border border-white/30 hover:bg-white/10"
-                    : "text-blue-600 border border-blue-200 hover:bg-blue-50"
+                    ? "text-white/80 hover:text-white"
+                    : "text-gray-600 hover:text-blue-600"
                 }`}
               >
                 Connexion
@@ -151,6 +151,9 @@ export function Header() {
               </Link>
             ))}
             <hr className="my-2" />
+            <Link href="/panier" onClick={() => setMenuOpen(false)} className="block px-3 py-2.5 text-sm font-medium text-gray-600 hover:text-blue-600">
+              Panier
+            </Link>
             {session?.user ? (
               <button onClick={() => signOut()} className="block w-full text-left px-3 py-2.5 text-sm text-red-600">Déconnexion</button>
             ) : (

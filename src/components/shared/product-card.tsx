@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { Package } from "lucide-react"
 import { useCart } from "@/contexts/cart-context"
 import { formatPrice } from "@/lib/utils"
 import { useState } from "react"
@@ -49,7 +48,7 @@ export function ProductCard({ product }: ProductCardProps) {
   return (
     <Link
       href={`/produits/${product.id}`}
-      className="group flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden transition-all hover:shadow-md"
+      className="group flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow"
     >
       <div className="relative h-48 bg-gray-50 overflow-hidden">
         {product.image ? (
@@ -57,12 +56,10 @@ export function ProductCard({ product }: ProductCardProps) {
             src={product.image}
             alt={product.name}
             fill
-            className="object-contain p-4 group-hover:scale-105 transition-transform duration-300"
+            className="object-contain p-4"
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-300">
-            <Package className="h-12 w-12" />
-          </div>
+          <div className="flex items-center justify-center h-full text-gray-300 text-4xl">🧊</div>
         )}
         {product.badge && (
           <span className={`absolute top-3 left-3 px-2 py-0.5 text-xs font-semibold rounded-full ${badgeClass}`}>
@@ -79,7 +76,7 @@ export function ProductCard({ product }: ProductCardProps) {
             {product.subtitle}
           </p>
         )}
-        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+        <div className="flex items-center justify-between">
           <div>
             <span className="font-bold text-sm text-gray-900">
               {formatPrice(firstVar.price)}

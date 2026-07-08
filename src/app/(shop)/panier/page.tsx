@@ -4,7 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
 import { formatPrice } from "@/lib/utils"
-import { Trash2, Minus, Plus, ShoppingBag, ArrowRight } from "lucide-react"
+import { Trash2, Minus, Plus, ShoppingBag } from "lucide-react"
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, subtotal, clearCart } = useCart()
@@ -19,9 +19,9 @@ export default function CartPage() {
         <p className="text-gray-500 mb-8">Parcourez notre catalogue de glaçons en eau minérale et ajoutez vos produits.</p>
         <Link
           href="/produits"
-          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
         >
-          Voir le catalogue <ArrowRight className="h-4 w-4" />
+          Voir le catalogue
         </Link>
       </div>
     )
@@ -95,9 +95,9 @@ export default function CartPage() {
             </div>
             <Link
               href="/commande"
-              className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
-            >
-              Commander <ArrowRight className="h-4 w-4" />
+            className="mt-6 w-full flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+          >
+            Commander
             </Link>
           </div>
         </div>

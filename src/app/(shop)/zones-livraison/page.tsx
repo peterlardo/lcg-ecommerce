@@ -1,6 +1,4 @@
 import Link from "next/link"
-import { ArrowRight } from "lucide-react"
-
 const zones = [
   { name: "Ouenzé", time: "30 – 45 min", desc: "Zone de production — livraison prioritaire" },
   { name: "Talangaï", time: "45 – 60 min", desc: "Livraison quotidienne" },
@@ -54,9 +52,9 @@ export default function ZonesLivraisonPage() {
           </p>
           <Link
             href="/contact"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
           >
-            Nous contacter <ArrowRight className="h-4 w-4" />
+            Nous contacter
           </Link>
         </div>
       </section>

@@ -18,25 +18,24 @@ export function Footer() {
             </p>
           </div>
           <div>
-            <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">Navigation</h4>
-            <div className="space-y-2">
-              <Link href="/produits" className="block text-sm hover:text-white transition-colors">Nos produits</Link>
-              <Link href="/professionnels" className="block text-sm hover:text-white transition-colors">Professionnels</Link>
-              <Link href="/zones-livraison" className="block text-sm hover:text-white transition-colors">Zones de livraison</Link>
-              <Link href="/a-propos" className="block text-sm hover:text-white transition-colors">Qui sommes-nous</Link>
-              <Link href="/faq" className="block text-sm hover:text-white transition-colors">FAQ</Link>
-              <Link href="/contact" className="block text-sm hover:text-white transition-colors">Contact</Link>
-              <Link href="/panier" className="block text-sm hover:text-white transition-colors">Mon panier</Link>
-            </div>
+            <h3 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">Navigation</h3>
+            <ul className="space-y-2">
+              <li><Link href="/produits" className="text-sm hover:text-white transition-colors">Nos produits</Link></li>
+              <li><Link href="/professionnels" className="text-sm hover:text-white transition-colors">Professionnels</Link></li>
+              <li><Link href="/zones-livraison" className="text-sm hover:text-white transition-colors">Zones de livraison</Link></li>
+              <li><Link href="/a-propos" className="text-sm hover:text-white transition-colors">Qui sommes-nous</Link></li>
+              <li><Link href="/faq" className="text-sm hover:text-white transition-colors">FAQ</Link></li>
+              <li><Link href="/contact" className="text-sm hover:text-white transition-colors">Contact</Link></li>
+              <li><Link href="/panier" className="text-sm hover:text-white transition-colors">Mon panier</Link></li>
+            </ul>
           </div>
           <div>
-            <h4 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">Contact</h4>
-            <div className="space-y-2 text-sm">
-              <p>97 Rue EWO, Ouenzé — Brazzaville</p>
-              <p>République du Congo</p>
-              <p className="mt-2">Commandes par téléphone et en ligne</p>
-              <p>Production · Eau minérale · Glaçons · PET · Livraison</p>
-            </div>
+            <h3 className="text-white text-xs font-semibold uppercase tracking-wider mb-3">Contact</h3>
+            <ul className="space-y-2 text-sm">
+              <li>97 Rue EWO, Ouenzé — Brazzaville, République du Congo</li>
+              <li>Commandes par téléphone et en ligne</li>
+              <li>Production · Eau minérale · Glaçons · PET · Livraison</li>
+            </ul>
           </div>
         </div>
         <div className="pt-6 text-center text-xs">
