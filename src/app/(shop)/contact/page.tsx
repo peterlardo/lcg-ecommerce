@@ -14,12 +14,21 @@ export default function ContactPage() {
   const [form, setForm] = useState({ nom: "", telephone: "", email: "", objet: "Question générale", message: "" })
   const [sent, setSent] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Contact message:", form)
-    setSent(true)
-    setForm({ nom: "", telephone: "", email: "", objet: "Question générale", message: "" })
-    setTimeout(() => setSent(false), 3000)
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) throw new Error("Erreur lors de l'envoi")
+      setSent(true)
+      setForm({ nom: "", telephone: "", email: "", objet: "Question générale", message: "" })
+      setTimeout(() => setSent(false), 3000)
+    } catch (err) {
+      console.error("Erreur:", err)
+    }
   }
 
   return (

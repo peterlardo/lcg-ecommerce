@@ -11,6 +11,8 @@ import {
   BarChart3,
   Settings,
   Warehouse,
+  CalendarRange,
+  MessageSquare,
 } from "lucide-react"
 
 const sidebarLinks = [
@@ -19,6 +21,8 @@ const sidebarLinks = [
   { href: "/admin/commandes", label: "Commandes", icon: ShoppingCart },
   { href: "/admin/stock", label: "Stock", icon: Warehouse },
   { href: "/admin/livraisons", label: "Livraisons", icon: Truck },
+  { href: "/admin/reservations", label: "Réservations", icon: CalendarRange },
+  { href: "/admin/messages", label: "Messages", icon: MessageSquare },
   { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/rapports", label: "Rapports", icon: BarChart3 },
   { href: "/admin/parametres", label: "Paramètres", icon: Settings },
