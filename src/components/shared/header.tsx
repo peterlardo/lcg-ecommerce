@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useCart } from "@/contexts/cart-context"
-import { ShoppingCart, Menu, X } from "lucide-react"
+import { ShoppingCart, Menu, X, Shield } from "lucide-react"
 import { useState } from "react"
 
 const navLinks = [
@@ -14,6 +14,8 @@ const navLinks = [
   { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Contact" },
 ]
+
+const adminLink = { href: "/admin", label: "Admin", icon: Shield }
 
 export function Header() {
   const pathname = usePathname()
@@ -54,6 +56,13 @@ export function Header() {
               </Link>
             )
           })}
+          <Link
+            href={adminLink.href}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground/60 transition-colors hover:text-primary"
+          >
+            <Shield className="h-3.5 w-3.5" />
+            {adminLink.label}
+          </Link>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -106,6 +115,14 @@ export function Header() {
             >
               <ShoppingCart className="h-4 w-4" />
               Panier
+            </Link>
+            <Link
+              href="/admin"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-muted-foreground/60 hover:text-primary"
+            >
+              <Shield className="h-4 w-4" />
+              Admin
             </Link>
           </div>
         </nav>
