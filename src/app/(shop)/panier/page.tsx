@@ -3,15 +3,19 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
 import { formatPrice, generateOrderNumber } from "@/lib/utils"
-import { Trash2, Minus, Plus, ShoppingCart, ArrowRight, CreditCard, Smartphone, Banknote } from "lucide-react"
+import { Trash2, Minus, Plus, ShoppingCart, ArrowRight, CreditCard, Smartphone, Banknote, CalendarRange } from "lucide-react"
 
 const paymentMethods = [
   { id: "card", label: "Carte bancaire", icon: CreditCard },
   { id: "mobile", label: "Mobile Money", icon: Smartphone },
   { id: "cod", label: "Paiement à la livraison", icon: Banknote },
+]
+
+const tabs = [
+  { id: "commande", label: "Commander", icon: ShoppingCart },
+  { id: "reservation", label: "Réserver", icon: CalendarRange },
 ]
 
 interface OrderForm {
@@ -27,15 +31,14 @@ interface OrderForm {
 export default function CartPage() {
   const router = useRouter()
   const { items, subtotal, clearCart, removeItem, updateQuantity } = useCart()
+  const [tab, setTab] = useState("commande")
 
-  // Commande form state
   const [paymentMethod, setPaymentMethod] = useState("cod")
   const [submitting, setSubmitting] = useState(false)
   const [orderForm, setOrderForm] = useState<OrderForm>({
     name: "", email: "", phone: "", address: "", city: "Brazzaville", district: "", notes: "",
   })
 
-  // Contact form state
   const [contactForm, setContactForm] = useState({
     nom: "", telephone: "", email: "", objet: "Réservation événement", message: "",
   })
@@ -94,7 +97,7 @@ export default function CartPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
+    <div className="mx-auto max-w-4xl px-4 py-10 sm:py-12">
       <div className="flex items-center justify-between mb-8">
         <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight">Mon panier</h1>
         <button onClick={clearCart} className="text-sm text-muted-foreground hover:text-destructive transition-colors">
@@ -107,7 +110,7 @@ export default function CartPage() {
           <div key={item.id} className="flex gap-4 rounded-2xl border border-border bg-card p-4 shadow-card-soft">
             <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-xl overflow-hidden bg-ice-gradient flex-shrink-0">
               {item.image ? (
-                <Image src={item.image} alt={item.name} fill className="object-cover" />
+                <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground text-xs">N/A</div>
               )}
@@ -140,15 +143,31 @@ export default function CartPage() {
         ))}
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* COMMANDE */}
-        <div className="rounded-2xl border-2 border-primary/20 bg-card p-6 shadow-card-soft">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <ShoppingCart className="h-4 w-4" />
-            </div>
-            <h2 className="font-display text-lg font-extrabold tracking-tight">Commande</h2>
-          </div>
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-2xl border-2 border-primary/20 bg-card p-1 shadow-card-soft">
+        {tabs.map((t) => {
+          const Icon = t.icon
+          const isActive = tab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all ${
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-frost"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Formulaire actif */}
+      <div className="mt-6 rounded-2xl border-2 border-primary/20 bg-card p-6 shadow-card-soft">
+        {tab === "commande" ? (
           <form onSubmit={handleOrderSubmit} className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -230,16 +249,7 @@ export default function CartPage() {
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
-        </div>
-
-        {/* RÉSERVATION */}
-        <div className="rounded-2xl border-2 border-accent/20 bg-card p-6 shadow-card-soft">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent">
-              <ShoppingCart className="h-4 w-4" />
-            </div>
-            <h2 className="font-display text-lg font-extrabold tracking-tight">Réservation événement</h2>
-          </div>
+        ) : (
           <form onSubmit={handleContactSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="block text-sm font-semibold sm:col-span-2">
@@ -282,7 +292,7 @@ export default function CartPage() {
               {sent ? "Message envoyé ✓" : "Envoyer le message"}
             </button>
           </form>
-        </div>
+        )}
       </div>
     </div>
   )
