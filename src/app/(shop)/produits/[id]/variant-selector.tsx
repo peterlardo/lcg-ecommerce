@@ -48,7 +48,7 @@ export function ProductVariantSelector({ product }: Props) {
               className={cn(
                 "px-4 py-3 text-sm font-medium rounded-lg border transition-all",
                 selectedVariantId === variant.id
-                  ? "border-primary-500 bg-primary-50 text-primary-700 ring-1 ring-primary-500"
+                  ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-500"
                   : "border-gray-200 text-gray-600 hover:border-gray-300 bg-white"
               )}
             >
@@ -76,7 +76,7 @@ export function ProductVariantSelector({ product }: Props) {
           "w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 font-semibold rounded-xl transition-all text-base",
           added
             ? "bg-green-500 text-white"
-            : "bg-primary-500 text-white hover:bg-primary-600"
+            : "bg-blue-600 text-white hover:bg-blue-700"
         )}
       >
         <ShoppingCart className={cn("h-5 w-5", added && "hidden")} />

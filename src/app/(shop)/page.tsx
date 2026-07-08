@@ -2,52 +2,49 @@ import Link from "next/link"
 import Image from "next/image"
 import { ProductCard } from "@/components/shared/product-card"
 import { products } from "@/data/products"
-import { ArrowRight, Shield, Truck, Leaf, Award } from "lucide-react"
+import { ArrowRight, Check } from "lucide-react"
 
 export default function HomePage() {
-  const featuredProducts = products.filter((p) => p.isFeatured)
-  const proProducts = products.filter((p) => p.categorySlug === "professionnel")
+  const featuredProducts = products.filter((p) => p.isFeatured).slice(0, 4)
 
   return (
     <div>
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-15">
-          <Image
-            src="/assets/hero-ice.jpg"
-            alt="Glaçons LCG"
-            fill
-            className="object-cover"
-            priority
-          />
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-900/60 to-transparent" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-36">
+      {/* Hero */}
+      <section className="relative h-[80vh] min-h-[500px] flex items-center text-white overflow-hidden">
+        <Image
+          src="/assets/hero-ice.jpg"
+          alt="Glaçons en eau minérale LCG plongeant dans l'eau"
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/15 backdrop-blur-sm rounded-full text-sm text-white/90 mb-6">
-              <Shield className="h-3.5 w-3.5" />
-              Eau minérale · Normes HACCP · Livraison réfrigérée
+              Brazzaville · Livraison réfrigérée
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight mb-6">
-              La fraîcheur pure,<br />livrée chez vous
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight mb-4">
+              La fraîcheur pure,
+              <br />
+              livrée chez vous.
             </h1>
-            <p className="text-lg sm:text-xl text-blue-100 leading-relaxed mb-10">
-              LCG produit des glaçons premium à base d&apos;eau minérale dans son usine à
-              Brazzaville. Fraîcheur, hygiène et fiabilité pour particuliers et professionnels.
+            <p className="text-lg sm:text-xl text-white/80 leading-relaxed mb-8 max-w-xl">
+              LCG produit des glaçons haut de gamme à base d&apos;eau minérale : cubes, glace pilée, sphères et blocs. Commandez en ligne ou réservez pour vos événements.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
                 href="/produits"
-                className="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white text-blue-700 font-semibold rounded-xl hover:bg-blue-50 transition-colors text-base shadow-lg"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
               >
                 Commander des glaçons
-                <ArrowRight className="h-5 w-5" />
+                <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/professionnels"
-                className="inline-flex items-center justify-center gap-2 px-8 py-3.5 border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/10 transition-colors text-base"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-white/40 text-white font-semibold rounded-xl hover:bg-white/10 transition-colors"
               >
-                Solution pro
+                Offres professionnels
               </Link>
             </div>
           </div>
@@ -57,183 +54,123 @@ export default function HomePage() {
       {/* Features */}
       <section className="py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
-              Pourquoi choisir LCG ?
-            </h2>
-            <p className="text-gray-500 max-w-lg mx-auto">
-              Nous combinons qualité industrielle et service personnalisé.
-            </p>
-          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Leaf className="h-6 w-6" />
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">100% eau minérale</h3>
+            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
+              <h3 className="font-bold text-gray-900 mb-2">100 % eau minérale</h3>
               <p className="text-sm text-gray-500 leading-relaxed">
-                Nos glaçons sont fabriqués à partir d&apos;eau minérale pure, filtrée et contrôlée.
+                Chaque glaçon est produit exclusivement à partir d&apos;eau minérale contrôlée.
               </p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Award className="h-6 w-6" />
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Hygiène irréprochable</h3>
+            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
+              <h3 className="font-bold text-gray-900 mb-2">Hygiène irréprochable</h3>
               <p className="text-sm text-gray-500 leading-relaxed">
-                Production en laboratoire certifié, manipulations stériles et emballages scellés.
+                Production tracée, conditionnement scellé et chaîne du froid respectée.
               </p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Truck className="h-6 w-6" />
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Livraison rapide</h3>
+            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
+              <h3 className="font-bold text-gray-900 mb-2">Livraison rapide</h3>
               <p className="text-sm text-gray-500 leading-relaxed">
-                Livraison en véhicule réfrigéré dans tout Brazzaville, sous 2 à 4 heures.
+                Livraison réfrigérée à Brazzaville, du sac 1 kg au big bag 25 kg.
               </p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-6 text-center hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <Shield className="h-6 w-6" />
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Réservation événement</h3>
+            <div className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
+              <h3 className="font-bold text-gray-900 mb-2">Réservation événement</h3>
               <p className="text-sm text-gray-500 leading-relaxed">
-                Commandez à l&apos;avance pour vos événements et soyez livrés le jour J.
+                Réservez vos volumes à l&apos;avance pour mariages, réceptions et festivals.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Categories */}
+      {/* Catalogue */}
       <section className="py-16 sm:py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
-              Nos catégories
-            </h2>
-            <p className="text-gray-500 max-w-lg mx-auto">
-              Des solutions adaptées à chaque besoin
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <Link href="/produits?categorie=particuliers" className="group relative bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-all">
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                  <span className="text-2xl">🏠</span>
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">Particuliers</h3>
-                <p className="text-sm text-gray-500">Glaçons pour usage quotidien. Sacs de 1 à 10 kg.</p>
-              </div>
-            </Link>
-            <Link href="/professionnels" className="group relative bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-all">
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                  <span className="text-2xl">🏢</span>
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">Professionnels</h3>
-                <p className="text-sm text-gray-500">Big bags, blocs, livraison programmée.</p>
-              </div>
-            </Link>
-            <Link href="/produits?categorie=evenementiel" className="group relative bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-all">
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                  <span className="text-2xl">🎉</span>
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">Événementiel</h3>
-                <p className="text-sm text-gray-500">Packs spéciaux pour vos fêtes et événements.</p>
-              </div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-blue-600 uppercase tracking-widest">Catalogue</span>
+            <Link href="/produits" className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+              Voir tout le catalogue <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-        </div>
-      </section>
-
-      {/* Featured Products */}
-      <section className="py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between mb-10">
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-                Nos produits vedettes
-              </h2>
-              <p className="text-gray-500">Les glaçons préférés de nos clients</p>
-            </div>
-            <Link
-              href="/produits"
-              className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
-              Voir tout <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-8">
+            Nos glaçons phares
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredProducts.slice(0, 4).map((product) => (
+            {featuredProducts.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
           <div className="mt-8 text-center sm:hidden">
-            <Link
-              href="/produits"
-              className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
-              Voir tout <ArrowRight className="h-4 w-4" />
+            <Link href="/produits" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+              Voir tout le catalogue <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Production Section */}
-      <section className="py-16 sm:py-20 bg-gray-50">
+      {/* Production */}
+      <section className="py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div className="relative h-72 sm:h-96 rounded-xl overflow-hidden">
               <Image
                 src="/assets/production.jpg"
-                alt="Usine LCG Ouenzé"
+                alt="Unité de production hygiénique de glaçons LCG"
                 fill
                 className="object-cover"
               />
             </div>
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">
-                Une production locale et maîtrisée
+              <span className="text-xs font-semibold text-blue-600 uppercase tracking-widest">Notre production</span>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2 mb-4">
+                De l&apos;eau minérale au glaçon parfait
               </h2>
               <p className="text-gray-600 leading-relaxed mb-6">
-                Basée à Ouenzé, Brazzaville, notre unité de production est équipée de machines
-                de dernière génération. Nous produisons chaque lot dans le respect strict des
-                normes HACCP, garantissant des glaçons d&apos;une pureté et d&apos;une
-                transparence exceptionnelles.
+                Notre unité de production à Ouenzé, Brazzaville, transforme une eau minérale rigoureusement contrôlée en glaçons cristallins. Chaque lot est tracé, conditionné en sachets scellés et stocké à température négative constante jusqu&apos;à la livraison.
               </p>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-600">+50</div>
-                  <div className="text-xs text-gray-500 mt-1">Clients actifs</div>
-                </div>
-                <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-600">8</div>
-                  <div className="text-xs text-gray-500 mt-1">Produits disponibles</div>
-                </div>
-              </div>
+              <ul className="space-y-2 mb-8">
+                <li className="flex items-start gap-2 text-sm text-gray-600">
+                  <Check className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                  <span>Eau minérale filtrée et analysée</span>
+                </li>
+                <li className="flex items-start gap-2 text-sm text-gray-600">
+                  <Check className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                  <span>Conditionnements de 1 kg à 25 kg</span>
+                </li>
+                <li className="flex items-start gap-2 text-sm text-gray-600">
+                  <Check className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                  <span>Chaîne du froid garantie jusqu&apos;à votre porte</span>
+                </li>
+                <li className="flex items-start gap-2 text-sm text-gray-600">
+                  <Check className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                  <span>Capacité de production adaptée aux grands événements</span>
+                </li>
+              </ul>
+              <Link
+                href="/a-propos"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors text-sm"
+              >
+                Découvrir LCG <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-16 sm:py-20 bg-gradient-to-r from-blue-700 to-blue-600 text-white">
+      <section className="py-16 sm:py-20 bg-gray-50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
             Un événement en préparation ?
           </h2>
-          <p className="text-blue-100 text-lg mb-8 max-w-xl mx-auto">
-            Mariage, anniversaire, fête d&apos;entreprise ? Nous livrons la quantité qu&apos;il
-            vous faut, avec une option de réservation événementielle.
+          <p className="text-gray-500 text-lg mb-8 max-w-xl mx-auto">
+            Réservez vos glaçons à l&apos;avance — mariage, réception, bar éphémère ou festival — et soyez livré à la date et au lieu de votre choix.
           </p>
           <Link
-            href="/contact"
-            className="inline-flex items-center gap-2 px-8 py-3.5 bg-white text-blue-700 font-semibold rounded-xl hover:bg-blue-50 transition-colors"
+            href="/panier"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
           >
-            Nous contacter <ArrowRight className="h-5 w-5" />
+            Réserver maintenant <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </section>

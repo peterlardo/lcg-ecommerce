@@ -3,8 +3,8 @@
 import Link from "next/link"
 import Image from "next/image"
 import { Package } from "lucide-react"
-import { formatPrice } from "@/lib/utils"
 import { useCart } from "@/contexts/cart-context"
+import { formatPrice } from "@/lib/utils"
 import { useState } from "react"
 
 interface ProductCardProps {

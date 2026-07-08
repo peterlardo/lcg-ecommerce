@@ -5,10 +5,9 @@ import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useCart } from "@/contexts/cart-context"
 import { ShoppingCart, Menu, X, ChevronDown } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 const navLinks = [
-  { href: "/", label: "Accueil" },
   { href: "/produits", label: "Nos produits" },
   { href: "/professionnels", label: "Professionnels" },
   { href: "/zones-livraison", label: "Livraison" },
@@ -22,13 +21,33 @@ export function Header() {
   const { data: session } = useSession()
   const { itemCount } = useCart()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40)
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
+  const isHome = pathname === "/"
+  const transparent = isHome && !scrolled
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+    <header
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        transparent
+          ? "bg-transparent"
+          : "bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm"
+      }`}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <img src="/logo-lcg.jpeg" alt="LCG — La Congolaise des Glaçons" className="h-9 w-auto" />
+          <Link href="/" className="flex items-center gap-2.5 shrink-0">
+            <img src="/logo-lcg.jpeg" alt="Logo LCG" className="h-9 w-auto" />
+            <div className="flex flex-col">
+              <span className={`text-sm font-bold leading-tight ${transparent ? "text-white" : "text-gray-900"}`}>LCG</span>
+              <span className={`text-[10px] leading-tight ${transparent ? "text-white/70" : "text-gray-500"}`}>La Congolaise des Glaçons</span>
+            </div>
           </Link>
 
           <nav className="hidden lg:flex items-center gap-0.5">
@@ -39,9 +58,9 @@ export function Header() {
                   key={link.href}
                   href={link.href}
                   className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    isActive
-                      ? "text-blue-600 bg-blue-50"
-                      : "text-gray-600 hover:text-blue-600 hover:bg-blue-50/50"
+                    transparent
+                      ? isActive ? "text-white bg-white/15" : "text-white/80 hover:text-white hover:bg-white/10"
+                      : isActive ? "text-blue-600 bg-blue-50" : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
                   }`}
                 >
                   {link.label}
@@ -53,12 +72,15 @@ export function Header() {
           <div className="flex items-center gap-2">
             <Link
               href="/panier"
-              className="relative flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:border-blue-500 hover:text-blue-600 transition-colors"
+              className={`relative flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                transparent
+                  ? "text-white/80 hover:text-white hover:bg-white/10"
+                  : "text-gray-700 hover:text-blue-600"
+              }`}
             >
               <ShoppingCart className="h-4 w-4" />
-              <span className="hidden sm:inline">Panier</span>
               {itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+                <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-blue-600 rounded-full">
                   {itemCount}
                 </span>
               )}
@@ -66,7 +88,9 @@ export function Header() {
 
             {session?.user ? (
               <div className="relative group">
-                <button className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:border-blue-500 transition-colors">
+                <button className={`flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  transparent ? "text-white/80 hover:text-white hover:bg-white/10" : "text-gray-700 hover:border-blue-500 border border-gray-200"
+                }`}>
                   <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-semibold">
                     {session.user.name?.charAt(0) || "U"}
                   </span>
@@ -85,12 +109,24 @@ export function Header() {
                 </div>
               </div>
             ) : (
-              <Link href="/auth/connexion" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+              <Link
+                href="/auth/connexion"
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  transparent
+                    ? "text-white border border-white/30 hover:bg-white/10"
+                    : "text-blue-600 border border-blue-200 hover:bg-blue-50"
+                }`}
+              >
                 Connexion
               </Link>
             )}
 
-            <button onClick={() => setMenuOpen(!menuOpen)} className="lg:hidden p-2 text-gray-600 hover:text-blue-600">
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className={`lg:hidden p-2 rounded-lg transition-colors ${
+                transparent ? "text-white/80 hover:text-white hover:bg-white/10" : "text-gray-600 hover:text-blue-600"
+              }`}
+            >
               {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
@@ -98,7 +134,7 @@ export function Header() {
       </div>
 
       {menuOpen && (
-        <nav className="lg:hidden border-t border-gray-100 bg-white">
+        <nav className="lg:hidden border-t border-gray-100 bg-white shadow-lg">
           <div className="px-4 py-3 space-y-1">
             {navLinks.map((link) => (
               <Link

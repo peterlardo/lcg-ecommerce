@@ -25,9 +25,9 @@ export default async function ProductDetailPage({
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-gray-500 mb-8">
-        <Link href="/" className="hover:text-primary-600 transition-colors">Accueil</Link>
+        <Link href="/" className="hover:text-blue-600 transition-colors">Accueil</Link>
         <span>/</span>
-        <Link href="/produits" className="hover:text-primary-600 transition-colors">Produits</Link>
+        <Link href="/produits" className="hover:text-blue-600 transition-colors">Produits</Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">{product.name}</span>
       </nav>
@@ -51,7 +51,7 @@ export default async function ProductDetailPage({
         </div>
 
         <div className="flex flex-col">
-          <p className="text-sm text-primary-600 font-medium mb-2">{product.categoryName}</p>
+          <p className="text-sm text-blue-600 font-medium mb-2">{product.categoryName}</p>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">{product.name}</h1>
           {product.subtitle && (
             <p className="text-gray-500 mb-6">{product.subtitle}</p>

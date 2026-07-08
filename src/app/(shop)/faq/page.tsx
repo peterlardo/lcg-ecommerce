@@ -1,103 +1,38 @@
 import Link from "next/link"
+import { ArrowRight } from "lucide-react"
 
 const faqItems = [
   {
-    category: "Livraison",
-    questions: [
-      {
-        q: "Quels sont les délais de livraison ?",
-        a: "Nous livrons sous 2 à 4 heures en moyenne dans tout Brazzaville. Si vous commandez avant 14h, votre colis est livré le jour même.",
-      },
-      {
-        q: "Livrez-vous le week-end ?",
-        a: "Oui, nous livrons du lundi au samedi. Les livraisons du dimanche sont possibles sur rendez-vous pour les événements.",
-      },
-      {
-        q: "Puis-je choisir mon créneau de livraison ?",
-        a: "Absolument. Lors de votre commande, vous pouvez sélectionner une tranche horaire : matin (8h-12h), après-midi (12h-17h) ou soir (17h-20h).",
-      },
-    ],
+    q: "Quels sont les délais de livraison ?",
+    a: "À Ouenzé, comptez 30 à 45 minutes. Dans les autres arrondissements de Brazzaville, entre 45 et 90 minutes selon la zone. Pour les gros volumes ou les zones éloignées, commandez la veille.",
   },
   {
-    category: "Commande minimum",
-    questions: [
-      {
-        q: "Quel est le montant minimum de commande ?",
-        a: "La commande minimum est de 1 000 FCFA, soit un sac de 1 kg de glaçons.",
-      },
-      {
-        q: "Y a-t-il des frais de livraison ?",
-        a: "Pour les commandes de moins de 10 000 FCFA, des frais de livraison de 500 à 1 500 FCFA s'appliquent selon la zone. La livraison est gratuite dès 10 000 FCFA d'achat.",
-      },
-    ],
+    q: "Comment conserver mes glaçons ?",
+    a: "Placez vos glaçons dans un congélateur à -18 °C dans leur emballage d'origine. Une fois le sachet ouvert, refermez-le soigneusement. Nos sacs sous atmosphère contrôlée préservent la qualité et empêchent l'absorption des odeurs.",
   },
   {
-    category: "Paiement",
-    questions: [
-      {
-        q: "Quels moyens de paiement acceptez-vous ?",
-        a: "Nous acceptons Mobile Money (Airtel Money, MTN MoMo), Wave, carte bancaire (Visa, Mastercard) et espèces à la livraison.",
-      },
-      {
-        q: "Puis-je payer à la livraison ?",
-        a: "Oui, le paiement à la livraison est disponible en espèces ou par Mobile Money.",
-      },
-      {
-        q: "Proposez-vous la facturation mensuelle pour les pros ?",
-        a: "Oui, les clients professionnels peuvent bénéficier d'une facturation mensuelle avec paiement à 30 jours sous réserve d'éligibilité.",
-      },
-    ],
+    q: "Vos glaçons sont-ils vraiment en eau minérale ?",
+    a: "Oui, tous nos glaçons sont fabriqués exclusivement à partir d'eau minérale contrôlée et filtrée. Nous n'utilisons pas d'eau du robinet. C'est ce qui garantit leur transparence, leur neutralité gustative et leur qualité alimentaire.",
   },
   {
-    category: "Conservation",
-    questions: [
-      {
-        q: "Comment conserver mes glaçons ?",
-        a: "Placez vos glaçons dans un congélateur à -18°C. Une fois le sac ouvert, refermez-le soigneusement pour éviter l'absorption d'odeurs.",
-      },
-      {
-        q: "Combien de temps les glaçons se conservent-ils ?",
-        a: "Dans un congélateur à -18°C, nos glaçons se conservent plusieurs mois sans altération de leur qualité.",
-      },
-      {
-        q: "Les glaçons prennent-ils le goût du congélateur ?",
-        a: "Non. Nos sacs sous atmosphère contrôlée protègent les glaçons des odeurs. Une fois ouverts, nous recommandons de bien refermer le sac.",
-      },
-    ],
+    q: "Quels moyens de paiement acceptez-vous ?",
+    a: "Nous acceptons Mobile Money (Airtel Money, MTN MoMo), Wave, carte bancaire (Visa, Mastercard) et espèces à la livraison. Pour les professionnels, la facturation mensuelle est possible.",
   },
   {
-    category: "Événements",
-    questions: [
-      {
-        q: "Proposez-vous des packs pour les événements ?",
-        a: "Oui, notre pack Événementiel est disponible en trois formats : Standard, Premium et VIP. Il comprend un assortiment de glaçons cubes, cylindriques et glace pilée.",
-      },
-      {
-        q: "Puis-je réserver une livraison pour une date ultérieure ?",
-        a: "Oui, vous pouvez planifier votre livraison jusqu'à 30 jours à l'avance. Idéal pour les mariages, anniversaires et fêtes.",
-      },
-      {
-        q: "Livrez-vous en dehors de Brazzaville pour les événements ?",
-        a: "Pour les événements spéciaux, contactez-nous directement. Nous étudions les demandes de livraison dans les localités voisines.",
-      },
-    ],
+    q: "Puis-je réserver des glaçons pour un événement ?",
+    a: "Absolument. Vous pouvez réserver jusqu'à 30 jours à l'avance via notre pack Événementiel (Standard, Premium ou VIP). Livraison garantie le jour J, même pour de grands volumes.",
   },
   {
-    category: "Comptes professionnels",
-    questions: [
-      {
-        q: "Comment créer un compte professionnel ?",
-        a: "Remplissez le formulaire de contact ou appelez notre équipe commerciale. Un conseiller vous accompagnera dans la création de votre compte.",
-      },
-      {
-        q: "Quels sont les avantages d'un compte professionnel ?",
-        a: "Tarifs dégressifs, livraison programmée, facturation mensuelle, accès à la plateforme pro et priorité de livraison.",
-      },
-      {
-        q: "Y a-t-il un engagement ?",
-        a: "Aucun engagement de durée. Vous pouvez commander selon vos besoins, sans minimum mensuel imposé.",
-      },
-    ],
+    q: "Puis-je modifier ou annuler ma commande ?",
+    a: "Tant que votre commande n'est pas en cours de préparation, vous pouvez la modifier ou l'annuler depuis votre compte. Une fois en livraison, contactez-nous directement.",
+  },
+  {
+    q: "Livrez-vous en dehors de Brazzaville ?",
+    a: "Pour les gros volumes et les événements, nous étudions les livraisons hors Brazzaville. Contactez-nous pour une demande spécifique.",
+  },
+  {
+    q: "Proposez-vous des tarifs professionnels ?",
+    a: "Oui, nous avons une grille tarifaire dégressive pour les restaurants, hôtels, bars et traiteurs. Bénéficiez de livraisons programmées et d'un compte avec facturation mensuelle sans engagement.",
   },
 ]
 
@@ -105,13 +40,14 @@ export default function FaqPage() {
   return (
     <div>
       {/* Hero */}
-      <section className="bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 text-white py-16 sm:py-20">
+      <section className="bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 text-white py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold mb-4">
-            Foire aux questions
+          <span className="text-xs font-semibold uppercase tracking-widest text-blue-200">FAQ</span>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold mt-2 mb-4">
+            Questions fréquentes
           </h1>
-          <p className="text-primary-100 text-lg max-w-xl mx-auto">
-            Tout ce que vous devez savoir sur LCG, nos produits et nos services.
+          <p className="text-blue-100 text-lg max-w-xl mx-auto">
+            Délais, conservation, hygiène, paiement… tout ce qu&apos;il faut savoir avant de commander.
           </p>
         </div>
       </section>
@@ -119,49 +55,19 @@ export default function FaqPage() {
       {/* FAQ */}
       <section className="py-16 sm:py-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          {faqItems.map((section, i) => (
-            <div key={i} className="mb-12 last:mb-0">
-              <h2 className="text-xl font-bold text-gray-900 mb-5 pb-2 border-b border-gray-200">
-                {section.category}
-              </h2>
-              <div className="space-y-3">
-                {section.questions.map((item, j) => (
-                  <details
-                    key={j}
-                    className="group bg-white border border-gray-200 rounded-xl overflow-hidden"
-                  >
-                    <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors">
-                      <span>{item.q}</span>
-                      <span className="text-gray-400 group-open:rotate-180 transition-transform text-lg shrink-0 ml-4">
-                        ▾
-                      </span>
-                    </summary>
-                    <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-3">
-                      {item.a}
-                    </div>
-                  </details>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Contact CTA */}
-      <section className="py-16 sm:py-20 bg-gray-50">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
-            Vous avez d&apos;autres questions ?
-          </h2>
-          <p className="text-gray-500 max-w-lg mx-auto mb-8">
-            Notre équipe est à votre disposition pour vous renseigner.
-          </p>
-          <Link
-            href="/contact"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-primary-500 text-white font-semibold rounded-xl hover:bg-primary-600 transition-colors"
-          >
-            Contactez-nous
-          </Link>
+          <div className="space-y-3">
+            {faqItems.map((item, i) => (
+              <details key={i} className="group bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors">
+                  <span>{item.q}</span>
+                  <span className="text-gray-400 group-open:rotate-180 transition-transform text-lg shrink-0 ml-4">▾</span>
+                </summary>
+                <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-3">
+                  {item.a}
+                </div>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
     </div>
