@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react"
 import { redirect } from "next/navigation"
 
 export default function ParametresPage() {
-  const { data: session, status } = useSession()
+  const { data: session, status, update } = useSession()
 
   const [name, setName] = useState(session?.user?.name || "")
   const [email, setEmail] = useState(session?.user?.email || "")
@@ -14,6 +14,7 @@ export default function ParametresPage() {
   const [newPassword, setNewPassword] = useState("")
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
+  const [error, setError] = useState("")
 
   if (status === "unauthenticated") {
     redirect("/auth/connexion")
@@ -21,8 +22,8 @@ export default function ParametresPage() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-gray-500">Chargement...</p>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     )
   }
@@ -31,45 +32,85 @@ export default function ParametresPage() {
     e.preventDefault()
     setSaving(true)
     setMessage("")
+    setError("")
 
-    console.log("Saving info:", { name, email, phone })
+    try {
+      const res = await fetch("/api/my-profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, phone }),
+      })
 
-    setTimeout(() => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || "Erreur lors de la mise à jour")
+      }
+
+      await update()
       setMessage("Informations mises à jour avec succès")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur est survenue")
+    } finally {
       setSaving(false)
-    }, 500)
+    }
   }
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setMessage("")
+    setError("")
 
-    console.log("Changing password:", { currentPassword, newPassword })
+    try {
+      const res = await fetch("/api/my-profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
 
-    setTimeout(() => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || "Erreur lors du changement de mot de passe")
+      }
+
       setMessage("Mot de passe mis à jour avec succès")
-      setSaving(false)
       setCurrentPassword("")
       setNewPassword("")
-    }, 500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur est survenue")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12">
-      <h1 className="mb-8 text-3xl font-bold text-gray-900">Paramètres du compte</h1>
+    <div className="p-6 lg:p-10 max-w-2xl">
+      <h1 className="font-display text-2xl font-extrabold tracking-tight lg:text-3xl">
+        Paramètres du compte
+      </h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Gérez vos informations personnelles et votre sécurité.
+      </p>
 
       {message && (
-        <div className="mb-6 rounded-lg bg-green-50 p-3 text-sm text-green-600">
+        <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
           {message}
         </div>
       )}
 
-      <div className="mb-8 rounded-xl bg-white p-6 shadow-md">
-        <h2 className="mb-6 text-lg font-semibold text-gray-900">Informations personnelles</h2>
+      {error && (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      <div className="mt-8 rounded-2xl border border-border bg-white p-6 shadow-sm">
+        <h2 className="mb-6 font-display text-lg font-bold">
+          Informations personnelles
+        </h2>
         <form onSubmit={handleInfoSubmit} className="space-y-5">
           <div>
-            <label htmlFor="name" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="name" className="mb-1 block text-sm font-semibold text-gray-700">
               Nom complet
             </label>
             <input
@@ -77,12 +118,12 @@ export default function ParametresPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-[#1f4fa3] focus:ring-1 focus:ring-[#1f4fa3]"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#1f4fa3] focus:ring-2 focus:ring-[#1f4fa3]/20"
             />
           </div>
 
           <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="email" className="mb-1 block text-sm font-semibold text-gray-700">
               Email
             </label>
             <input
@@ -90,12 +131,12 @@ export default function ParametresPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-[#1f4fa3] focus:ring-1 focus:ring-[#1f4fa3]"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#1f4fa3] focus:ring-2 focus:ring-[#1f4fa3]/20"
             />
           </div>
 
           <div>
-            <label htmlFor="phone" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="phone" className="mb-1 block text-sm font-semibold text-gray-700">
               Téléphone
             </label>
             <input
@@ -103,25 +144,28 @@ export default function ParametresPage() {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-[#1f4fa3] focus:ring-1 focus:ring-[#1f4fa3]"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#1f4fa3] focus:ring-2 focus:ring-[#1f4fa3]/20"
+              placeholder="+242 ..."
             />
           </div>
 
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-[#1f4fa3] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#183d80] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full bg-[#1f4fa3] px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-[#1f4fa3]/25 transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Enregistrement..." : "Enregistrer"}
           </button>
         </form>
       </div>
 
-      <div className="rounded-xl bg-white p-6 shadow-md">
-        <h2 className="mb-6 text-lg font-semibold text-gray-900">Changer le mot de passe</h2>
+      <div className="mt-6 rounded-2xl border border-border bg-white p-6 shadow-sm">
+        <h2 className="mb-6 font-display text-lg font-bold">
+          Changer le mot de passe
+        </h2>
         <form onSubmit={handlePasswordSubmit} className="space-y-5">
           <div>
-            <label htmlFor="currentPassword" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="currentPassword" className="mb-1 block text-sm font-semibold text-gray-700">
               Mot de passe actuel
             </label>
             <input
@@ -130,12 +174,12 @@ export default function ParametresPage() {
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               required
-              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-[#1f4fa3] focus:ring-1 focus:ring-[#1f4fa3]"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#1f4fa3] focus:ring-2 focus:ring-[#1f4fa3]/20"
             />
           </div>
 
           <div>
-            <label htmlFor="newPassword" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="newPassword" className="mb-1 block text-sm font-semibold text-gray-700">
               Nouveau mot de passe
             </label>
             <input
@@ -145,14 +189,14 @@ export default function ParametresPage() {
               onChange={(e) => setNewPassword(e.target.value)}
               required
               minLength={8}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-[#1f4fa3] focus:ring-1 focus:ring-[#1f4fa3]"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-shadow focus:border-[#1f4fa3] focus:ring-2 focus:ring-[#1f4fa3]/20"
             />
           </div>
 
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-[#1f4fa3] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#183d80] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full bg-[#1f4fa3] px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-[#1f4fa3]/25 transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Enregistrement..." : "Mettre à jour le mot de passe"}
           </button>

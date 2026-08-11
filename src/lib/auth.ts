@@ -8,6 +8,7 @@ type Role = "ADMIN" | "STOCK_MANAGER" | "DELIVERY_AGENT" | "CUSTOMER"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/auth/connexion",
@@ -27,6 +28,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         })
 
         if (!user || !user.password || !user.isActive) return null
+
+        const STAFF_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
+        if (!STAFF_ROLES.includes(user.role) && !user.emailVerified) return null
 
         const isValid = await bcrypt.compare(
           credentials.password as string,
@@ -51,12 +55,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = user.role as Role
         token.id = user.id
       }
+      if (token.id) {
+        token.permissions = await prisma.userPermission.findMany({ where: { userId: token.id as string }, select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true } })
+      }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.role = token.role as Role
         session.user.id = token.id as string
+        session.user.permissions = (token.permissions || []) as { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }[]
       }
       return session
     },
@@ -76,3 +84,10 @@ export async function requireAuth(allowedRoles?: Role[]) {
   }
   return user
 }
+
+
+
+
+
+
+

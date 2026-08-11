@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { requireManagementAccess } from "@/lib/api-auth"
 import { getProducts, createProduct } from "@/data/store"
 
 export async function GET() {
@@ -7,6 +8,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
+  if (forbidden) return forbidden
+
   try {
     const body = await request.json()
     const { name, subtitle, description, image, categoryId, categorySlug, categoryName, isFeatured, badge, variants } = body

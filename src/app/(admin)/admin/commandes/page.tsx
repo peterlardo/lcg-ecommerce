@@ -1,13 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import {
   ShoppingCart,
   ChevronDown,
-  Eye,
   Search,
+  Plus,
+  X,
 } from "lucide-react"
 import { formatPrice, getStatusColor, getStatusLabel } from "@/lib/utils"
+import { products } from "@/data/products"
 
 const statusFilters = [
   "Toutes",
@@ -31,228 +33,220 @@ const statusMap: Record<string, string> = {
 }
 
 interface OrderItem {
-  product: string
+  productId: string
+  variantId: string
+  name: string
+  format: string
   quantity: number
   price: number
+  total: number
 }
 
 interface Order {
   id: string
-  customer: string
-  email: string
-  phone: string
+  orderNumber: string
+  customerName: string
+  customerEmail: string
+  customerPhone: string
   status: string
+  paymentMethod: string
+  source: string
   total: number
-  date: string
+  createdAt: string
   items: OrderItem[]
-  deliveryAddress: string
-  scheduledDate: string
-  deliveryAgent: string
+  delivery: { address: string; city: string; district: string | null; notes: string | null } | null
 }
 
-const orders: Order[] = [
-  {
-    id: "LCG-A3F2-1B9C",
-    customer: "Jean-Paul M.",
-    email: "jeanpaul@example.com",
-    phone: "+242 05 123 45 67",
-    status: "DELIVERED",
-    total: 15000,
-    date: "08/07/2026",
-    items: [
-      { product: "Big bag pro — 25 kg", quantity: 1, price: 15000 },
-    ],
-    deliveryAddress: "15 Av. de la République, Brazzaville",
-    scheduledDate: "08/07/2026",
-    deliveryAgent: "Alex N.",
-  },
-  {
-    id: "LCG-B4E1-2C8D",
-    customer: "Marie K.",
-    email: "marie.k@example.com",
-    phone: "+242 06 234 56 78",
-    status: "OUT_FOR_DELIVERY",
-    total: 4000,
-    date: "08/07/2026",
-    items: [
-      { product: "Glaçons cubes — Sac 5 kg", quantity: 1, price: 4000 },
-    ],
-    deliveryAddress: "12 Rue des Lilas, Brazzaville",
-    scheduledDate: "08/07/2026",
-    deliveryAgent: "Sarah B.",
-  },
-  {
-    id: "LCG-C5D0-3D7E",
-    customer: "Hôtel Émeraude",
-    email: "contact@hotelemeraude.cg",
-    phone: "+242 05 345 67 89",
-    status: "PROCESSING",
-    total: 35000,
-    date: "07/07/2026",
-    items: [
-      { product: "Pack Événementiel VIP", quantity: 1, price: 35000 },
-    ],
-    deliveryAddress: "Bd du Général de Gaulle, Brazzaville",
-    scheduledDate: "09/07/2026",
-    deliveryAgent: "",
-  },
-  {
-    id: "LCG-D6C9-4E6F",
-    customer: "Restaurant Le Palais",
-    email: "contact@lepalais.cg",
-    phone: "+242 06 456 78 90",
-    status: "CONFIRMED",
-    total: 22000,
-    date: "07/07/2026",
-    items: [
-      { product: "Glaçons cylindriques — Sac 5 kg", quantity: 2, price: 5500 },
-      { product: "Glace pilée — Sac 5 kg", quantity: 1, price: 4500 },
-      { product: "Bloc de glace grand format ±10kg", quantity: 1, price: 5000 },
-    ],
-    deliveryAddress: "Av. de l'Indépendance, Brazzaville",
-    scheduledDate: "09/07/2026",
-    deliveryAgent: "",
-  },
-  {
-    id: "LCG-E7B8-5F5G",
-    customer: "Café Central",
-    email: "cafecentral@example.com",
-    phone: "+242 05 567 89 01",
-    status: "PENDING",
-    total: 8500,
-    date: "06/07/2026",
-    items: [
-      { product: "Glaçons cubes — Sac 2 kg", quantity: 1, price: 1500 },
-      { product: "Sphères premium — Boîte de 6", quantity: 2, price: 3500 },
-    ],
-    deliveryAddress: "3 Place de la Cathédrale, Brazzaville",
-    scheduledDate: "10/07/2026",
-    deliveryAgent: "",
-  },
-  {
-    id: "LCG-F9A7-6G4H",
-    customer: "Traiteur Élégance",
-    email: "info@traiteurelegance.cg",
-    phone: "+242 06 678 90 12",
-    status: "READY",
-    total: 48500,
-    date: "06/07/2026",
-    items: [
-      { product: "Pack Événementiel Premium", quantity: 1, price: 20000 },
-      { product: "Bloc de glace grand format ±25kg", quantity: 1, price: 10000 },
-      { product: "Glaçons cubes — Sac 5 kg", quantity: 3, price: 4000 },
-      { product: "Glace pilée — Sac 5 kg", quantity: 1, price: 4500 },
-    ],
-    deliveryAddress: "25 Rue du Commerce, Brazzaville",
-    scheduledDate: "09/07/2026",
-    deliveryAgent: "",
-  },
-  {
-    id: "LCG-G0B6-7H3I",
-    customer: "Supermarché Mega",
-    email: "commandes@megamarket.cg",
-    phone: "+242 05 789 01 23",
-    status: "PENDING",
-    total: 75000,
-    date: "05/07/2026",
-    items: [
-      { product: "Big bag pro — 25 kg", quantity: 3, price: 15000 },
-      { product: "Glaçons cubes — Sac 10 kg", quantity: 2, price: 7000 },
-      { product: "Glaçons cubes — Sac 25 kg", quantity: 1, price: 15000 },
-    ],
-    deliveryAddress: "Zone Industrielle, Pointe-Noire",
-    scheduledDate: "11/07/2026",
-    deliveryAgent: "",
-  },
-  {
-    id: "LCG-H1C4-8G2J",
-    customer: "Bar L'Éclipse",
-    email: "barleclipse@example.com",
-    phone: "+242 06 890 12 34",
-    status: "CANCELLED",
-    total: 12500,
-    date: "04/07/2026",
-    items: [
-      { product: "Sphères premium — Boîte de 12", quantity: 1, price: 6000 },
-      { product: "Glaçons cylindriques — Sac 2 kg", quantity: 1, price: 2500 },
-      { product: "Glace pilée — Sac 2 kg", quantity: 2, price: 2000 },
-    ],
-    deliveryAddress: "5 Quai des Arts, Brazzaville",
-    scheduledDate: "06/07/2026",
-    deliveryAgent: "",
-  },
-  {
-    id: "LCG-I2D5-9F1K",
-    customer: "Mairie de Brazzaville",
-    email: "service.event@mairie-bzv.cg",
-    phone: "+242 05 901 23 45",
-    status: "DELIVERED",
-    total: 120000,
-    date: "03/07/2026",
-    items: [
-      { product: "Bloc de glace grand format ±25kg", quantity: 4, price: 10000 },
-      { product: "Pack Événementiel VIP", quantity: 2, price: 35000 },
-      { product: "Glaçons cubes — Sac 25 kg", quantity: 2, price: 15000 },
-    ],
-    deliveryAddress: "Hôtel de Ville, Brazzaville",
-    scheduledDate: "03/07/2026",
-    deliveryAgent: "Alex N.",
-  },
-  {
-    id: "LCG-J3E6-0G2L",
-    customer: "Clinique Sainte-Anne",
-    email: "logistique@sainteanne.cg",
-    phone: "+242 06 012 34 56",
-    status: "PROCESSING",
-    total: 29000,
-    date: "03/07/2026",
-    items: [
-      { product: "Bloc de glace grand format ±10kg", quantity: 2, price: 5000 },
-      { product: "Glaçons cubes — Sac 10 kg", quantity: 2, price: 7000 },
-      { product: "Big bag pro — 25 kg", quantity: 1, price: 15000 },
-    ],
-    deliveryAddress: "Av. de la Santé, Brazzaville",
-    scheduledDate: "10/07/2026",
-    deliveryAgent: "",
-  },
-]
+const paymentLabels: Record<string, string> = {
+  CARD: "Carte bancaire",
+  MOBILE_MONEY: "Mobile Money",
+  CASH_ON_DELIVERY: "Paiement à la livraison",
+}
 
-const statusToLabel: Record<string, string> = {}
-for (const [label, status] of Object.entries(statusMap)) {
-  statusToLabel[status] = label
+const sourceLabels: Record<string, { label: string; className: string }> = {
+  WEB: { label: "En ligne", className: "bg-teal-100 text-teal-700" },
+  OPERATOR: { label: "Opérateur", className: "bg-violet-100 text-violet-700" },
+}
+
+interface DraftItem {
+  productId: string
+  variantId: string
+  quantity: number
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleDateString("fr-FR")
 }
 
 export default function CommandesPage() {
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("Toutes")
-  const [search, setSearch] = useState("")
+  const [searchName, setSearchName] = useState("")
+  const [searchCode, setSearchCode] = useState("")
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [showModal, setShowModal] = useState(false)
+  const [form, setForm] = useState({
+    customerName: "",
+    customerPhone: "",
+    customerEmail: "",
+    address: "",
+    district: "",
+    paymentMethod: "CASH_ON_DELIVERY",
+    notes: "",
+  })
+  const [draftItems, setDraftItems] = useState<DraftItem[]>([{ productId: "", variantId: "", quantity: 1 }])
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState("")
+  const [page, setPage] = useState(1)
+  const PER_PAGE = 5
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/orders")
+      if (res.ok) setOrders(await res.json())
+    } catch (error) {
+      console.error("Erreur chargement commandes:", error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   const filtered = orders.filter((order) => {
     const matchesTab =
       activeTab === "Toutes" || getStatusLabel(order.status) === activeTab
-    const matchesSearch =
-      order.customer.toLowerCase().includes(search.toLowerCase()) ||
-      order.id.toLowerCase().includes(search.toLowerCase())
-    return matchesTab && matchesSearch
+    const matchesName =
+      !searchName || order.customerName.toLowerCase().includes(searchName.toLowerCase())
+    const matchesCode =
+      !searchCode || order.orderNumber.toLowerCase().includes(searchCode.toLowerCase())
+    return matchesTab && matchesName && matchesCode
   })
 
-  const handleStatusChange = (orderId: string, newStatus: string) => {
-    console.log(`Commande ${orderId}: passage en ${newStatus}`)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+  const currentPage = Math.min(page, totalPages)
+  const paged = filtered.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE)
+
+  const handleSearchName = (v: string) => { setSearchName(v); setPage(1) }
+  const handleSearchCode = (v: string) => { setSearchCode(v); setPage(1) }
+  const handleTab = (t: string) => { setActiveTab(t); setPage(1) }
+
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (res.ok) await load()
+    } catch (error) {
+      console.error(`Erreur mise à jour commande ${orderId}:`, error)
+    }
+  }
+
+  const addDraftItem = () => {
+    setDraftItems([...draftItems, { productId: "", variantId: "", quantity: 1 }])
+  }
+
+  const updateDraftItem = (index: number, patch: Partial<DraftItem>) => {
+    setDraftItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...patch } : item))
+    )
+  }
+
+  const removeDraftItem = (index: number) => {
+    setDraftItems((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleCreateOrder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormError("")
+    setSubmitting(true)
+    try {
+      const items = draftItems
+        .filter((item) => item.productId && item.variantId)
+        .map((item) => {
+          const product = products.find((p) => p.id === item.productId)
+          const variant = product?.variants.find((v) => v.id === item.variantId)
+          return {
+            productId: item.productId,
+            variantId: item.variantId,
+            name: product?.name || "Produit",
+            format: variant?.format || "",
+            quantity: item.quantity,
+            price: variant?.price || 0,
+          }
+        })
+
+      if (!form.customerName || !form.customerPhone || !form.address || items.length === 0) {
+        setFormError("Client, téléphone, adresse et au moins un article sont requis")
+        setSubmitting(false)
+        return
+      }
+
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          source: "OPERATOR",
+          items,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFormError(data.error || "Erreur lors de la création")
+        setSubmitting(false)
+        return
+      }
+      setShowModal(false)
+      setForm({ customerName: "", customerPhone: "", customerEmail: "", address: "", district: "", paymentMethod: "CASH_ON_DELIVERY", notes: "" })
+      setDraftItems([{ productId: "", variantId: "", quantity: 1 }])
+      await load()
+    } catch (error) {
+      console.error("Erreur création commande:", error)
+      setFormError("Erreur interne, réessayez")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Commandes</h1>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Rechercher une commande..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:w-64 pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
-          />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Nom du client..."
+              value={searchName}
+              onChange={(e) => handleSearchName(e.target.value)}
+              className="w-full sm:w-56 pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+            />
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Code commande..."
+              value={searchCode}
+              onChange={(e) => handleSearchCode(e.target.value)}
+              className="w-full sm:w-56 pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+            />
+          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Nouvelle commande
+          </button>
         </div>
       </div>
 
@@ -260,10 +254,10 @@ export default function CommandesPage() {
         {statusFilters.map((tab) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => handleTab(tab)}
             className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
               activeTab === tab
-                ? "bg-primary-600 text-white"
+                ? "bg-primary text-white"
                 : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
             }`}
           >
@@ -278,7 +272,12 @@ export default function CommandesPage() {
       </div>
 
       <div className="space-y-4">
-        {filtered.map((order) => (
+        {loading && (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+            <p className="text-sm text-gray-500">Chargement des commandes...</p>
+          </div>
+        )}
+        {!loading && paged.map((order) => (
           <div
             key={order.id}
             className="bg-white rounded-xl border border-gray-200 overflow-hidden"
@@ -292,22 +291,29 @@ export default function CommandesPage() {
                   <div className="flex items-center gap-2 mb-1">
                     <ShoppingCart className="h-4 w-4 text-gray-400" />
                     <span className="text-sm font-mono font-medium text-gray-900">
-                      {order.id}
+                      {order.orderNumber}
                     </span>
                     <span
                       className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}
                     >
                       {getStatusLabel(order.status)}
                     </span>
+                    <span
+                      className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                        sourceLabels[order.source]?.className || "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {sourceLabels[order.source]?.label || order.source || "En ligne"}
+                    </span>
                   </div>
-                  <p className="text-sm font-medium text-gray-700">{order.customer}</p>
+                  <p className="text-sm font-medium text-gray-700">{order.customerName}</p>
                 </div>
                 <div className="flex items-center gap-4 sm:text-right">
                   <div>
                     <p className="text-sm font-semibold text-gray-900">
                       {formatPrice(order.total)}
                     </p>
-                    <p className="text-xs text-gray-500">{order.date}</p>
+                    <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
                   </div>
                   <ChevronDown
                     className={`h-5 w-5 text-gray-400 transition-transform ${
@@ -331,12 +337,13 @@ export default function CommandesPage() {
                           key={idx}
                           className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border border-gray-100"
                         >
-                          <span className="text-gray-700">{item.product}</span>
-                          <span className="text-gray-500">
-                            x{item.quantity}
+                          <span className="text-gray-700">
+                            {item.name}
+                            {item.format ? ` — ${item.format}` : ""}
                           </span>
+                          <span className="text-gray-500">x{item.quantity}</span>
                           <span className="font-medium text-gray-900">
-                            {formatPrice(item.price * item.quantity)}
+                            {formatPrice(item.total)}
                           </span>
                         </div>
                       ))}
@@ -355,20 +362,24 @@ export default function CommandesPage() {
                     <div className="space-y-2 text-sm bg-white p-3 rounded-lg border border-gray-100">
                       <p className="text-gray-700">
                         <span className="font-medium text-gray-500">Adresse: </span>
-                        {order.deliveryAddress}
+                        {order.delivery
+                          ? `${order.delivery.address}${order.delivery.district ? ` — ${order.delivery.district}` : ""} (${order.delivery.city})`
+                          : "—"}
                       </p>
                       <p className="text-gray-700">
-                        <span className="font-medium text-gray-500">Livraison prévue: </span>
-                        {order.scheduledDate}
-                      </p>
-                      <p className="text-gray-700">
-                        <span className="font-medium text-gray-500">Livreur: </span>
-                        {order.deliveryAgent || "Non assigné"}
+                        <span className="font-medium text-gray-500">Paiement: </span>
+                        {paymentLabels[order.paymentMethod] || order.paymentMethod || "—"}
                       </p>
                       <p className="text-gray-700">
                         <span className="font-medium text-gray-500">Client: </span>
-                        {order.email} | {order.phone}
+                        {order.customerEmail || "email non renseigné"} | {order.customerPhone}
                       </p>
+                      {order.delivery?.notes && (
+                        <p className="text-gray-700">
+                          <span className="font-medium text-gray-500">Notes: </span>
+                          {order.delivery.notes}
+                        </p>
+                      )}
                     </div>
 
                     {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
@@ -414,13 +425,214 @@ export default function CommandesPage() {
             )}
           </div>
         ))}
-        {filtered.length === 0 && (
+        {!loading && filtered.length === 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
             <ShoppingCart className="h-10 w-10 text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-500">Aucune commande trouvée</p>
           </div>
         )}
+        {!loading && filtered.length > 0 && (
+          <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3">
+            <p className="text-xs text-gray-500">
+              {filtered.length} résultat{filtered.length > 1 ? "s" : ""} · Page {currentPage}/{totalPages}
+            </p>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
+              <button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []).map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1.5 text-xs text-gray-400">…</span> : <button key={p} onClick={() => setPage(p)} className={`min-w-[28px] rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${p === currentPage ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-100"}`}>{p}</button>)}
+              <button onClick={() => setPage(currentPage + 1)} disabled={currentPage >= totalPages} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
+              <button onClick={() => setPage(totalPages)} disabled={currentPage >= totalPages} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&raquo;</button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-8">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Nouvelle commande</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Saisie opérateur — source : Opérateur</p>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateOrder} className="p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Client *</label>
+                  <input
+                    type="text"
+                    value={form.customerName}
+                    onChange={(e) => setForm({ ...form, customerName: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                    placeholder="Nom du client"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Téléphone *</label>
+                  <input
+                    type="text"
+                    value={form.customerPhone}
+                    onChange={(e) => setForm({ ...form, customerPhone: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                    placeholder="+242..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Email</label>
+                  <input
+                    type="email"
+                    value={form.customerEmail}
+                    onChange={(e) => setForm({ ...form, customerEmail: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                    placeholder="optionnel"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Paiement</label>
+                  <select
+                    value={form.paymentMethod}
+                    onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                  >
+                    <option value="CASH_ON_DELIVERY">Paiement à la livraison</option>
+                    <option value="MOBILE_MONEY">Mobile Money</option>
+                    <option value="CARD">Carte bancaire</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Adresse de livraison *</label>
+                  <input
+                    type="text"
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                    placeholder="Quartier, rue..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quartier / District</label>
+                  <input
+                    type="text"
+                    value={form.district}
+                    onChange={(e) => setForm({ ...form, district: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Notes</label>
+                  <input
+                    type="text"
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Articles *</label>
+                  <button
+                    type="button"
+                    onClick={addDraftItem}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Ajouter un article
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {draftItems.map((item, index) => {
+                    const product = products.find((p) => p.id === item.productId)
+                    const variants = product?.variants || []
+                    const variant = variants.find((v) => v.id === item.variantId)
+                    return (
+                      <div key={index} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                        <select
+                          value={item.productId}
+                          onChange={(e) => {
+                            const productId = e.target.value
+                            const firstVariant = products.find((p) => p.id === productId)?.variants[0]
+                            updateDraftItem(index, { productId, variantId: firstVariant?.id || "" })
+                          }}
+                          className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none"
+                        >
+                          <option value="">Produit...</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={item.variantId}
+                          onChange={(e) => updateDraftItem(index, { variantId: e.target.value })}
+                          className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none"
+                          disabled={!item.productId}
+                        >
+                          <option value="">Format...</option>
+                          {variants.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.format} — {formatPrice(v.price)}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(e) => updateDraftItem(index, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+                          className="w-20 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none"
+                        />
+                        <span className="text-sm font-semibold text-gray-900 w-28 text-right sm:text-left">
+                          {variant ? formatPrice(variant.price * item.quantity) : ""}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeDraftItem(index)}
+                          disabled={draftItems.length === 1}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {formError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+                  {formError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors disabled:opacity-60"
+                >
+                  {submitting ? "Création..." : "Créer la commande"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

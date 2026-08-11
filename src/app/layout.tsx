@@ -6,9 +6,7 @@ export const metadata: Metadata = {
   title: "LCG — La Congolaise des Glaçons | Glaçons en eau minérale",
   description:
     "Commandez et réservez vos glaçons en eau minérale à Brazzaville : cubes, glace pilée, sphères, blocs. Livraison rapide pour particuliers et professionnels.",
-  icons: {
-    icon: "/favicon.jpg",
-  },
+
 }
 
 export default function RootLayout({
@@ -19,6 +17,7 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <head>
+        <link rel="icon" type="image/png" href="/favicon-64.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

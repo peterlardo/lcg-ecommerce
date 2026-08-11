@@ -1,5 +1,12 @@
 import Link from "next/link"
 import { MapPin, Timer, ArrowRight, Snowflake } from "lucide-react"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Zones de livraison — LCG | Brazzaville",
+  description:
+    "Consultez les zones de livraison LCG à Brazzaville. Délais, tarifs et couverture par arrondissement pour la livraison de glaçons en eau minérale.",
+}
 
 const zones = [
   { name: "Ouenzé", time: "30 – 45 min", desc: "Zone de production — livraison prioritaire" },
@@ -9,7 +16,7 @@ const zones = [
   { name: "Centre-ville / Plateau", time: "60 – 90 min", desc: "Créneaux matin et après-midi" },
   { name: "Bacongo", time: "60 – 90 min", desc: "Créneaux matin et après-midi" },
   { name: "Makélékélé", time: "60 – 90 min", desc: "Créneaux matin et après-midi" },
-  { name: "Mfilou / Djiri", time: "Sur réservation", desc: "Commande la veille recommandée" },
+  { name: "Mfilou / Djiri", time: "Sur pré-commande", desc: "Commande la veille recommandée" },
 ]
 
 export default function ZonesLivraisonPage() {

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { products as staticProducts, categories } from "./products"
 import type { Product, ProductVariant } from "./products"
+import { allocateStockFIFO } from "@/lib/lot-utils"
 
 export interface ContactMessage {
   id: string
@@ -13,8 +14,17 @@ export interface ContactMessage {
   createdAt: string
 }
 
+export interface ReservationItem {
+  name: string
+  format: string
+  quantity: number
+  price: number
+}
+
 export interface Reservation {
   id: string
+  userId?: string | null
+  orderId?: string | null
   client: string
   telephone: string
   email: string
@@ -22,9 +32,53 @@ export interface Reservation {
   date: string
   heure: string
   inviteCount: number
+  address: string
+  items: ReservationItem[]
   notes: string
   status: "PENDING" | "CONFIRMED" | "CANCELLED"
+  source: string
   createdAt: string
+}
+
+export interface OrderItemInput {
+  productId: string
+  variantId: string
+  name: string
+  format: string
+  quantity: number
+  price: number
+}
+
+export interface OrderInput {
+  orderNumber: string
+  userId?: string
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  address: string
+  city: string
+  district?: string
+  paymentMethod: string
+  source?: string
+  notes?: string
+  items: OrderItemInput[]
+}
+
+export interface OrderRecord {
+  id: string
+  orderNumber: string
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  status: string
+  paymentMethod: string
+  subtotal: number
+  deliveryFee: number
+  total: number
+  notes: string | null
+  source: string
+  createdAt: string
+  items: { productId: string; variantId: string; quantity: number; price: number; total: number }[]
 }
 
 export type { Product, ProductVariant }
@@ -99,6 +153,7 @@ export async function createProduct(
       description: data.description,
       image: data.image,
       categoryId: data.categoryId,
+      badge: data.badge,
       isFeatured: data.isFeatured || false,
       isActive: true,
       variants: {
@@ -249,26 +304,26 @@ export async function deleteMessage(id: string): Promise<boolean> {
 
 export async function getReservations(): Promise<Reservation[]> {
   const rows = await prisma.reservation.findMany({ orderBy: { createdAt: "desc" } })
-  return rows.map((r) => ({
-    id: r.id,
-    client: r.client,
-    telephone: r.telephone,
-    email: r.email,
-    type: r.type,
-    date: r.date,
-    heure: r.heure,
-    inviteCount: r.inviteCount,
-    notes: r.notes,
-    status: r.status as "PENDING" | "CONFIRMED" | "CANCELLED",
-    createdAt: r.createdAt.toISOString(),
-  }))
+  return rows.map(mapReservation)
 }
 
 export async function getReservationById(id: string): Promise<Reservation | undefined> {
   const r = await prisma.reservation.findUnique({ where: { id } })
   if (!r) return undefined
+  return mapReservation(r)
+}
+
+function mapReservation(r: any): Reservation {
+  let items: ReservationItem[] = []
+  try {
+    items = JSON.parse(r.itemsJson || "[]")
+  } catch {
+    items = []
+  }
   return {
     id: r.id,
+    userId: r.userId || null,
+    orderId: r.orderId || null,
     client: r.client,
     telephone: r.telephone,
     email: r.email,
@@ -276,8 +331,11 @@ export async function getReservationById(id: string): Promise<Reservation | unde
     date: r.date,
     heure: r.heure,
     inviteCount: r.inviteCount,
+    address: r.address || "",
+    items,
     notes: r.notes,
     status: r.status as "PENDING" | "CONFIRMED" | "CANCELLED",
+    source: r.source || "WEB",
     createdAt: r.createdAt.toISOString(),
   }
 }
@@ -299,6 +357,7 @@ export async function addReservation(
 ): Promise<Reservation> {
   const r = await prisma.reservation.create({
     data: {
+      userId: (res as any).userId || null,
       client: res.client,
       telephone: res.telephone,
       email: res.email,
@@ -306,20 +365,122 @@ export async function addReservation(
       date: res.date,
       heure: res.heure,
       inviteCount: res.inviteCount,
+      address: res.address || "",
+      itemsJson: JSON.stringify(res.items || []),
       notes: res.notes,
+      source: res.source || "WEB",
     },
   })
+  return mapReservation(r)
+}
+
+export async function createOrder(input: OrderInput): Promise<OrderRecord> {
+  await bootstrapProducts()
+
+  const subtotal = input.items.reduce((s, i) => s + i.price * i.quantity, 0)
+
+  const order = await prisma.$transaction(async (tx) => {
+    for (const item of input.items) {
+      const variant = await tx.productVariant.findUnique({
+        where: { id: item.variantId },
+        select: { stock: true },
+      })
+
+      if (!variant) {
+        throw new Error(`Variante introuvable pour ${item.name}`)
+      }
+
+      if (variant.stock < item.quantity) {
+        throw new Error(`Stock insuffisant pour ${item.name} ${item.format}`)
+      }
+    }
+
+    const created = await tx.order.create({
+      data: {
+        orderNumber: input.orderNumber,
+        userId: input.userId || null,
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        customerPhone: input.customerPhone,
+        paymentMethod: input.paymentMethod as any,
+        source: input.source || "WEB",
+        subtotal,
+        deliveryFee: 0,
+        total: subtotal,
+        items: {
+          create: input.items.map((i) => ({
+            productId: i.productId,
+            variantId: i.variantId,
+            quantity: i.quantity,
+            price: i.price,
+            total: i.price * i.quantity,
+          })),
+        },
+        delivery: {
+          create: {
+            address: input.address,
+            city: input.city,
+            district: input.district || null,
+            notes: input.notes || null,
+          },
+        },
+      },
+      include: { items: true },
+    })
+
+    for (const item of input.items) {
+      await tx.productVariant.update({
+        where: { id: item.variantId },
+        data: { stock: { decrement: item.quantity } },
+      })
+      await tx.stockMovement.create({
+        data: {
+          variantId: item.variantId,
+          type: "SALE",
+          quantity: item.quantity,
+          reason: "Vente client",
+          reference: input.orderNumber,
+        },
+      })
+      try {
+        const fifoResult = await allocateStockFIFO(item.variantId, item.quantity, "SALE", input.orderNumber)
+        const orderItem = created.items.find((oi) => oi.variantId === item.variantId)
+        if (orderItem && fifoResult.allocations.length > 0) {
+          await tx.orderItem.update({
+            where: { id: orderItem.id },
+            data: { lotId: fifoResult.allocations[0].lotId },
+          })
+        }
+      } catch {
+        // Lots may not exist yet; graceful fallback
+      }
+    }
+
+    return created
+  })
+
   return {
-    id: r.id,
-    client: r.client,
-    telephone: r.telephone,
-    email: r.email,
-    type: r.type,
-    date: r.date,
-    heure: r.heure,
-    inviteCount: r.inviteCount,
-    notes: r.notes,
-    status: r.status as "PENDING" | "CONFIRMED" | "CANCELLED",
-    createdAt: r.createdAt.toISOString(),
+    id: order.id,
+    orderNumber: order.orderNumber,
+    customerName: order.customerName ?? "",
+    customerEmail: order.customerEmail ?? "",
+    customerPhone: order.customerPhone ?? "",
+    status: order.status,
+    paymentMethod: order.paymentMethod ?? "",
+    subtotal: order.subtotal,
+    deliveryFee: order.deliveryFee,
+    total: order.total,
+    notes: order.notes,
+    source: order.source || "WEB",
+    createdAt: order.createdAt.toISOString(),
+    items: order.items.map((i) => ({
+      productId: i.productId,
+      variantId: i.variantId,
+      quantity: i.quantity,
+      price: i.price,
+      total: i.total,
+    })),
   }
 }
+
+

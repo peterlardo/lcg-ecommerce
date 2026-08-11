@@ -1,54 +1,20 @@
 import Link from "next/link"
 import Image from "next/image"
 import { ProductCard } from "@/components/shared/product-card"
-import { products } from "@/data/products"
+import { HeroSlider } from "@/components/shared/hero-slider"
+import { getProducts } from "@/data/store"
 import { Snowflake, ArrowRight, Droplets, ShieldCheck, Truck, CalendarClock } from "lucide-react"
+import { FaqSection } from "@/components/shared/faq-section"
+import { ContactSection } from "@/components/shared/contact-section"
 
-export default function HomePage() {
-  const featuredProducts = products.filter((p) => p.isFeatured).slice(0, 4)
+export default async function HomePage() {
+  const allProducts = await getProducts()
+  const featuredProducts = allProducts.filter((p) => p.isFeatured).slice(0, 4)
 
   return (
     <div>
-      {/* Hero */}
-      <section className="relative overflow-hidden bg-hero-gradient text-primary-foreground">
-        <Image
-          src="/assets/hero-ice.jpg"
-          alt="Glaçons en eau minérale LCG plongeant dans l'eau"
-          width="1920"
-          height="1080"
-          className="absolute inset-0 h-full w-full object-cover opacity-30"
-        />
-        <div className="relative mx-auto max-w-6xl px-4 py-24 md:py-36">
-          <div className="max-w-2xl animate-rise">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/25 bg-primary-foreground/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest backdrop-blur">
-              <Snowflake className="h-3.5 w-3.5" aria-hidden="true" />
-              Brazzaville · Livraison réfrigérée
-            </span>
-            <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.08] tracking-tight md:text-6xl">
-              La fraîcheur pure,<br />
-              <span className="text-gradient-ice">livrée chez vous.</span>
-            </h1>
-            <p className="mt-6 max-w-xl text-base leading-relaxed text-primary-foreground/85 md:text-lg">
-              LCG produit des glaçons haut de gamme à base d&apos;eau minérale : cubes, glace pilée, sphères et blocs. Commandez en ligne ou réservez pour vos événements.
-            </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <Link
-                href="/produits"
-                className="inline-flex items-center gap-2 rounded-full bg-primary-foreground px-7 py-3.5 font-display text-sm font-bold text-primary shadow-frost transition-transform hover:scale-[1.04]"
-              >
-                Commander des glaçons
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                href="/professionnels"
-                className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/35 px-7 py-3.5 font-display text-sm font-bold text-primary-foreground backdrop-blur transition-colors hover:bg-primary-foreground/10"
-              >
-                Offres professionnels
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Hero Slider */}
+      <HeroSlider />
 
       {/* Features */}
       <section className="mx-auto max-w-6xl px-4 py-20">
@@ -84,7 +50,7 @@ export default function HomePage() {
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-ice-gradient text-primary">
               <CalendarClock className="h-5 w-5" />
             </div>
-            <h3 className="mt-4 font-display text-base font-bold">Réservation événement</h3>
+            <h3 className="mt-4 font-display text-base font-bold">Pré-commande événement</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
               Réservez vos volumes à l&apos;avance pour mariages, réceptions et festivals.
             </p>
@@ -171,6 +137,12 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* FAQ */}
+      <FaqSection />
+
+      {/* Contact */}
+      <ContactSection />
 
       {/* CTA */}
       <section className="mx-auto max-w-6xl px-4 pb-24">

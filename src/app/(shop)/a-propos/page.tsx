@@ -1,6 +1,13 @@
 import Image from "next/image"
 import Link from "next/link"
 import { Droplets, Factory, HeartHandshake, Leaf, ArrowRight } from "lucide-react"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Qui sommes-nous — LCG | La Congolaise des Glaçons",
+  description:
+    "Découvrez LCG, producteur de glaçons haut de gamme à base d'eau minérale à Brazzaville. Notre histoire, nos valeurs et notre engagement qualité.",
+}
 
 const values = [
   {
@@ -37,7 +44,7 @@ export default function AboutPage() {
               Basée au 97 Rue EWO à Ouenzé, Brazzaville, <strong className="text-foreground">LCG-SARL</strong> est une société spécialisée dans la production et la vente de tout type de glaçons fabriqués à partir d&apos;eau minérale.
             </p>
             <p>
-              Née d&apos;un constat simple — la commande de glaçons se faisait uniquement par téléphone ou en boutique — LCG modernise l&apos;accès au froid de qualité : catalogue en ligne, commande en quelques clics et réservation anticipée pour les événements.
+              Née d&apos;un constat simple — la commande de glaçons se faisait uniquement par téléphone ou en boutique — LCG modernise l&apos;accès au froid de qualité : catalogue en ligne, commande en quelques clics et pré-commande anticipée pour les événements.
             </p>
             <p>
               Notre ambition : devenir la référence du glaçon premium en République du Congo, au service des particuliers, restaurateurs, hôtels, bars, traiteurs et industriels.

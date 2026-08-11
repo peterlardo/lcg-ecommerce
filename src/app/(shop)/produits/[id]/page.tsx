@@ -1,7 +1,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { getProductById, getProductsByCategory } from "@/data/products"
+import { getProductById, getProducts } from "@/data/store"
 import { ProductCard } from "@/components/shared/product-card"
 import { ProductVariantSelector } from "./variant-selector"
 
@@ -11,15 +11,16 @@ export default async function ProductDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const product = getProductById(id)
+  const product = await getProductById(id)
 
   if (!product) {
     notFound()
   }
 
-  const related = getProductsByCategory(product.categorySlug).filter(
-    (p) => p.id !== product.id
-  ).slice(0, 4)
+  const allProducts = await getProducts()
+  const related = allProducts
+    .filter((p) => p.categorySlug === product.categorySlug && p.id !== product.id)
+    .slice(0, 4)
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">

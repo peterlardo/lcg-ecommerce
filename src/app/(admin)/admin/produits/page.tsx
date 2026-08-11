@@ -160,7 +160,7 @@ export default function ProduitsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Produits</h1>
         <button
           onClick={openCreate}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
         >
           <Plus className="h-4 w-4" />
           Ajouter un produit
@@ -429,7 +429,7 @@ export default function ProduitsPage() {
                 Annuler
               </button>
               <button onClick={handleSave}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors">
+                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:opacity-90 transition-colors">
                 {editingId ? "Enregistrer" : "Ajouter"}
               </button>
             </div>

@@ -52,6 +52,7 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   User: 'User',
+  UserPermission: 'UserPermission',
   Account: 'Account',
   Session: 'Session',
   VerificationToken: 'VerificationToken',
@@ -63,8 +64,13 @@ export const ModelName = {
   OrderItem: 'OrderItem',
   Delivery: 'Delivery',
   StockMovement: 'StockMovement',
+  ProductionLot: 'ProductionLot',
+  LotAllocation: 'LotAllocation',
   Message: 'Message',
-  Reservation: 'Reservation'
+  Reservation: 'Reservation',
+  PointOfSale: 'PointOfSale',
+  PointOfSaleStock: 'PointOfSaleStock',
+  CashSession: 'CashSession'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -98,6 +104,19 @@ export const UserScalarFieldEnum = {
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
+
+
+export const UserPermissionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  module: 'module',
+  canView: 'canView',
+  canCreate: 'canCreate',
+  canEdit: 'canEdit',
+  canDelete: 'canDelete'
+} as const
+
+export type UserPermissionScalarFieldEnum = (typeof UserPermissionScalarFieldEnum)[keyof typeof UserPermissionScalarFieldEnum]
 
 
 export const AccountScalarFieldEnum = {
@@ -169,6 +188,7 @@ export const ProductScalarFieldEnum = {
   subtitle: 'subtitle',
   description: 'description',
   image: 'image',
+  badge: 'badge',
   categoryId: 'categoryId',
   isFeatured: 'isFeatured',
   isActive: 'isActive',
@@ -206,6 +226,8 @@ export const OrderScalarFieldEnum = {
   deliveryFee: 'deliveryFee',
   total: 'total',
   notes: 'notes',
+  pointOfSaleId: 'pointOfSaleId',
+  source: 'source',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -220,7 +242,8 @@ export const OrderItemScalarFieldEnum = {
   variantId: 'variantId',
   quantity: 'quantity',
   price: 'price',
-  total: 'total'
+  total: 'total',
+  lotId: 'lotId'
 } as const
 
 export type OrderItemScalarFieldEnum = (typeof OrderItemScalarFieldEnum)[keyof typeof OrderItemScalarFieldEnum]
@@ -251,10 +274,42 @@ export const StockMovementScalarFieldEnum = {
   quantity: 'quantity',
   reason: 'reason',
   reference: 'reference',
+  pointOfSaleId: 'pointOfSaleId',
+  lotId: 'lotId',
   createdAt: 'createdAt'
 } as const
 
 export type StockMovementScalarFieldEnum = (typeof StockMovementScalarFieldEnum)[keyof typeof StockMovementScalarFieldEnum]
+
+
+export const ProductionLotScalarFieldEnum = {
+  id: 'id',
+  lotNumber: 'lotNumber',
+  variantId: 'variantId',
+  initialQuantity: 'initialQuantity',
+  remainingQuantity: 'remainingQuantity',
+  productionDate: 'productionDate',
+  expiryDate: 'expiryDate',
+  status: 'status',
+  notes: 'notes',
+  createdById: 'createdById',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ProductionLotScalarFieldEnum = (typeof ProductionLotScalarFieldEnum)[keyof typeof ProductionLotScalarFieldEnum]
+
+
+export const LotAllocationScalarFieldEnum = {
+  id: 'id',
+  lotId: 'lotId',
+  quantity: 'quantity',
+  type: 'type',
+  reference: 'reference',
+  createdAt: 'createdAt'
+} as const
+
+export type LotAllocationScalarFieldEnum = (typeof LotAllocationScalarFieldEnum)[keyof typeof LotAllocationScalarFieldEnum]
 
 
 export const MessageScalarFieldEnum = {
@@ -273,6 +328,8 @@ export type MessageScalarFieldEnum = (typeof MessageScalarFieldEnum)[keyof typeo
 
 export const ReservationScalarFieldEnum = {
   id: 'id',
+  userId: 'userId',
+  orderId: 'orderId',
   client: 'client',
   telephone: 'telephone',
   email: 'email',
@@ -280,12 +337,58 @@ export const ReservationScalarFieldEnum = {
   date: 'date',
   heure: 'heure',
   inviteCount: 'inviteCount',
+  address: 'address',
+  itemsJson: 'itemsJson',
   notes: 'notes',
   status: 'status',
+  pointOfSaleId: 'pointOfSaleId',
+  source: 'source',
   createdAt: 'createdAt'
 } as const
 
 export type ReservationScalarFieldEnum = (typeof ReservationScalarFieldEnum)[keyof typeof ReservationScalarFieldEnum]
+
+
+export const PointOfSaleScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  code: 'code',
+  address: 'address',
+  city: 'city',
+  phone: 'phone',
+  managerName: 'managerName',
+  managerUserId: 'managerUserId',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PointOfSaleScalarFieldEnum = (typeof PointOfSaleScalarFieldEnum)[keyof typeof PointOfSaleScalarFieldEnum]
+
+
+export const PointOfSaleStockScalarFieldEnum = {
+  id: 'id',
+  pointOfSaleId: 'pointOfSaleId',
+  variantId: 'variantId',
+  quantity: 'quantity',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PointOfSaleStockScalarFieldEnum = (typeof PointOfSaleStockScalarFieldEnum)[keyof typeof PointOfSaleStockScalarFieldEnum]
+
+
+export const CashSessionScalarFieldEnum = {
+  id: 'id',
+  pointOfSaleId: 'pointOfSaleId',
+  openedById: 'openedById',
+  openedAt: 'openedAt',
+  closedAt: 'closedAt',
+  openingBalance: 'openingBalance',
+  closingBalance: 'closingBalance',
+  status: 'status'
+} as const
+
+export type CashSessionScalarFieldEnum = (typeof CashSessionScalarFieldEnum)[keyof typeof CashSessionScalarFieldEnum]
 
 
 export const SortOrder = {

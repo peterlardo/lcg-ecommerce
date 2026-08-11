@@ -7,6 +7,7 @@ import { useCart } from "@/contexts/cart-context"
 import { formatPrice, generateOrderNumber } from "@/lib/utils"
 import { CreditCard, Smartphone, Banknote, Trash2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { useDeliveryFee } from "@/hooks/use-delivery-fee"
 
 const paymentMethods = [
   { id: "card", label: "Carte bancaire", icon: CreditCard },
@@ -43,29 +44,57 @@ export default function CommandePage() {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  const deliveryFee = 0
+  const { deliveryFee, isFreeDelivery } = useDeliveryFee(subtotal)
   const total = subtotal + deliveryFee
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
 
-    const order = {
-      number: generateOrderNumber(),
-      items,
-      subtotal,
-      deliveryFee,
-      total,
-      paymentMethod,
-      customer: form,
-      createdAt: new Date().toISOString(),
+    const paymentMap: Record<string, string> = {
+      card: "CARD",
+      mobile: "MOBILE_MONEY",
+      cod: "CASH_ON_DELIVERY",
     }
 
-    console.log("Nouvelle commande :", order)
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderNumber: generateOrderNumber(),
+          customerName: form.name,
+          customerEmail: form.email,
+          customerPhone: form.phone,
+          address: form.address,
+          city: form.city,
+          district: form.district,
+          paymentMethod: paymentMap[paymentMethod] || "CASH_ON_DELIVERY",
+          notes: form.notes,
+          items: items.map((i) => ({
+            productId: i.productId,
+            variantId: i.id,
+            name: i.name,
+            format: i.format,
+            quantity: i.quantity,
+            price: i.price,
+          })),
+        }),
+      })
 
-    await new Promise((r) => setTimeout(r, 1000))
-    clearCart()
-    router.push(`/commande/succes?order=${order.number}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || "Erreur lors de l'enregistrement de la commande")
+      }
+
+      const order = await res.json()
+      clearCart()
+      router.push(`/commande/succes?order=${order.orderNumber}`)
+    } catch (error) {
+      console.error("Nouvelle commande :", error)
+      setSubmitting(false)
+      alert(error instanceof Error ? error.message : "Une erreur est survenue. Veuillez réessayer.")
+    }
   }
 
   if (items.length === 0) {
@@ -272,7 +301,9 @@ export default function CommandePage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Livraison</span>
-                  <span className="font-medium text-green-600">Gratuite</span>
+                  <span className={`font-medium ${isFreeDelivery ? "text-green-600" : ""}`}>
+                    {isFreeDelivery ? "Gratuite" : deliveryFee > 0 ? formatPrice(deliveryFee) : "Gratuite"}
+                  </span>
                 </div>
                 <hr className="border-gray-200" />
                 <div className="flex justify-between text-base">

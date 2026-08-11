@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
+import crypto from "crypto"
 import { prisma } from "@/lib/prisma"
+import { sendVerificationEmail } from "@/lib/mailer"
 
 const registerSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
@@ -47,7 +49,21 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({ user }, { status: 201 })
+    const token = crypto.randomBytes(32).toString("hex")
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000)
+
+    await prisma.verificationToken.create({
+      data: {
+        identifier: email,
+        token,
+        expires,
+      },
+    })
+
+    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+    await sendVerificationEmail(email, token, baseUrl)
+
+    return NextResponse.json({ user, message: "Email de vérification envoyé" }, { status: 201 })
   } catch (error) {
     console.error("Registration error:", error)
     return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })

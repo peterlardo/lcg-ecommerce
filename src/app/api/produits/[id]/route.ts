@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { requireManagementAccess } from "@/lib/api-auth"
 import { getProductById, updateProduct, deleteProduct } from "@/data/store"
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/produits/[id]">) {
@@ -11,6 +12,9 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/produits/[id]">
 }
 
 export async function PATCH(req: Request, ctx: RouteContext<"/api/produits/[id]">) {
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
+  if (forbidden) return forbidden
+
   try {
     const { id } = await ctx.params
     const body = await req.json()
@@ -26,6 +30,9 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/produits/[id]"
 }
 
 export async function DELETE(_req: Request, ctx: RouteContext<"/api/produits/[id]">) {
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
+  if (forbidden) return forbidden
+
   const { id } = await ctx.params
   const success = await deleteProduct(id)
   if (!success) {

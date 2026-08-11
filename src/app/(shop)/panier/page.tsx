@@ -1,29 +1,43 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 import { useCart } from "@/contexts/cart-context"
 import { formatPrice } from "@/lib/utils"
 import {
   ShoppingCart, Truck, CalendarClock, Plus, Minus, Trash2,
-  ArrowRight, CircleCheck,
+  ArrowRight, CircleCheck, UserPlus, LogIn, Lock,
 } from "lucide-react"
+import { useDeliveryFee } from "@/hooks/use-delivery-fee"
 
 const modes = [
   { id: "commande", label: "Commande", icon: Truck },
-  { id: "reservation", label: "Réservation", icon: CalendarClock },
+  { id: "reservation", label: "Pré-commande", icon: CalendarClock },
 ]
 
 export default function CartPage() {
+  const { data: session, status } = useSession()
   const { items, subtotal, itemCount, removeItem, updateQuantity, clearCart } = useCart()
   const [mode, setMode] = useState("commande")
   const [success, setSuccess] = useState<{ mode: string; ref: string } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const [nom, setNom] = useState("")
   const [telephone, setTelephone] = useState("")
   const [date, setDate] = useState("")
   const [heure, setHeure] = useState("")
   const [adresse, setAdresse] = useState("")
   const [notes, setNotes] = useState("")
+  const { deliveryFee, isFreeDelivery } = useDeliveryFee(subtotal)
+
+  const isLoggedIn = !!session?.user
+
+  useEffect(() => {
+    if (session?.user) {
+      if (!nom && session.user.name) setNom(session.user.name)
+    }
+  }, [session])
 
   if (items.length === 0 && !success) {
     return (
@@ -55,15 +69,21 @@ export default function CartPage() {
           <CircleCheck className="h-8 w-8" />
         </div>
         <h1 className="mt-6 font-display text-3xl font-extrabold tracking-tight">
-          {success.mode === "reservation" ? "Réservation enregistrée !" : "Commande enregistrée !"}
+          {success.mode === "reservation" ? "Pré-commande enregistrée !" : "Commande enregistrée !"}
         </h1>
         <p className="mt-3 leading-relaxed text-muted-foreground">
           Référence <strong className="text-foreground">{success.ref}</strong>. Notre équipe vous contactera très rapidement pour confirmer{" "}
-          {success.mode === "reservation" ? "votre réservation" : "la livraison"} et le paiement (espèces ou Mobile Money).
+          {success.mode === "reservation" ? "votre pré-commande" : "la livraison"} et le paiement (espèces ou Mobile Money).
         </p>
         <Link
+          href="/compte/commandes"
+          className="mt-4 text-sm font-semibold text-primary hover:underline"
+        >
+          Voir mes commandes
+        </Link>
+        <Link
           href="/produits"
-          className="mt-8 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 font-display text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
+          className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 font-display text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
         >
           Continuer mes achats
           <ArrowRight className="h-4 w-4" />
@@ -72,11 +92,75 @@ export default function CartPage() {
     )
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const ref = `LCG-${Date.now().toString(36).toUpperCase().slice(-6)}`
-    clearCart()
-    setSuccess({ mode, ref })
+    setSubmitting(true)
+    setError("")
+
+    const payload = {
+      items: items.map((i) => ({
+        productId: i.productId,
+        variantId: i.id,
+        name: i.name,
+        format: i.format,
+        quantity: i.quantity,
+        price: i.price,
+      })),
+    }
+
+    try {
+      let ref: string
+      if (mode === "reservation") {
+        const res = await fetch("/api/reservations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...payload,
+            client: nom,
+            telephone,
+            type: "Pré-commande de glaçons",
+            date,
+            heure,
+            address: adresse,
+            notes,
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => null)
+          throw new Error(err?.error || "Erreur lors de l'enregistrement de la pré-commande")
+        }
+        const data = await res.json()
+        ref = data.ref || `LCG-${Date.now().toString(36).toUpperCase().slice(-6)}`
+      } else {
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...payload,
+            orderNumber: `LCG-${Date.now().toString(36).toUpperCase().slice(-6)}`,
+            customerName: nom,
+            customerPhone: telephone,
+            customerEmail: session?.user?.email || "",
+            address: adresse,
+            city: "Brazzaville",
+            paymentMethod: "CASH_ON_DELIVERY",
+            notes,
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => null)
+          throw new Error(err?.error || "Erreur lors de l'enregistrement de la commande")
+        }
+        const data = await res.json()
+        ref = data.orderNumber
+      }
+      clearCart()
+      setSuccess({ mode, ref })
+    } catch (err) {
+      console.error("Erreur :", err)
+      setError(err instanceof Error ? err.message : "Une erreur est survenue. Veuillez réessayer.")
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -85,7 +169,7 @@ export default function CartPage() {
         Votre panier
       </h1>
       <p className="mt-2 text-muted-foreground">
-        {itemCount} article{itemCount > 1 ? "s" : ""} — choisissez livraison immédiate ou réservation à date.
+        {itemCount} article{itemCount > 1 ? "s" : ""} — choisissez livraison immédiate ou pré-commande à date.
       </p>
 
       <div className="mt-10 grid gap-10 lg:grid-cols-5">
@@ -145,135 +229,204 @@ export default function CartPage() {
             </div>
           ))}
 
-          <div className="flex items-center justify-between rounded-2xl bg-ice-gradient px-6 py-4">
-            <span className="font-display text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              Total
-            </span>
-            <span className="font-display text-2xl font-extrabold text-primary">
-              {formatPrice(subtotal)}
-            </span>
+          <div className="space-y-2 rounded-2xl bg-ice-gradient px-6 py-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Sous-total</span>
+              <span className="font-semibold">{formatPrice(subtotal)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Livraison</span>
+              <span className={`font-semibold ${isFreeDelivery ? "text-green-600" : ""}`}>
+                {isFreeDelivery ? "Gratuite" : deliveryFee > 0 ? formatPrice(deliveryFee) : "Gratuite"}
+              </span>
+            </div>
+            <hr className="border-border" />
+            <div className="flex items-center justify-between">
+              <span className="font-display text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                Total
+              </span>
+              <span className="font-display text-2xl font-extrabold text-primary">
+                {formatPrice(subtotal + deliveryFee)}
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Right — form */}
-        <form
-          onSubmit={handleSubmit}
-          className="h-fit rounded-3xl border border-border bg-card p-7 shadow-card-soft lg:col-span-2"
-        >
-          {/* Segmented control */}
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-1.5">
-            {modes.map((m) => {
-              const Icon = m.icon
-              const active = mode === m.id
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setMode(m.id)}
-                  className={
-                    active
-                      ? "flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-primary-foreground"
-                      : "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                  }
-                >
-                  <Icon className="h-4 w-4" />
-                  {m.label}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="mt-6 space-y-4">
-            <label className="block text-sm font-semibold">
-              Nom complet *
-              <input
-                required
-                name="nom"
-                value={nom}
-                onChange={(e) => setNom(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                placeholder="Votre nom"
-              />
-            </label>
-
-            <label className="block text-sm font-semibold">
-              Téléphone *
-              <input
-                required
-                name="telephone"
-                type="tel"
-                value={telephone}
-                onChange={(e) => setTelephone(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                placeholder="+242 …"
-              />
-            </label>
-
-            {mode === "reservation" && (
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-sm font-semibold">
-                  Date *
-                  <input
-                    required
-                    name="date"
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                  />
-                </label>
-                <label className="block text-sm font-semibold">
-                  Heure *
-                  <input
-                    required
-                    name="heure"
-                    type="time"
-                    value={heure}
-                    onChange={(e) => setHeure(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                  />
-                </label>
+        <div className="h-fit rounded-3xl border border-border bg-card p-7 shadow-card-soft lg:col-span-2">
+          {/* Auth gate */}
+          {!isLoggedIn && status !== "loading" && (
+            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-display text-sm font-bold text-amber-800">
+                    Compte requis
+                  </h3>
+                  <p className="mt-1 text-sm text-amber-700">
+                    Un compte LCG est obligatoire pour passer commande ou réserver.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Link
+                      href="/auth/inscription?callbackUrl=/panier"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Créer un compte
+                    </Link>
+                    <Link
+                      href="/auth/connexion?callbackUrl=/panier"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted"
+                    >
+                      <LogIn className="h-3.5 w-3.5" />
+                      Se connecter
+                    </Link>
+                  </div>
+                </div>
               </div>
-            )}
+            </div>
+          )}
 
-            <label className="block text-sm font-semibold">
-              {mode === "reservation" ? "Lieu de livraison / retrait *" : "Adresse de livraison *"}
-              <input
-                required
-                name="adresse"
-                value={adresse}
-                onChange={(e) => setAdresse(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                placeholder="Quartier, rue, repère…"
-              />
-            </label>
+          {isLoggedIn && status !== "loading" && (
+            <div className="mb-6 flex items-center gap-3 rounded-2xl bg-primary/5 p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                {(session?.user?.name || "U").charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold truncate">{session?.user?.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{session?.user?.email}</p>
+              </div>
+              <Link
+                href="/compte"
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                Mon compte
+              </Link>
+            </div>
+          )}
 
-            <label className="block text-sm font-semibold">
-              Notes
-              <textarea
-                name="notes"
-                rows={3}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="mt-1.5 w-full resize-none rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                placeholder="Précisions utiles (événement, accès, volume…)"
-              />
-            </label>
-          </div>
+          <form onSubmit={handleSubmit}>
+            {/* Segmented control */}
+            <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-1.5">
+              {modes.map((m) => {
+                const Icon = m.icon
+                const active = mode === m.id
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setMode(m.id)}
+                    className={
+                      active
+                        ? "flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-primary-foreground"
+                        : "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                    }
+                  >
+                    <Icon className="h-4 w-4" />
+                    {m.label}
+                  </button>
+                )
+              })}
+            </div>
 
-          <button
-            type="submit"
-            className="mt-6 w-full rounded-full bg-primary py-3.5 font-display text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.02]"
-          >
-            {mode === "reservation" ? "Confirmer la réservation" : "Valider la commande"}
-            {' — '}
-            {formatPrice(subtotal)}
-          </button>
+            <div className="mt-6 space-y-4">
+              <label className="block text-sm font-semibold">
+                Nom complet *
+                <input
+                  required
+                  name="nom"
+                  value={nom}
+                  onChange={(e) => setNom(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Votre nom"
+                />
+              </label>
 
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            Paiement à la livraison : espèces ou Mobile Money.
-          </p>
-        </form>
+              <label className="block text-sm font-semibold">
+                Téléphone *
+                <input
+                  required
+                  name="telephone"
+                  type="tel"
+                  value={telephone}
+                  onChange={(e) => setTelephone(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="+242 …"
+                />
+              </label>
+
+              {mode === "reservation" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-sm font-semibold">
+                    Date *
+                    <input
+                      required
+                      name="date"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold">
+                    Heure *
+                    <input
+                      required
+                      name="heure"
+                      type="time"
+                      value={heure}
+                      onChange={(e) => setHeure(e.target.value)}
+                      className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                    />
+                  </label>
+                </div>
+              )}
+
+              <label className="block text-sm font-semibold">
+                {mode === "reservation" ? "Lieu de livraison / retrait *" : "Adresse de livraison *"}
+                <input
+                  required
+                  name="adresse"
+                  value={adresse}
+                  onChange={(e) => setAdresse(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Quartier, rue, repère…"
+                />
+              </label>
+
+              <label className="block text-sm font-semibold">
+                Notes
+                <textarea
+                  name="notes"
+                  rows={3}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="mt-1.5 w-full resize-none rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="Précisions utiles (événement, accès, volume…)"
+                />
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting || !isLoggedIn || status === "loading"}
+              className="mt-6 w-full rounded-full bg-primary py-3.5 font-display text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {!isLoggedIn
+                ? "Connectez-vous pour commander"
+                : submitting
+                  ? "Traitement..."
+                  : `${mode === "reservation" ? "Confirmer la pré-commande" : "Valider la commande"} — ${formatPrice(subtotal + deliveryFee)}`
+              }
+            </button>
+
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Paiement à la livraison : espèces ou Mobile Money.
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   )

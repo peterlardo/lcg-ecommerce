@@ -385,6 +385,7 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 export const ModelName = {
   User: 'User',
+  UserPermission: 'UserPermission',
   Account: 'Account',
   Session: 'Session',
   VerificationToken: 'VerificationToken',
@@ -396,8 +397,13 @@ export const ModelName = {
   OrderItem: 'OrderItem',
   Delivery: 'Delivery',
   StockMovement: 'StockMovement',
+  ProductionLot: 'ProductionLot',
+  LotAllocation: 'LotAllocation',
   Message: 'Message',
-  Reservation: 'Reservation'
+  Reservation: 'Reservation',
+  PointOfSale: 'PointOfSale',
+  PointOfSaleStock: 'PointOfSaleStock',
+  CashSession: 'CashSession'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -413,7 +419,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "account" | "session" | "verificationToken" | "address" | "category" | "product" | "productVariant" | "order" | "orderItem" | "delivery" | "stockMovement" | "message" | "reservation"
+    modelProps: "user" | "userPermission" | "account" | "session" | "verificationToken" | "address" | "category" | "product" | "productVariant" | "order" | "orderItem" | "delivery" | "stockMovement" | "productionLot" | "lotAllocation" | "message" | "reservation" | "pointOfSale" | "pointOfSaleStock" | "cashSession"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -488,6 +494,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.UserCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.UserCountAggregateOutputType> | number
+        }
+      }
+    }
+    UserPermission: {
+      payload: Prisma.$UserPermissionPayload<ExtArgs>
+      fields: Prisma.UserPermissionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.UserPermissionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.UserPermissionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload>
+        }
+        findFirst: {
+          args: Prisma.UserPermissionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.UserPermissionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload>
+        }
+        findMany: {
+          args: Prisma.UserPermissionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload>[]
+        }
+        create: {
+          args: Prisma.UserPermissionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload>
+        }
+        createMany: {
+          args: Prisma.UserPermissionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.UserPermissionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload>[]
+        }
+        delete: {
+          args: Prisma.UserPermissionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload>
+        }
+        update: {
+          args: Prisma.UserPermissionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload>
+        }
+        deleteMany: {
+          args: Prisma.UserPermissionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.UserPermissionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.UserPermissionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload>[]
+        }
+        upsert: {
+          args: Prisma.UserPermissionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserPermissionPayload>
+        }
+        aggregate: {
+          args: Prisma.UserPermissionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateUserPermission>
+        }
+        groupBy: {
+          args: Prisma.UserPermissionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UserPermissionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.UserPermissionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UserPermissionCountAggregateOutputType> | number
         }
       }
     }
@@ -1305,6 +1385,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ProductionLot: {
+      payload: Prisma.$ProductionLotPayload<ExtArgs>
+      fields: Prisma.ProductionLotFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ProductionLotFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ProductionLotFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload>
+        }
+        findFirst: {
+          args: Prisma.ProductionLotFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ProductionLotFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload>
+        }
+        findMany: {
+          args: Prisma.ProductionLotFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload>[]
+        }
+        create: {
+          args: Prisma.ProductionLotCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload>
+        }
+        createMany: {
+          args: Prisma.ProductionLotCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ProductionLotCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload>[]
+        }
+        delete: {
+          args: Prisma.ProductionLotDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload>
+        }
+        update: {
+          args: Prisma.ProductionLotUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload>
+        }
+        deleteMany: {
+          args: Prisma.ProductionLotDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ProductionLotUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ProductionLotUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload>[]
+        }
+        upsert: {
+          args: Prisma.ProductionLotUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProductionLotPayload>
+        }
+        aggregate: {
+          args: Prisma.ProductionLotAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateProductionLot>
+        }
+        groupBy: {
+          args: Prisma.ProductionLotGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ProductionLotGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ProductionLotCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ProductionLotCountAggregateOutputType> | number
+        }
+      }
+    }
+    LotAllocation: {
+      payload: Prisma.$LotAllocationPayload<ExtArgs>
+      fields: Prisma.LotAllocationFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.LotAllocationFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.LotAllocationFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload>
+        }
+        findFirst: {
+          args: Prisma.LotAllocationFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.LotAllocationFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload>
+        }
+        findMany: {
+          args: Prisma.LotAllocationFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload>[]
+        }
+        create: {
+          args: Prisma.LotAllocationCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload>
+        }
+        createMany: {
+          args: Prisma.LotAllocationCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.LotAllocationCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload>[]
+        }
+        delete: {
+          args: Prisma.LotAllocationDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload>
+        }
+        update: {
+          args: Prisma.LotAllocationUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload>
+        }
+        deleteMany: {
+          args: Prisma.LotAllocationDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.LotAllocationUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.LotAllocationUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload>[]
+        }
+        upsert: {
+          args: Prisma.LotAllocationUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$LotAllocationPayload>
+        }
+        aggregate: {
+          args: Prisma.LotAllocationAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateLotAllocation>
+        }
+        groupBy: {
+          args: Prisma.LotAllocationGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LotAllocationGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.LotAllocationCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LotAllocationCountAggregateOutputType> | number
+        }
+      }
+    }
     Message: {
       payload: Prisma.$MessagePayload<ExtArgs>
       fields: Prisma.MessageFieldRefs
@@ -1453,6 +1681,228 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    PointOfSale: {
+      payload: Prisma.$PointOfSalePayload<ExtArgs>
+      fields: Prisma.PointOfSaleFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PointOfSaleFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PointOfSaleFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload>
+        }
+        findFirst: {
+          args: Prisma.PointOfSaleFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PointOfSaleFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload>
+        }
+        findMany: {
+          args: Prisma.PointOfSaleFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload>[]
+        }
+        create: {
+          args: Prisma.PointOfSaleCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload>
+        }
+        createMany: {
+          args: Prisma.PointOfSaleCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PointOfSaleCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload>[]
+        }
+        delete: {
+          args: Prisma.PointOfSaleDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload>
+        }
+        update: {
+          args: Prisma.PointOfSaleUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload>
+        }
+        deleteMany: {
+          args: Prisma.PointOfSaleDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PointOfSaleUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PointOfSaleUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload>[]
+        }
+        upsert: {
+          args: Prisma.PointOfSaleUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSalePayload>
+        }
+        aggregate: {
+          args: Prisma.PointOfSaleAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePointOfSale>
+        }
+        groupBy: {
+          args: Prisma.PointOfSaleGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PointOfSaleGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PointOfSaleCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PointOfSaleCountAggregateOutputType> | number
+        }
+      }
+    }
+    PointOfSaleStock: {
+      payload: Prisma.$PointOfSaleStockPayload<ExtArgs>
+      fields: Prisma.PointOfSaleStockFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PointOfSaleStockFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PointOfSaleStockFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload>
+        }
+        findFirst: {
+          args: Prisma.PointOfSaleStockFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PointOfSaleStockFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload>
+        }
+        findMany: {
+          args: Prisma.PointOfSaleStockFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload>[]
+        }
+        create: {
+          args: Prisma.PointOfSaleStockCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload>
+        }
+        createMany: {
+          args: Prisma.PointOfSaleStockCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PointOfSaleStockCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload>[]
+        }
+        delete: {
+          args: Prisma.PointOfSaleStockDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload>
+        }
+        update: {
+          args: Prisma.PointOfSaleStockUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload>
+        }
+        deleteMany: {
+          args: Prisma.PointOfSaleStockDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PointOfSaleStockUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PointOfSaleStockUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload>[]
+        }
+        upsert: {
+          args: Prisma.PointOfSaleStockUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PointOfSaleStockPayload>
+        }
+        aggregate: {
+          args: Prisma.PointOfSaleStockAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePointOfSaleStock>
+        }
+        groupBy: {
+          args: Prisma.PointOfSaleStockGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PointOfSaleStockGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PointOfSaleStockCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PointOfSaleStockCountAggregateOutputType> | number
+        }
+      }
+    }
+    CashSession: {
+      payload: Prisma.$CashSessionPayload<ExtArgs>
+      fields: Prisma.CashSessionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.CashSessionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.CashSessionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload>
+        }
+        findFirst: {
+          args: Prisma.CashSessionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.CashSessionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload>
+        }
+        findMany: {
+          args: Prisma.CashSessionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload>[]
+        }
+        create: {
+          args: Prisma.CashSessionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload>
+        }
+        createMany: {
+          args: Prisma.CashSessionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.CashSessionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload>[]
+        }
+        delete: {
+          args: Prisma.CashSessionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload>
+        }
+        update: {
+          args: Prisma.CashSessionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload>
+        }
+        deleteMany: {
+          args: Prisma.CashSessionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.CashSessionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.CashSessionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload>[]
+        }
+        upsert: {
+          args: Prisma.CashSessionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CashSessionPayload>
+        }
+        aggregate: {
+          args: Prisma.CashSessionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateCashSession>
+        }
+        groupBy: {
+          args: Prisma.CashSessionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.CashSessionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.CashSessionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.CashSessionCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1507,6 +1957,19 @@ export const UserScalarFieldEnum = {
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
+
+
+export const UserPermissionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  module: 'module',
+  canView: 'canView',
+  canCreate: 'canCreate',
+  canEdit: 'canEdit',
+  canDelete: 'canDelete'
+} as const
+
+export type UserPermissionScalarFieldEnum = (typeof UserPermissionScalarFieldEnum)[keyof typeof UserPermissionScalarFieldEnum]
 
 
 export const AccountScalarFieldEnum = {
@@ -1578,6 +2041,7 @@ export const ProductScalarFieldEnum = {
   subtitle: 'subtitle',
   description: 'description',
   image: 'image',
+  badge: 'badge',
   categoryId: 'categoryId',
   isFeatured: 'isFeatured',
   isActive: 'isActive',
@@ -1615,6 +2079,8 @@ export const OrderScalarFieldEnum = {
   deliveryFee: 'deliveryFee',
   total: 'total',
   notes: 'notes',
+  pointOfSaleId: 'pointOfSaleId',
+  source: 'source',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -1629,7 +2095,8 @@ export const OrderItemScalarFieldEnum = {
   variantId: 'variantId',
   quantity: 'quantity',
   price: 'price',
-  total: 'total'
+  total: 'total',
+  lotId: 'lotId'
 } as const
 
 export type OrderItemScalarFieldEnum = (typeof OrderItemScalarFieldEnum)[keyof typeof OrderItemScalarFieldEnum]
@@ -1660,10 +2127,42 @@ export const StockMovementScalarFieldEnum = {
   quantity: 'quantity',
   reason: 'reason',
   reference: 'reference',
+  pointOfSaleId: 'pointOfSaleId',
+  lotId: 'lotId',
   createdAt: 'createdAt'
 } as const
 
 export type StockMovementScalarFieldEnum = (typeof StockMovementScalarFieldEnum)[keyof typeof StockMovementScalarFieldEnum]
+
+
+export const ProductionLotScalarFieldEnum = {
+  id: 'id',
+  lotNumber: 'lotNumber',
+  variantId: 'variantId',
+  initialQuantity: 'initialQuantity',
+  remainingQuantity: 'remainingQuantity',
+  productionDate: 'productionDate',
+  expiryDate: 'expiryDate',
+  status: 'status',
+  notes: 'notes',
+  createdById: 'createdById',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ProductionLotScalarFieldEnum = (typeof ProductionLotScalarFieldEnum)[keyof typeof ProductionLotScalarFieldEnum]
+
+
+export const LotAllocationScalarFieldEnum = {
+  id: 'id',
+  lotId: 'lotId',
+  quantity: 'quantity',
+  type: 'type',
+  reference: 'reference',
+  createdAt: 'createdAt'
+} as const
+
+export type LotAllocationScalarFieldEnum = (typeof LotAllocationScalarFieldEnum)[keyof typeof LotAllocationScalarFieldEnum]
 
 
 export const MessageScalarFieldEnum = {
@@ -1682,6 +2181,8 @@ export type MessageScalarFieldEnum = (typeof MessageScalarFieldEnum)[keyof typeo
 
 export const ReservationScalarFieldEnum = {
   id: 'id',
+  userId: 'userId',
+  orderId: 'orderId',
   client: 'client',
   telephone: 'telephone',
   email: 'email',
@@ -1689,12 +2190,58 @@ export const ReservationScalarFieldEnum = {
   date: 'date',
   heure: 'heure',
   inviteCount: 'inviteCount',
+  address: 'address',
+  itemsJson: 'itemsJson',
   notes: 'notes',
   status: 'status',
+  pointOfSaleId: 'pointOfSaleId',
+  source: 'source',
   createdAt: 'createdAt'
 } as const
 
 export type ReservationScalarFieldEnum = (typeof ReservationScalarFieldEnum)[keyof typeof ReservationScalarFieldEnum]
+
+
+export const PointOfSaleScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  code: 'code',
+  address: 'address',
+  city: 'city',
+  phone: 'phone',
+  managerName: 'managerName',
+  managerUserId: 'managerUserId',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PointOfSaleScalarFieldEnum = (typeof PointOfSaleScalarFieldEnum)[keyof typeof PointOfSaleScalarFieldEnum]
+
+
+export const PointOfSaleStockScalarFieldEnum = {
+  id: 'id',
+  pointOfSaleId: 'pointOfSaleId',
+  variantId: 'variantId',
+  quantity: 'quantity',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PointOfSaleStockScalarFieldEnum = (typeof PointOfSaleStockScalarFieldEnum)[keyof typeof PointOfSaleStockScalarFieldEnum]
+
+
+export const CashSessionScalarFieldEnum = {
+  id: 'id',
+  pointOfSaleId: 'pointOfSaleId',
+  openedById: 'openedById',
+  openedAt: 'openedAt',
+  closedAt: 'closedAt',
+  openingBalance: 'openingBalance',
+  closingBalance: 'closingBalance',
+  status: 'status'
+} as const
+
+export type CashSessionScalarFieldEnum = (typeof CashSessionScalarFieldEnum)[keyof typeof CashSessionScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1984,6 +2531,7 @@ export type PrismaClientOptions = ({
 }
 export type GlobalOmitConfig = {
   user?: Prisma.UserOmit
+  userPermission?: Prisma.UserPermissionOmit
   account?: Prisma.AccountOmit
   session?: Prisma.SessionOmit
   verificationToken?: Prisma.VerificationTokenOmit
@@ -1995,8 +2543,13 @@ export type GlobalOmitConfig = {
   orderItem?: Prisma.OrderItemOmit
   delivery?: Prisma.DeliveryOmit
   stockMovement?: Prisma.StockMovementOmit
+  productionLot?: Prisma.ProductionLotOmit
+  lotAllocation?: Prisma.LotAllocationOmit
   message?: Prisma.MessageOmit
   reservation?: Prisma.ReservationOmit
+  pointOfSale?: Prisma.PointOfSaleOmit
+  pointOfSaleStock?: Prisma.PointOfSaleStockOmit
+  cashSession?: Prisma.CashSessionOmit
 }
 
 /* Types for Logging */

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Settings, Save } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Settings, Save, Plus, X } from "lucide-react"
 
 interface GeneralSettings {
   companyName: string
@@ -58,21 +58,86 @@ export default function ParametresPage() {
     newRegistration: true,
   })
 
+  const [saving, setSaving] = useState<string | null>(null)
+  const [saved, setSaved] = useState<string | null>(null)
+  const [newZone, setNewZone] = useState("")
+  const [showZoneInput, setShowZoneInput] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((s) => {
+        if (s.general) setGeneral(s.general)
+        if (s.delivery) setDelivery(s.delivery)
+        if (s.payment) setPayment(s.payment)
+        if (s.notifications) setNotifications(s.notifications)
+      })
+      .catch(() => {})
+  }, [])
+
+  const persistSettings = async (section: string, data: Record<string, unknown>) => {
+    setSaving(section)
+    setSaved(null)
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ section, data }),
+      })
+      if (!res.ok) throw new Error("Erreur")
+      setSaved(section)
+      setTimeout(() => setSaved(null), 2500)
+    } catch {
+      setSaved(null)
+    } finally {
+      setSaving(null)
+    }
+  }
+
   const handleSave = (section: string) => {
-    console.log(`Paramètres "${section}" sauvegardés:`, {
-      general,
-      delivery,
-      payment,
-      notifications,
-    })
+    const payload: Record<string, unknown> = {}
+    if (section === "generaux") payload.general = general
+    else if (section === "livraison") payload.delivery = delivery
+    else if (section === "paiement") payload.payment = payment
+    else if (section === "notifications") payload.notifications = notifications
+    persistSettings(section, payload)
   }
 
   const togglePayment = (key: keyof PaymentSettings) => {
-    setPayment((prev) => ({ ...prev, [key]: !prev[key] }))
+    const updated = { ...payment, [key]: !payment[key] }
+    setPayment(updated)
+    persistSettings("paiement", { payment: updated })
   }
 
   const toggleNotification = (key: keyof NotificationSettings) => {
-    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }))
+    const updated = { ...notifications, [key]: !notifications[key] }
+    setNotifications(updated)
+    persistSettings("notifications", { notifications: updated })
+  }
+
+  const SaveBtn = ({ section, label }: { section: string; label?: string }) => {
+    const isActive = saving === section
+    const isSaved = saved === section
+    return (
+      <button
+        onClick={() => handleSave(section)}
+        disabled={isActive}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+          isSaved
+            ? "bg-green-100 text-green-700 border border-green-200"
+            : "bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        }`}
+      >
+        {isActive ? (
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+        ) : isSaved ? (
+          <span>&#10003;</span>
+        ) : (
+          <Save className="h-3.5 w-3.5" />
+        )}
+        {isSaved ? "Enregistre" : label ?? "Enregistrer"}
+      </button>
+    )
   }
 
   return (
@@ -85,13 +150,7 @@ export default function ParametresPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-900">Paramètres généraux</h3>
-          <button
-            onClick={() => handleSave("généraux")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            <Save className="h-3.5 w-3.5" />
-            Enregistrer
-          </button>
+          <SaveBtn section="generaux" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -165,13 +224,7 @@ export default function ParametresPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-900">Paramètres de livraison</h3>
-          <button
-            onClick={() => handleSave("livraison")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            <Save className="h-3.5 w-3.5" />
-            Enregistrer
-          </button>
+          <SaveBtn section="livraison" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -217,11 +270,60 @@ export default function ParametresPage() {
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-lg"
                 >
                   {zone}
+                  <button
+                    onClick={() => {
+                      const updated = { ...delivery, zones: delivery.zones.filter((_, i) => i !== idx) }
+                      setDelivery(updated)
+                      persistSettings("livraison", { delivery: updated })
+                    }}
+                    className="ml-0.5 text-blue-400 hover:text-blue-700"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </span>
               ))}
-              <button className="px-2.5 py-1 text-xs font-medium text-gray-500 border border-dashed border-gray-300 rounded-lg hover:border-primary-300 hover:text-primary-600 transition-colors">
-                + Ajouter une zone
-              </button>
+              {showZoneInput ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    value={newZone}
+                    onChange={(e) => setNewZone(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newZone.trim()) {
+                        const updated = { ...delivery, zones: [...delivery.zones, newZone.trim()] }
+                        setDelivery(updated)
+                        persistSettings("livraison", { delivery: updated })
+                        setNewZone("")
+                        setShowZoneInput(false)
+                      }
+                      if (e.key === "Escape") setShowZoneInput(false)
+                    }}
+                    className="w-36 px-2 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500/40"
+                    placeholder="Nom de la zone"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => {
+                      if (newZone.trim()) {
+                        const updated = { ...delivery, zones: [...delivery.zones, newZone.trim()] }
+                        setDelivery(updated)
+                        persistSettings("livraison", { delivery: updated })
+                        setNewZone("")
+                      }
+                      setShowZoneInput(false)
+                    }}
+                    className="text-green-600 hover:text-green-800"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowZoneInput(true)}
+                  className="px-2.5 py-1 text-xs font-medium text-gray-500 border border-dashed border-gray-300 rounded-lg hover:border-primary-300 hover:text-primary-600 transition-colors"
+                >
+                  + Ajouter une zone
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -230,13 +332,7 @@ export default function ParametresPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-900">Moyens de paiement</h3>
-          <button
-            onClick={() => handleSave("paiement")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            <Save className="h-3.5 w-3.5" />
-            Enregistrer
-          </button>
+          <SaveBtn section="paiement" />
         </div>
         <div className="space-y-3">
           {[
@@ -255,7 +351,7 @@ export default function ParametresPage() {
               <button
                 onClick={() => togglePayment(item.key)}
                 className={`relative w-10 h-5 rounded-full transition-colors ${
-                  payment[item.key] ? "bg-primary-600" : "bg-gray-300"
+                  payment[item.key] ? "bg-primary" : "bg-gray-300"
                 }`}
               >
                 <span
@@ -272,13 +368,7 @@ export default function ParametresPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
-          <button
-            onClick={() => handleSave("notifications")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            <Save className="h-3.5 w-3.5" />
-            Enregistrer
-          </button>
+          <SaveBtn section="notifications" />
         </div>
         <div className="space-y-3">
           {[
@@ -298,7 +388,7 @@ export default function ParametresPage() {
               <button
                 onClick={() => toggleNotification(item.key)}
                 className={`relative w-10 h-5 rounded-full transition-colors ${
-                  notifications[item.key] ? "bg-primary-600" : "bg-gray-300"
+                  notifications[item.key] ? "bg-primary" : "bg-gray-300"
                 }`}
               >
                 <span

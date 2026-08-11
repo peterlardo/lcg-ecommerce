@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import { MapPin, Phone, Mail, Clock } from "lucide-react"
+import type { Metadata } from "next"
 
 const contactCards = [
   { icon: MapPin, title: "Adresse", text: "97 Rue EWO, Ouenzé — Brazzaville, République du Congo" },
-  { icon: Phone, title: "Téléphone", text: "Numéro à venir — commandes en ligne disponibles 24h/24" },
-  { icon: Mail, title: "E-mail", text: "contact@lcg-glacons.cg (à confirmer)" },
+  { icon: Phone, title: "Téléphone", text: "+242 05 123 45 67 — commandes en ligne disponibles 24h/24" },
+  { icon: Mail, title: "E-mail", text: "contact@lcg.cg" },
   { icon: Clock, title: "Horaires", text: "Lun – Sam : 7h00 – 19h00 · Dim : 8h00 – 13h00" },
 ]
 
@@ -99,7 +100,7 @@ export default function ContactPage() {
                 >
                   <option>Question générale</option>
                   <option>Devis professionnel</option>
-                  <option>Réservation événement</option>
+                  <option>Pré-commande événement</option>
                   <option>Suivi de commande</option>
                 </select>
               </label>

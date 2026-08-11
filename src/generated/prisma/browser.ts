@@ -23,6 +23,11 @@ export * from './enums';
  */
 export type User = Prisma.UserModel
 /**
+ * Model UserPermission
+ * 
+ */
+export type UserPermission = Prisma.UserPermissionModel
+/**
  * Model Account
  * 
  */
@@ -78,6 +83,16 @@ export type Delivery = Prisma.DeliveryModel
  */
 export type StockMovement = Prisma.StockMovementModel
 /**
+ * Model ProductionLot
+ * 
+ */
+export type ProductionLot = Prisma.ProductionLotModel
+/**
+ * Model LotAllocation
+ * 
+ */
+export type LotAllocation = Prisma.LotAllocationModel
+/**
  * Model Message
  * 
  */
@@ -87,3 +102,18 @@ export type Message = Prisma.MessageModel
  * 
  */
 export type Reservation = Prisma.ReservationModel
+/**
+ * Model PointOfSale
+ * 
+ */
+export type PointOfSale = Prisma.PointOfSaleModel
+/**
+ * Model PointOfSaleStock
+ * 
+ */
+export type PointOfSaleStock = Prisma.PointOfSaleStockModel
+/**
+ * Model CashSession
+ * 
+ */
+export type CashSession = Prisma.CashSessionModel
