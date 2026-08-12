@@ -47,27 +47,27 @@ enum DeliveryStatus {
 }
 
 model User {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String?
-  email         String   @unique
+  email         String    @unique
   emailVerified DateTime?
   password      String?
   phone         String?
   image         String?
-  role          Role     @default(CUSTOMER)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  role          Role      @default(CUSTOMER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  accounts     Account[]
-  sessions     Session[]
-  addresses    Address[]
-  orders       Order[]
-  reservations Reservation[]
-  deliveries   Delivery[]
-  managedPointOfSales PointOfSale[] @relation("PointOfSaleManager")
-  permissions UserPermission[]
-  producedLots ProductionLot[]
+  accounts            Account[]
+  sessions            Session[]
+  addresses           Address[]
+  orders              Order[]
+  reservations        Reservation[]
+  deliveries          Delivery[]
+  managedPointOfSales PointOfSale[]    @relation("PointOfSaleManager")
+  permissions         UserPermission[]
+  producedLots        ProductionLot[]
 }
 
 model UserPermission {
@@ -120,26 +120,26 @@ model VerificationToken {
 }
 
 model Address {
-  id         String  @id @default(cuid())
-  userId     String
-  label      String?
-  street     String
-  city       String
-  district   String?
-  isDefault  Boolean @default(false)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  label     String?
+  street    String
+  city      String
+  district  String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders Order[]
 }
 
 model Category {
-  id       String    @id @default(cuid())
-  name     String
-  slug     String    @unique
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
   description String?
-  image    String?
-  createdAt DateTime @default(now())
+  image       String?
+  createdAt   DateTime @default(now())
 
   products Product[]
 }
@@ -157,56 +157,56 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  category Category?     @relation(fields: [categoryId], references: [id])
-  variants ProductVariant[]
+  category   Category?        @relation(fields: [categoryId], references: [id])
+  variants   ProductVariant[]
   orderItems OrderItem[]
 }
 
 model ProductVariant {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   productId String
   format    String
   price     Float
-  stock     Int      @default(0)
+  stock     Int     @default(0)
   unit      String?
 
-  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItems  OrderItem[]
-  stockMovements StockMovement[]
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems        OrderItem[]
+  stockMovements    StockMovement[]
   pointOfSaleStocks PointOfSaleStock[]
-  productionLots ProductionLot[]
+  productionLots    ProductionLot[]
 }
 
 model Order {
-  id            String        @id @default(cuid())
-  orderNumber   String        @unique
+  id            String         @id @default(cuid())
+  orderNumber   String         @unique
   userId        String?
   customerName  String?
   customerEmail String?
   customerPhone String?
   addressId     String?
-  status        OrderStatus   @default(PENDING)
+  status        OrderStatus    @default(PENDING)
   paymentMethod PaymentMethod?
-  paymentStatus PaymentStatus @default(PENDING)
-  subtotal      Float         @default(0)
-  deliveryFee   Float         @default(0)
-  total         Float         @default(0)
+  paymentStatus PaymentStatus  @default(PENDING)
+  subtotal      Float          @default(0)
+  deliveryFee   Float          @default(0)
+  total         Float          @default(0)
   notes         String?
   pointOfSaleId String?
   source        String         @default("WEB")
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
-  user      User?         @relation(fields: [userId], references: [id])
-  address   Address?      @relation(fields: [addressId], references: [id])
-  items     OrderItem[]
-  delivery    Delivery?
+  user         User?         @relation(fields: [userId], references: [id])
+  address      Address?      @relation(fields: [addressId], references: [id])
+  items        OrderItem[]
+  delivery     Delivery?
   reservations Reservation[]
-  pointOfSale PointOfSale? @relation(fields: [pointOfSaleId], references: [id], onDelete: SetNull)
+  pointOfSale  PointOfSale?  @relation(fields: [pointOfSaleId], references: [id], onDelete: SetNull)
 }
 
 model OrderItem {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   orderId   String
   productId String
   variantId String
@@ -215,65 +215,65 @@ model OrderItem {
   total     Float
   lotId     String?
 
-  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product         @relation(fields: [productId], references: [id])
-  variant ProductVariant  @relation(fields: [variantId], references: [id])
-  lot     ProductionLot?  @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product        @relation(fields: [productId], references: [id])
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+  lot     ProductionLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
 }
 
 model Delivery {
-  id              String          @id @default(cuid())
-  orderId         String          @unique
+  id              String         @id @default(cuid())
+  orderId         String         @unique
   deliveryAgentId String?
-  status          DeliveryStatus  @default(PENDING)
+  status          DeliveryStatus @default(PENDING)
   address         String
   city            String
   district        String?
   scheduledDate   DateTime?
   deliveredAt     DateTime?
   notes           String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  order         Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  deliveryAgent User?  @relation(fields: [deliveryAgentId], references: [id])
+  order         Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  deliveryAgent User? @relation(fields: [deliveryAgentId], references: [id])
 }
 
 model StockMovement {
-  id          String   @id @default(cuid())
-  variantId   String
-  type        String
-  quantity    Int
-  reason      String?
-  reference   String?
+  id            String   @id @default(cuid())
+  variantId     String
+  type          String
+  quantity      Int
+  reason        String?
+  reference     String?
   pointOfSaleId String?
-  lotId       String?
-  createdAt   DateTime @default(now())
+  lotId         String?
+  createdAt     DateTime @default(now())
 
-  variant ProductVariant @relation(fields: [variantId], references: [id])
-  pointOfSale PointOfSale? @relation(fields: [pointOfSaleId], references: [id], onDelete: SetNull)
-  lot ProductionLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  pointOfSale PointOfSale?   @relation(fields: [pointOfSaleId], references: [id], onDelete: SetNull)
+  lot         ProductionLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
 }
 
 model ProductionLot {
-  id                String   @id @default(cuid())
-  lotNumber         String   @unique
+  id                String    @id @default(cuid())
+  lotNumber         String    @unique
   variantId         String
   initialQuantity   Int
   remainingQuantity Int
-  productionDate    DateTime @default(now())
+  productionDate    DateTime  @default(now())
   expiryDate        DateTime?
-  status            String   @default("ACTIVE")
+  status            String    @default("ACTIVE")
   notes             String?
   createdById       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  variant       ProductVariant  @relation(fields: [variantId], references: [id])
-  createdBy     User?           @relation(fields: [createdById], references: [id])
+  variant        ProductVariant  @relation(fields: [variantId], references: [id])
+  createdBy      User?           @relation(fields: [createdById], references: [id])
   stockMovements StockMovement[]
-  allocations   LotAllocation[]
-  orderItems    OrderItem[]
+  allocations    LotAllocation[]
+  orderItems     OrderItem[]
 }
 
 model LotAllocation {
@@ -305,77 +305,71 @@ enum ReservationStatus {
 }
 
 model Reservation {
-  id         String             @id @default(cuid())
-  userId     String?
-  orderId    String?
-  client     String
-  telephone  String
-  email      String             @default("")
-  type       String
-  date       String
-  heure      String
-  inviteCount Int               @default(0)
-  address    String             @default("")
-  itemsJson  String             @default("[]")
-  notes      String             @default("")
-  status     ReservationStatus  @default(PENDING)
+  id            String            @id @default(cuid())
+  userId        String?
+  orderId       String?
+  client        String
+  telephone     String
+  email         String            @default("")
+  type          String
+  date          String
+  heure         String
+  inviteCount   Int               @default(0)
+  address       String            @default("")
+  itemsJson     String            @default("[]")
+  notes         String            @default("")
+  status        ReservationStatus @default(PENDING)
   pointOfSaleId String?
-  source     String             @default("WEB")
-  createdAt  DateTime           @default(now())
-  user       User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
-  order      Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  pointOfSale PointOfSale? @relation(fields: [pointOfSaleId], references: [id], onDelete: SetNull)
+  source        String            @default("WEB")
+  createdAt     DateTime          @default(now())
+  user          User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  order         Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  pointOfSale   PointOfSale?      @relation(fields: [pointOfSaleId], references: [id], onDelete: SetNull)
 }
-
 
 model PointOfSale {
-  id          String   @id @default(cuid())
-  name        String
-  code        String   @unique
-  address     String
-  city        String
-  phone       String?
-  managerName String?
+  id            String   @id @default(cuid())
+  name          String
+  code          String   @unique
+  address       String
+  city          String
+  phone         String?
+  managerName   String?
   managerUserId String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  orders Order[]
-  managerUser User? @relation("PointOfSaleManager", fields: [managerUserId], references: [id], onDelete: SetNull)
-  stocks PointOfSaleStock[]
-  cashSessions CashSession[]
+  orders         Order[]
+  managerUser    User?              @relation("PointOfSaleManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  stocks         PointOfSaleStock[]
+  cashSessions   CashSession[]
   stockMovements StockMovement[]
-  reservations Reservation[]
+  reservations   Reservation[]
 }
 
-
 model PointOfSaleStock {
-  id          String   @id @default(cuid())
+  id            String   @id @default(cuid())
   pointOfSaleId String
-  variantId   String
-  quantity    Int      @default(0)
-  updatedAt   DateTime @updatedAt
+  variantId     String
+  quantity      Int      @default(0)
+  updatedAt     DateTime @updatedAt
 
-  pointOfSale PointOfSale @relation(fields: [pointOfSaleId], references: [id], onDelete: Cascade)
-  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  pointOfSale PointOfSale    @relation(fields: [pointOfSaleId], references: [id], onDelete: Cascade)
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   @@unique([pointOfSaleId, variantId])
 }
 
 model CashSession {
-  id            String   @id @default(cuid())
-  pointOfSaleId String
-  openedById    String?
-  openedAt     DateTime @default(now())
-  closedAt     DateTime?
-  openingBalance Float   @default(0)
+  id             String    @id @default(cuid())
+  pointOfSaleId  String
+  openedById     String?
+  openedAt       DateTime  @default(now())
+  closedAt       DateTime?
+  openingBalance Float     @default(0)
   closingBalance Float?
-  status        String   @default("OPEN")
+  status         String    @default("OPEN")
 
   pointOfSale PointOfSale @relation(fields: [pointOfSaleId], references: [id], onDelete: Cascade)
 }
-
-
-
-

@@ -13544,3 +13544,83 @@ Unknown argument `userId`. Available options are marked with ?.
  GET /api/auth/session 200 in 93ms (next.js: 8ms, application-code: 85ms)
  GET /api/auth/session 200 in 86ms (next.js: 8ms, application-code: 78ms)
  GET /api/auth/session 200 in 191ms (next.js: 20ms, application-code: 171ms)
+  Reload env: .env
+Ô£ô Compiled in 851ms
+ÔÜá Fast Refresh had to perform a full reload when ./node_modules/next/dist/client/image-component.js changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ÔÜá Fast Refresh had to perform a full reload when ./node_modules/next/dist/client/image-component.js changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+[browser] Failed to fetch RSC payload for http://localhost:3000/. Falling back to browser navigation. TypeError: NetworkError when attempting to fetch resource.
+ GET /admin 200 in 4.1s (next.js: 2.8s, proxy.ts: 519ms, application-code: 816ms)
+Ô¿» Error: useCart must be used within CartProvider
+    at useCart (src\contexts\cart-context.tsx:87:23)
+    at ProductCard (src\components\shared\product-card.tsx:21:30)
+  85 | export function useCart() {
+  86 |   const context = useContext(CartContext)
+> 87 |   if (!context) throw new Error("useCart must be used within CartProvider")
+     |                       ^
+  88 |   return context
+  89 | }
+  90 | {
+  digest: '2969152147'
+}
+ GET /admin 200 in 1406ms (next.js: 12ms, proxy.ts: 18ms, application-code: 1376ms)
+ GET / 500 in 10.5s (next.js: 625ms, application-code: 9.9s)
+ GET / 200 in 7.1s (next.js: 12ms, application-code: 7.0s)
+ GET /admin 200 in 3.1s (next.js: 111ms, proxy.ts: 165ms, application-code: 2.9s)
+ GET / 200 in 2.5s (next.js: 139ms, application-code: 2.4s)
+ GET /api/auth/session 200 in 2.6s (next.js: 892ms, application-code: 1659ms)
+ GET /admin 200 in 3.8s (next.js: 1665ms, proxy.ts: 834ms, application-code: 1278ms)
+ GET /api/auth/session 200 in 1044ms (next.js: 70ms, application-code: 975ms)
+ GET / 200 in 4.8s (next.js: 121ms, application-code: 4.7s)
+ GET /api/auth/session 200 in 1027ms (next.js: 60ms, application-code: 967ms)
+ GET /admin 200 in 3.2s (next.js: 132ms, proxy.ts: 114ms, application-code: 2.9s)
+ GET / 200 in 3.3s (next.js: 109ms, application-code: 3.2s)
+ GET /admin 200 in 3.6s (next.js: 121ms, proxy.ts: 147ms, application-code: 3.4s)
+ GET / 200 in 3.6s (next.js: 61ms, application-code: 3.5s)
+Ô¿» Error: useCart must be used within CartProvider
+    at useCart (src\contexts\cart-context.tsx:87:23)
+    at ProductCard (src\components\shared\product-card.tsx:21:30)
+  85 | export function useCart() {
+  86 |   const context = useContext(CartContext)
+> 87 |   if (!context) throw new Error("useCart must be used within CartProvider")
+     |                       ^
+  88 |   return context
+  89 | }
+  90 | {
+  digest: '1270050035'
+}
+ GET /admin 200 in 4.0s (next.js: 122ms, proxy.ts: 198ms, application-code: 3.7s)
+ GET /admin 200 in 3.4s (next.js: 1268ms, proxy.ts: 163ms, application-code: 2.0s)
+ GET / 500 in 3.6s (next.js: 89ms, application-code: 3.5s)
+ GET /admin 200 in 7.4s (next.js: 169ms, proxy.ts: 84ms, application-code: 7.2s)
+ GET / 200 in 7.3s (next.js: 504ms, application-code: 6.8s)
+ GET /api/auth/session 200 in 70ms (next.js: 26ms, application-code: 45ms)
+ GET /api/auth/session 200 in 125ms (next.js: 6ms, application-code: 119ms)
+ GET /api/auth/session 200 in 108ms (next.js: 8ms, application-code: 101ms)
+ GET /api/auth/session 200 in 73ms (next.js: 10ms, application-code: 62ms)
+Ô£ô Compiled in 447ms
+ GET /admin 200 in 1533ms (next.js: 893ms, proxy.ts: 223ms, application-code: 417ms)
+ GET / 200 in 1583ms (next.js: 510ms, application-code: 1073ms)
+ GET /admin 200 in 194ms (next.js: 6ms, proxy.ts: 8ms, application-code: 180ms)
+ GET / 200 in 145ms (next.js: 4ms, application-code: 141ms)
+ GET / 200 in 94ms (next.js: 4ms, application-code: 90ms)
+ GET / 200 in 94ms (next.js: 5ms, application-code: 89ms)
+ GET / 200 in 663ms (next.js: 166ms, application-code: 497ms)
+ GET /admin 200 in 797ms (next.js: 289ms, proxy.ts: 89ms, application-code: 418ms)
+ GET / 200 in 128ms (next.js: 5ms, application-code: 123ms)

@@ -7,6 +7,8 @@ import { Snowflake, ArrowRight, Droplets, ShieldCheck, Truck, CalendarClock } fr
 import { FaqSection } from "@/components/shared/faq-section"
 import { ContactSection } from "@/components/shared/contact-section"
 
+export const dynamic = "force-dynamic"
+
 export default async function HomePage() {
   const allProducts = await getProducts()
   const featuredProducts = allProducts.filter((p) => p.isFeatured).slice(0, 4)

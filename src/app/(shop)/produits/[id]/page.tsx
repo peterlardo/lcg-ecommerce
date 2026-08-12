@@ -5,6 +5,8 @@ import { getProductById, getProducts } from "@/data/store"
 import { ProductCard } from "@/components/shared/product-card"
 import { ProductVariantSelector } from "./variant-selector"
 
+export const dynamic = "force-dynamic"
+
 export default async function ProductDetailPage({
   params,
 }: {
