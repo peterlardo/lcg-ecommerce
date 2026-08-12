@@ -30,6 +30,7 @@ interface ReportData {
   paymentBreakdown: { method: string; total: number; count: number }[]
   paymentBreakdown30: { method: string; total: number; count: number }[]
   topProducts: { name: string; quantity: number; revenue: number }[]
+  ordersByStatus: { status: string; count: number; total: number }[]
   reservations: { id: string; client: string; type: string; date: string; heure: string; status: string }[]
   periodLabel: string
 }
@@ -138,6 +139,23 @@ export default function DashboardPage() {
 
         <section className="rounded-xl border border-border bg-card p-5 shadow-card-soft"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Produits les plus vendus</h2><p className="mt-1 text-xs text-muted-foreground">Sur les sept derniers jours</p></div><BarChart3 className="h-5 w-5 text-primary" /></div><div className="mt-5 space-y-4">{(report?.topProducts ?? []).map((product, index) => <div key={product.name}><div className="mb-1 flex justify-between text-sm"><span className="font-medium text-foreground">{product.name}</span><span className="text-muted-foreground">{product.quantity} unités</span></div><div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(8, product.quantity * 12))}%` }} /></div></div>)}{!loading && !report?.topProducts.length && <p className="text-sm text-muted-foreground">Pas encore de ventes.</p>}</div></section>
       </div>
+
+      <section className="rounded-xl border border-border bg-card shadow-card-soft">
+        <div className="flex items-center justify-between border-b border-border p-5">
+          <div><h2 className="font-semibold text-foreground">Statut des commandes</h2><p className="mt-1 text-xs text-muted-foreground">Vue d&apos;ensemble de toutes les commandes du système</p></div>
+          <Link href="/admin/commandes" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
+        </div>
+        <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-3 lg:grid-cols-7">
+          {(report?.ordersByStatus ?? []).map((item) => (
+            <div key={item.status} className="rounded-xl border border-border bg-muted/40 p-4 text-center">
+              <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${getStatusColor(item.status)}`}>{getStatusLabel(item.status)}</span>
+              <p className="mt-3 text-2xl font-bold text-foreground">{item.count}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{formatPrice(item.total)}</p>
+            </div>
+          ))}
+          {!loading && (report?.ordersByStatus ?? []).length === 0 && <p className="col-span-full py-8 text-center text-sm text-muted-foreground">Aucune commande.</p>}
+        </div>
+      </section>
 
       <section className="rounded-xl border border-border bg-card p-5 shadow-card-soft"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Dernières pré-commandes</h2><p className="mt-1 text-xs text-muted-foreground">Pré-commandes les plus récentes</p></div><Link href="/admin/reservations" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link></div><div className="mt-4 divide-y divide-border">{reservations.slice(0, 5).map((res) => <div key={res.id} className="flex items-center justify-between gap-3 py-3 text-sm"><div className="min-w-0"><p className="truncate font-medium text-foreground">{res.client}</p><p className="text-xs text-muted-foreground">{res.type} · {res.date} à {res.heure || "-"}</p></div><div className="flex shrink-0 items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${sourceLabels[res.source]?.className || "bg-gray-100 text-gray-600"}`}>{sourceLabels[res.source]?.label || res.source || "En ligne"}</span><span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{res.status}</span></div></div>)}{!loading && reservations.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Aucune pré-commande pour le moment.</p>}</div></section>
 
