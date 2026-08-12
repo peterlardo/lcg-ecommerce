@@ -24,7 +24,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
 import { formatPrice, getStatusColor, getStatusLabel } from "@/lib/utils"
 
 interface ReportData {
-  summary: { todayRevenue: number; todayOrders: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string }
+  summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string }
   daily: { name: string; revenu: number; commandes: number }[]
   salesByDay: { name: string; revenu: number; commandes: number }[]
   paymentBreakdown: { method: string; total: number; count: number }[]
@@ -78,7 +78,7 @@ export default function DashboardPage() {
 
   const summary = report?.summary
   const stats = [
-    { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: `${summary?.todayOrders ?? 0} commande(s)`, icon: CircleDollarSign, tone: "text-green-600 bg-green-100" },
+    { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: `${summary?.todayOrdersDelivered ?? 0} commande(s)`, icon: CircleDollarSign, tone: "text-green-600 bg-green-100" },
     { label: "Commandes totales", value: String(summary?.orders30 ?? 0), detail: `${summary?.todayOrders ?? 0} aujourd'hui`, icon: ShoppingCart, tone: "text-primary bg-primary/10" },
     { label: "Livraisons", value: String(summary?.totalDeliveries ?? 0), detail: `${summary?.deliveriesInProgress ?? 0} en cours · ${summary?.deliveredToday ?? 0} livrées aujourd'hui`, icon: Truck, tone: "text-orange-600 bg-orange-100" },
     { label: "Pré-commandes", value: String(summary?.totalReservations ?? 0), detail: `${summary?.pendingReservations ?? 0} en attente`, icon: ClipboardList, tone: "text-blue-600 bg-blue-100" },

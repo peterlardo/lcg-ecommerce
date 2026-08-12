@@ -245,7 +245,7 @@ export async function GET(request: Request) {
       period,
       periodLabel: getPeriodRange(period, now).label,
       summary: {
-        revenue7, revenue30, todayRevenue, orders7: activeRecent.length, orders30: activeAll.length, todayOrders: todayOrders.length,
+        revenue7, revenue30, todayRevenue, orders7: activeRecent.length, orders30: activeAll.length, todayOrders: todayOrders.length, todayOrdersDelivered: todayOrdersDelivered.length,
         avgOrder: activeAllDelivered.length ? Math.round(revenue30 / activeAllDelivered.length) : 0, topProduct: topProducts[0]?.name ?? "-",
         stockUnits: variants.reduce((s, v) => s + v.stock, 0), totalVariants: variants.length,
         lowStock: stockAlerts.filter((i) => i.stock > 0).length, outOfStock: stockAlerts.filter((i) => i.stock <= 0).length,
