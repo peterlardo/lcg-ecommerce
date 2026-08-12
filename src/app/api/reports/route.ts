@@ -103,28 +103,31 @@ export async function GET(request: Request) {
     ])
 
     const activeRecent = recentOrders.filter((o) => o.status !== "CANCELLED")
+    const activeRecentDelivered = activeRecent.filter((o) => ["OUT_FOR_DELIVERY", "DELIVERED"].includes(o.status))
     const activeAll = allOrders.filter((o) => o.status !== "CANCELLED")
+    const activeAllDelivered = activeAll.filter((o) => ["OUT_FOR_DELIVERY", "DELIVERED"].includes(o.status))
     const todayOrders = activeRecent.filter((o) => o.createdAt >= todayStart)
+    const todayOrdersDelivered = activeRecentDelivered.filter((o) => o.createdAt >= todayStart)
 
-    const revenue7 = activeRecent.reduce((s, o) => s + o.total, 0)
-    const revenue30 = activeAll.reduce((s, o) => s + o.total, 0)
-    const todayRevenue = todayOrders.reduce((s, o) => s + o.total, 0)
-    const cashExpected = todayOrders.filter((o) => o.paymentMethod === "CASH_ON_DELIVERY").reduce((s, o) => s + o.total, 0)
+    const revenue7 = activeRecentDelivered.reduce((s, o) => s + o.total, 0)
+    const revenue30 = activeAllDelivered.reduce((s, o) => s + o.total, 0)
+    const todayRevenue = todayOrdersDelivered.reduce((s, o) => s + o.total, 0)
+    const cashExpected = todayOrders.filter((o) => o.paymentMethod === "CASH_ON_DELIVERY" && o.paymentStatus === "PAID").reduce((s, o) => s + o.total, 0)
 
     const daily7 = daysArray(sevenDaysAgo, 7).map((date) => {
       const key = dayKey(date)
-      const dayOrders = activeRecent.filter((o) => dayKey(o.createdAt) === key)
+      const dayOrders = activeRecentDelivered.filter((o) => dayKey(o.createdAt) === key)
       return { name: shortDay(date), date: key, revenu: dayOrders.reduce((s, o) => s + o.total, 0), commandes: dayOrders.length }
     })
 
     const daily30 = daysArray(periodFrom, dayCount).map((date) => {
       const key = dayKey(date)
-      const dayOrders = activeAll.filter((o) => dayKey(o.createdAt) === key)
+      const dayOrders = activeAllDelivered.filter((o) => dayKey(o.createdAt) === key)
       return { name: date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }), date: key, revenu: dayOrders.reduce((s, o) => s + o.total, 0), commandes: dayOrders.length }
     })
 
     const productTotals = new Map<string, { name: string; quantity: number; revenue: number }>()
-    for (const order of activeRecent) {
+    for (const order of activeRecentDelivered) {
       for (const item of order.items) {
         const name = item.variant?.product?.name ?? "Produit"
         const cur = productTotals.get(item.productId) ?? { name, quantity: 0, revenue: 0 }
@@ -137,14 +140,14 @@ export async function GET(request: Request) {
 
     const paymentBreakdown = ["CASH_ON_DELIVERY", "MOBILE_MONEY", "CARD"].map((method) => ({
       method,
-      total: todayOrders.filter((o) => o.paymentMethod === method).reduce((s, o) => s + o.total, 0),
-      count: todayOrders.filter((o) => o.paymentMethod === method).length,
+      total: todayOrdersDelivered.filter((o) => o.paymentMethod === method).reduce((s, o) => s + o.total, 0),
+      count: todayOrdersDelivered.filter((o) => o.paymentMethod === method).length,
     }))
 
     const paymentBreakdown30 = ["CASH_ON_DELIVERY", "MOBILE_MONEY", "CARD"].map((method) => ({
       method,
-      total: activeAll.filter((o) => o.paymentMethod === method).reduce((s, o) => s + o.total, 0),
-      count: activeAll.filter((o) => o.paymentMethod === method).length,
+      total: activeAllDelivered.filter((o) => o.paymentMethod === method).reduce((s, o) => s + o.total, 0),
+      count: activeAllDelivered.filter((o) => o.paymentMethod === method).length,
     }))
 
     const stockAlerts = variants.filter((v) => v.stock <= 20).map((v) => ({
@@ -166,7 +169,7 @@ export async function GET(request: Request) {
       productName: v.product.name, format: v.format, stock: v.stock, price: v.price, categoryName: v.product.category?.name ?? "Sans categorie",
     })).sort((a, b) => a.stock - b.stock)
 
-    const salesByDay = daily30.map((d) => ({ ...d, ventes: activeAll.filter((o) => dayKey(o.createdAt) === d.date).reduce((s, o) => s + o.total, 0) }))
+    const salesByDay = daily30.map((d) => ({ ...d, ventes: activeAllDelivered.filter((o) => dayKey(o.createdAt) === d.date).reduce((s, o) => s + o.total, 0) }))
 
     const supplyMovements = movements.filter((m) => supplyTypes.includes(m.type))
     const supplyByDay = daysArray(periodFrom, dayCount).map((date) => {
@@ -187,7 +190,7 @@ export async function GET(request: Request) {
 
     const ordersByDay = daysArray(periodFrom, dayCount).map((date) => {
       const key = dayKey(date)
-      const dayOrders = activeAll.filter((o) => dayKey(o.createdAt) === key)
+      const dayOrders = activeAllDelivered.filter((o) => dayKey(o.createdAt) === key)
       return { name: date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }), date: key, commandes: dayOrders.length, revenu: dayOrders.reduce((s, o) => s + o.total, 0) }
     })
 
@@ -243,7 +246,7 @@ export async function GET(request: Request) {
       periodLabel: getPeriodRange(period, now).label,
       summary: {
         revenue7, revenue30, todayRevenue, orders7: activeRecent.length, orders30: activeAll.length, todayOrders: todayOrders.length,
-        avgOrder: activeAll.length ? Math.round(revenue30 / activeAll.length) : 0, topProduct: topProducts[0]?.name ?? "-",
+        avgOrder: activeAllDelivered.length ? Math.round(revenue30 / activeAllDelivered.length) : 0, topProduct: topProducts[0]?.name ?? "-",
         stockUnits: variants.reduce((s, v) => s + v.stock, 0), totalVariants: variants.length,
         lowStock: stockAlerts.filter((i) => i.stock > 0).length, outOfStock: stockAlerts.filter((i) => i.stock <= 0).length,
         pendingReservations: reservations.filter((r) => r.status === "PENDING").length,

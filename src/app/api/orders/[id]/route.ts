@@ -28,7 +28,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
     const order = await prisma.$transaction(async (tx) => {
       const previous = await tx.order.findUnique({
         where: { id },
-        include: { items: true },
+        select: { items: true, paymentStatus: true, status: true, orderNumber: true },
       })
 
       if (!previous) throw new Error("Commande introuvable")
@@ -76,7 +76,16 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
         }
       }
 
-      const updated = await tx.order.update({ where: { id }, data: { status } })
+      const updateData: Record<string, string> = { status }
+
+      if ((status === "OUT_FOR_DELIVERY" || status === "DELIVERED") && previous.paymentStatus !== "PAID") {
+        updateData.paymentStatus = "PAID"
+      }
+      if (status === "CANCELLED" && previous.paymentStatus === "PAID") {
+        updateData.paymentStatus = "REFUNDED"
+      }
+
+      const updated = await tx.order.update({ where: { id }, data: updateData })
 
       if (status === "OUT_FOR_DELIVERY") {
         await tx.delivery.updateMany({ where: { orderId: id }, data: { status: "IN_TRANSIT" } })

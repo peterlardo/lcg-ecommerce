@@ -116,7 +116,7 @@ export async function GET(request: Request) {
       const day = dailyMap.get(key)!
       day.orderCount++
       day.totalRevenue += order.total
-      if (order.paymentMethod === "CASH_ON_DELIVERY") day.cashTotal += order.total
+      if (order.paymentMethod === "CASH_ON_DELIVERY" && order.paymentStatus === "PAID") day.cashTotal += order.total
       else if (order.paymentMethod === "MOBILE_MONEY") day.mobileMoneyTotal += order.total
       else if (order.paymentMethod === "CARD") day.cardTotal += order.total
     }

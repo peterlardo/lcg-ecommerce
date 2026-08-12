@@ -50,6 +50,7 @@ interface Order {
   customerPhone: string
   status: string
   paymentMethod: string
+  paymentStatus: string
   source: string
   total: number
   createdAt: string
@@ -66,6 +67,12 @@ const paymentLabels: Record<string, string> = {
 const sourceLabels: Record<string, { label: string; className: string }> = {
   WEB: { label: "En ligne", className: "bg-teal-100 text-teal-700" },
   OPERATOR: { label: "Opérateur", className: "bg-violet-100 text-violet-700" },
+}
+
+const paymentStatusConfig: Record<string, { label: string; className: string }> = {
+  PAID: { label: "Réglée", className: "bg-green-100 text-green-700" },
+  PENDING: { label: "En attente", className: "bg-amber-100 text-amber-700" },
+  REFUNDED: { label: "Remboursée", className: "bg-red-100 text-red-700" },
 }
 
 interface DraftItem {
@@ -305,6 +312,15 @@ export default function CommandesPage() {
                     >
                       {sourceLabels[order.source]?.label || order.source || "En ligne"}
                     </span>
+                    {order.paymentStatus && (
+                      <span
+                        className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                          paymentStatusConfig[order.paymentStatus]?.className || "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {paymentStatusConfig[order.paymentStatus]?.label || order.paymentStatus}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm font-medium text-gray-700">{order.customerName}</p>
                 </div>
@@ -370,6 +386,16 @@ export default function CommandesPage() {
                         <span className="font-medium text-gray-500">Paiement: </span>
                         {paymentLabels[order.paymentMethod] || order.paymentMethod || "—"}
                       </p>
+                      {order.paymentStatus && (
+                        <p className="text-gray-700">
+                          <span className="font-medium text-gray-500">Statut paiement: </span>
+                          <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
+                            paymentStatusConfig[order.paymentStatus]?.className || "bg-gray-100 text-gray-600"
+                          }`}>
+                            {paymentStatusConfig[order.paymentStatus]?.label || order.paymentStatus}
+                          </span>
+                        </p>
+                      )}
                       <p className="text-gray-700">
                         <span className="font-medium text-gray-500">Client: </span>
                         {order.customerEmail || "email non renseigné"} | {order.customerPhone}
