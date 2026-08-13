@@ -63,6 +63,8 @@ const sidebarGroups = [
   {
     title: "Administration",
     links: [
+      { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users },
+      { href: "/admin/utilisateurs/roles", label: "Rôles & permissions", icon: ShieldCheck },
       { href: "/admin/clients", label: "Clients", icon: Users },
       { href: "/admin/controle-distant", label: "Contrôle distant", icon: ShieldCheck },
       { href: "/admin/messages", label: "Messages", icon: MessageSquare },

@@ -1,13 +1,15 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import {
+  AlertCircle,
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
   BarChart3,
+  Bell,
   CalendarRange,
   CheckCircle2,
   CircleDollarSign,
@@ -22,9 +24,11 @@ import {
 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { formatPrice, getStatusColor, getStatusLabel } from "@/lib/utils"
+import { useNotifications } from "@/hooks/use-notifications"
+import { NotificationToast } from "@/components/notification-toast"
 
 interface ReportData {
-  summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string }
+  summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; todayDeliveries: number; todayReservations: number; todayReservationsPending: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string; todayInDelivery: number; todayConfirmed: number }
   daily: { name: string; revenu: number; commandes: number }[]
   salesByDay: { name: string; revenu: number; commandes: number }[]
   paymentBreakdown: { method: string; total: number; count: number }[]
@@ -32,10 +36,24 @@ interface ReportData {
   topProducts: { name: string; quantity: number; revenue: number }[]
   ordersByStatus: { status: string; count: number; total: number }[]
   reservations: { id: string; client: string; type: string; date: string; heure: string; status: string }[]
+  weeklyCommandes: { name: string; date: string; commandes: number; montant: number; details: { orderNumber: string; customerName: string; total: number; paymentMethod: string }[] }[]
+  weeklyPrecommandes: { name: string; date: string; precommandes: number }[]
+  weeklyLivraisons: { name: string; date: string; livraisons: number; livrees: number; details: { orderNumber: string; customer: string; status: string; address: string }[] }[]
+  stockAlerts: { variantId: string; productName: string; format: string; stock: number; categoryName: string }[]
   periodLabel: string
+  weekOffset: number
+  weekStart: string
+  weekEnd: string
+  livraisonWeekStart: string
+  livraisonWeekEnd: string
 }
 
-interface Order { id: string; orderNumber: string; customerName: string; status: string; total: number; createdAt: string; source: string }
+interface Order {
+  id: string; orderNumber: string; customerName: string; status: string; total: number;
+  createdAt: string; source: string; paymentMethod: string; paymentStatus: string;
+  pointOfSaleId: string | null; pointOfSale?: { name: string } | null;
+  items: { name: string; format: string; quantity: number; price: number; total: number }[]
+}
 
 interface Reservation { id: string; client: string; type: string; date: string; heure: string; status: string; source: string }
 
@@ -59,18 +77,32 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
-  const [chartMode, setChartMode] = useState<"revenu" | "commandes">("revenu")
+  const [chartMode, setChartMode] = useState<"revenu" | "confirmees" | "production" | "livrees" | "ventesjour">("revenu")
+  const [encaissementsTab, setEncaissementsTab] = useState<"aujourdhui" | "semaine">("aujourdhui")
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [livraisonWeekOffset, setLivraisonWeekOffset] = useState(0)
+  const [expandedDay, setExpandedDay] = useState<string | null>(null)
+  const [recentStatusFilter, setRecentStatusFilter] = useState<string | null>(null)
+  const { notifications, newCount, dismiss, dismissAll } = useNotifications(15000)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
 
-  useEffect(() => {
-    Promise.all([fetch("/api/reports"), fetch("/api/orders"), fetch("/api/reservations")])
+  const loadData = useCallback(() => {
+    Promise.all([fetch(`/api/reports?weekOffset=${weekOffset}&livraisonWeekOffset=${livraisonWeekOffset}`), fetch("/api/orders"), fetch("/api/reservations")])
       .then(async ([reportRes, ordersRes, reservationsRes]) => {
         if (reportRes.ok) setReport(await reportRes.json())
         if (ordersRes.ok) setOrders(await ordersRes.json())
         if (reservationsRes.ok) setReservations(await reservationsRes.json())
+        setLastRefresh(new Date())
       })
       .catch((error) => console.error("Erreur dashboard:", error))
       .finally(() => setLoading(false))
-  }, [])
+  }, [weekOffset, livraisonWeekOffset])
+
+  useEffect(() => {
+    loadData()
+    const interval = setInterval(loadData, 15000)
+    return () => clearInterval(interval)
+  }, [loadData])
 
   const role = session?.user?.role
   const isAdmin = role === "ADMIN"
@@ -79,17 +111,40 @@ export default function DashboardPage() {
 
   const summary = report?.summary
   const stats = [
-    { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: `${summary?.todayOrdersDelivered ?? 0} commande(s)`, icon: CircleDollarSign, tone: "text-green-600 bg-green-100" },
-    { label: "Commandes totales", value: String(summary?.orders30 ?? 0), detail: `${summary?.todayOrders ?? 0} aujourd'hui`, icon: ShoppingCart, tone: "text-primary bg-primary/10" },
-    { label: "Livraisons", value: String(summary?.totalDeliveries ?? 0), detail: `${summary?.deliveriesInProgress ?? 0} en cours · ${summary?.deliveredToday ?? 0} livrées aujourd'hui`, icon: Truck, tone: "text-orange-600 bg-orange-100" },
-    { label: "Pré-commandes", value: String(summary?.totalReservations ?? 0), detail: `${summary?.pendingReservations ?? 0} en attente`, icon: ClipboardList, tone: "text-blue-600 bg-blue-100" },
+    { label: "En livraison", value: String(summary?.todayInDelivery ?? 0), detail: "Commandes en cours de livraison", icon: Truck, tone: "text-orange-600 bg-orange-100" },
+    { label: "Confirmé", value: String(summary?.todayConfirmed ?? 0), detail: "Commandes confirmées aujourd'hui", icon: CheckCircle2, tone: "text-green-600 bg-green-100" },
+    { label: "Commandes totales", value: String(summary?.todayOrders ?? 0), detail: `${formatPrice(summary?.todayRevenue ?? 0)} de ventes`, icon: ShoppingCart, tone: "text-primary bg-primary/10" },
+    { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: `${summary?.todayOrdersDelivered ?? 0} livrée(s)`, icon: CircleDollarSign, tone: "text-emerald-600 bg-emerald-100" },
+    { label: "Précommandes", value: String(summary?.todayReservations ?? 0), detail: `${summary?.todayReservationsPending ?? 0} en attente`, icon: ClipboardList, tone: "text-blue-600 bg-blue-100" },
   ]
 
   const paymentData = useMemo(() => (report?.paymentBreakdown ?? []).map((item) => ({ ...item, name: paymentLabels[item.method] ?? item.method })), [report])
-  const recentOrders = orders.slice(0, 6)
+  const recentOrders = useMemo(() => {
+    const list = recentStatusFilter ? orders.filter((o) => o.status === recentStatusFilter) : orders
+    return list.slice(0, 6)
+  }, [orders, recentStatusFilter])
+  const recentStatuses = useMemo(() => Array.from(new Set(orders.map((o) => o.status))), [orders])
+  const confirmedOrders = useMemo(() => orders.filter((o) => o.status === "CONFIRMED"), [orders])
+  const productionOrders = useMemo(() => orders.filter((o) => o.status === "PROCESSING"), [orders])
+  const deliveredOrders = useMemo(() => orders.filter((o) => o.status === "DELIVERED"), [orders])
+  const todaySalesOrders = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return orders.filter((o) => o.status === "DELIVERED" && new Date(o.createdAt) >= today)
+  }, [orders])
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
 
   return (
     <div className="space-y-6">
+      <NotificationToast notifications={notifications} onDismiss={dismiss} />
+      {newCount > 0 && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <button onClick={dismissAll} className="flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2 text-xs font-semibold shadow-lg hover:opacity-90 transition-opacity">
+            <Bell className="h-3.5 w-3.5" />
+            {newCount} nouvelle(s) commande(s)
+          </button>
+        </div>
+      )}
       <div className="space-y-1">
         <h3 className="-mt-[3px] text-3xl font-bold tracking-tight text-foreground">Bonjour, <span className="text-primary">{session?.user?.name || "Administrateur"}</span></h3>
         {!isAdmin && role && (
@@ -101,18 +156,81 @@ export default function DashboardPage() {
         )}
         <div className="mt-10 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div><p className="text-sm text-muted-foreground">Vue d&apos;ensemble</p><h1 className="mt-1 text-2xl font-bold text-foreground">Tableau de bord{!isAdmin ? " personnel" : ""}</h1></div>
-          <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-[10px] font-semibold text-green-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+              Auto-refresh 15s
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => { const Icon = stat.icon; return <div key={stat.label} className="rounded-xl border border-border bg-card p-5 shadow-card-soft"><div className="flex items-start justify-between"><div><p className="text-sm text-muted-foreground">{stat.label}</p><p className="mt-2 text-2xl font-bold text-foreground">{stat.value}</p></div><div className={`flex h-11 w-11 items-center justify-center rounded-full ${stat.tone}`}><Icon className="h-5 w-5" /></div></div><p className="mt-4 text-xs text-muted-foreground">{stat.detail}</p></div> })}
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
         <section className="rounded-xl border border-border bg-card p-5 shadow-card-soft">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-foreground">Statistiques des ventes</h2><p className="mt-1 text-xs text-muted-foreground">Vue d&apos;ensemble des ventes et commandes</p></div><div className="flex rounded-lg border border-border bg-muted p-1"><button onClick={() => setChartMode("revenu")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "revenu" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Revenus</button><button onClick={() => setChartMode("commandes")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "commandes" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Commandes</button></div></div>
-          <div className="mt-6 h-72">{loading ? <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Chargement...</div> : <ResponsiveContainer width="100%" height="100%"><BarChart data={report?.daily ?? []} barCategoryGap="28%"><CartesianGrid vertical={false} stroke="var(--border)" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} /><YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickFormatter={(value) => chartMode === "revenu" ? `${Math.round(Number(value) / 1000)}k` : String(value)} /><Tooltip formatter={(value) => [chartMode === "revenu" ? formatPrice(Number(value)) : value, chartMode === "revenu" ? "Revenu" : "Commandes"]} /><Bar dataKey={chartMode} fill="var(--primary)" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer>}</div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-foreground">Statistiques des ventes</h2><p className="mt-1 text-xs text-muted-foreground">Vue d&apos;ensemble des ventes et commandes</p></div><div className="flex rounded-lg border border-border bg-muted p-1"><button onClick={() => setChartMode("revenu")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "revenu" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Revenus</button><button onClick={() => setChartMode("confirmees")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "confirmees" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Confirmées ({confirmedOrders.length})</button><button onClick={() => setChartMode("production")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "production" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>En production ({productionOrders.length})</button><button onClick={() => setChartMode("livrees")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "livrees" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Livrées ({deliveredOrders.length})</button><button onClick={() => setChartMode("ventesjour")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "ventesjour" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Ventes du jour ({todaySalesOrders.length})</button></div></div>
+          {chartMode === "confirmees" || chartMode === "production" || chartMode === "livrees" || chartMode === "ventesjour" ? (() => {
+            const list = chartMode === "confirmees" ? confirmedOrders : chartMode === "production" ? productionOrders : chartMode === "ventesjour" ? todaySalesOrders : deliveredOrders
+            const emptyMsg = chartMode === "confirmees" ? "Aucune commande confirmée." : chartMode === "production" ? "Aucune commande en production." : chartMode === "ventesjour" ? "Aucune vente aujourd'hui." : "Aucune commande livrée."
+            return (
+              <div className="mt-4">
+                {list.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">{emptyMsg}</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="text-xs text-muted-foreground border-b border-border">
+                        <tr>
+                          <th className="pb-2 font-medium">Commande</th>
+                          <th className="pb-2 font-medium">Client</th>
+                          <th className="pb-2 font-medium">Statut</th>
+                          <th className="pb-2 font-medium">POS</th>
+                          <th className="pb-2 font-medium text-right">Montant</th>
+                          <th className="pb-2 font-medium">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {list.map((o) => (
+                          <Fragment key={o.id}>
+                            <tr className="hover:bg-muted/40 cursor-pointer" onClick={() => setExpandedOrder(expandedOrder === o.id ? null : o.id)}>
+                              <td className="py-2.5 font-medium text-foreground">{o.orderNumber}</td>
+                              <td className="py-2.5 text-muted-foreground">{o.customerName || "—"}</td>
+                              <td className="py-2.5"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getStatusColor(o.status)}`}>{getStatusLabel(o.status)}</span></td>
+                              <td className="py-2.5 text-muted-foreground">{o.pointOfSale?.name || "—"}</td>
+                              <td className="py-2.5 text-right font-semibold text-foreground">{formatPrice(o.total)}</td>
+                              <td className="py-2.5 text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleDateString("fr-FR")}</td>
+                            </tr>
+                            {expandedOrder === o.id && (
+                              <tr><td colSpan={6} className="bg-muted/20 px-4 py-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1.5">Articles</p>
+                                    <div className="space-y-1">{o.items.map((item, idx) => <div key={idx} className="flex justify-between"><span className="text-foreground">{item.name}{item.format ? ` — ${item.format}` : ""} x{item.quantity}</span><span className="font-medium">{formatPrice(item.total)}</span></div>)}</div>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1.5">Détails</p>
+                                    <p className="text-muted-foreground">Paiement : <span className="text-foreground">{paymentLabels[o.paymentMethod] || o.paymentMethod || "—"}</span></p>
+                                    <p className="text-muted-foreground">Source : <span className="text-foreground">{o.source === "WEB" ? "En ligne" : "Opérateur"}</span></p>
+                                    {o.pointOfSale && <p className="text-muted-foreground">Point de vente : <span className="text-foreground">{o.pointOfSale.name}</span></p>}
+                                  </div>
+                                </div>
+                              </td></tr>
+                            )}
+                          </Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )
+          })() : (
+            <>
+              <div className="mt-6 h-72">{loading ? <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Chargement...</div> : <ResponsiveContainer width="100%" height="100%"><BarChart data={report?.daily ?? []} barCategoryGap="28%"><CartesianGrid vertical={false} stroke="var(--border)" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} /><YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickFormatter={(value) => chartMode === "revenu" ? `${Math.round(Number(value) / 1000)}k` : String(value)} /><Tooltip formatter={(value) => [chartMode === "revenu" ? formatPrice(Number(value)) : value, chartMode === "revenu" ? "Revenu" : "Commandes"]} /><Bar dataKey={chartMode} fill="var(--primary)" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer>}</div>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-lg bg-muted/50 p-3"><p className="text-xs text-muted-foreground">CA 7 jours</p><p className="mt-1 text-lg font-bold text-foreground">{formatPrice(summary?.revenue7 ?? 0)}</p></div>
             <div className="rounded-lg bg-muted/50 p-3"><p className="text-xs text-muted-foreground">CA {report?.periodLabel ?? "Mois"}</p><p className="mt-1 text-lg font-bold text-foreground">{formatPrice(summary?.revenue30 ?? 0)}</p></div>
@@ -128,14 +246,188 @@ export default function DashboardPage() {
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Paiements {report?.periodLabel ?? "Mois"}</h3>
               <div className="space-y-2">{(report?.paymentBreakdown30 ?? []).filter((p) => p.total > 0).map((item, index) => <div key={item.method} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 text-muted-foreground"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: paymentColors[index % paymentColors.length] }} />{paymentLabels[item.method] ?? item.method} <span className="text-xs text-muted-foreground">({item.count})</span></span><span className="font-semibold text-foreground">{formatPrice(item.total)}</span></div>)}{(report?.paymentBreakdown30 ?? []).filter((p) => p.total > 0).length === 0 && <p className="text-xs text-muted-foreground">Aucun encaissement.</p>}</div>
             </div>
-          </div>
+           </div>
+            </>
+          )}
         </section>
 
-        <section className="rounded-xl border border-border bg-card p-5 shadow-card-soft"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Encaissements du jour</h2><p className="mt-1 text-xs text-muted-foreground">Répartition par moyen de paiement</p></div><CircleDollarSign className="h-5 w-5 text-primary" /></div><div className="mt-4 h-44"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={paymentData} dataKey="total" nameKey="name" innerRadius={48} outerRadius={70} paddingAngle={3}>{paymentData.map((entry, index) => <Cell key={entry.method} fill={paymentColors[index % paymentColors.length]} />)}</Pie><Tooltip formatter={(value) => [formatPrice(Number(value)), "Total"]} /></PieChart></ResponsiveContainer></div><div className="space-y-2">{paymentData.map((item, index) => <div key={item.method} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 text-muted-foreground"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: paymentColors[index % paymentColors.length] }} />{item.name}</span><span className="font-semibold text-foreground">{formatPrice(item.total)}</span></div>)}{paymentData.length === 0 && <p className="text-center text-sm text-muted-foreground">Aucun encaissement aujourd&apos;hui.</p>}</div></section>
+        <section className="rounded-xl border border-border bg-card p-5 shadow-card-soft">
+          <div className="flex items-center justify-between">
+            <div><h2 className="font-semibold text-foreground">Encaissements, Commandes et livraisons par semaine</h2><p className="mt-1 text-xs text-muted-foreground">Suivi des paiements, commandes et livraisons</p></div>
+            <CircleDollarSign className="h-5 w-5 text-primary" />
+          </div>
+          <div className="mt-4 flex rounded-lg border border-border bg-muted p-1">
+            <button onClick={() => setEncaissementsTab("aujourdhui")} className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${encaissementsTab === "aujourdhui" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Aujourd&apos;hui</button>
+            <button onClick={() => setEncaissementsTab("semaine")} className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${encaissementsTab === "semaine" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Historique semaine</button>
+          </div>
+
+          {encaissementsTab === "aujourdhui" ? (
+            <>
+              <div className="mt-4 h-44"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={paymentData} dataKey="total" nameKey="name" innerRadius={48} outerRadius={70} paddingAngle={3}>{paymentData.map((entry, index) => <Cell key={entry.method} fill={paymentColors[index % paymentColors.length]} />)}</Pie><Tooltip formatter={(value) => [formatPrice(Number(value)), "Total"]} /></PieChart></ResponsiveContainer></div>
+              <div className="space-y-2">{paymentData.map((item, index) => <div key={item.method} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 text-muted-foreground"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: paymentColors[index % paymentColors.length] }} />{item.name}</span><span className="font-semibold text-foreground">{formatPrice(item.total)}</span></div>)}{paymentData.length === 0 && <p className="text-center text-sm text-muted-foreground">Aucun encaissement aujourd&apos;hui.</p>}</div>
+            </>
+          ) : (
+            <div className="mt-5 space-y-6">
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/50 px-4 py-2.5">
+                <button onClick={() => { setWeekOffset((o) => o + 1); setExpandedDay(null) }} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Semaine précédente
+                </button>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-foreground">
+                    {report?.weekStart && report?.weekEnd
+                      ? `${new Date(report.weekStart).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} — ${new Date(report.weekEnd).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`
+                      : "Cette semaine"}
+                  </p>
+                  {weekOffset > 0 && <p className="text-[10px] text-muted-foreground mt-0.5">{weekOffset} semaine(s) précédente(s)</p>}
+                </div>
+                <button onClick={() => { setWeekOffset((o) => Math.max(0, o - 1)); setExpandedDay(null) }} disabled={weekOffset === 0} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                  Semaine suivante <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Commandes de la semaine</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-xs text-muted-foreground"><tr><th className="pb-2 font-medium">Jour</th><th className="pb-2 font-medium text-right">Commandes</th><th className="pb-2 font-medium text-right">Montant</th><th className="pb-2 font-medium w-8"></th></tr></thead>
+                    <tbody className="divide-y divide-border/50">
+                      {(report?.weeklyCommandes ?? []).map((d) => (
+                        <Fragment key={d.date}>
+                          <tr className="hover:bg-muted/40 cursor-pointer" onClick={() => setExpandedDay(expandedDay === d.date ? null : d.date)}>
+                            <td className="py-2 font-medium text-foreground">{d.name} <span className="text-[10px] text-muted-foreground font-normal ml-1">{new Date(d.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}</span></td>
+                            <td className="py-2 text-right">{d.commandes}</td>
+                            <td className="py-2 text-right font-semibold">{formatPrice(d.montant)}</td>
+                            <td className="py-2 text-right text-xs text-muted-foreground">{d.commandes > 0 ? (expandedDay === d.date ? "▲" : "▼") : ""}</td>
+                          </tr>
+                          {expandedDay === d.date && d.details.length > 0 && (
+                            <tr><td colSpan={4} className="bg-muted/20 px-4 py-3">
+                              <div className="space-y-1.5">
+                                {d.details.map((cmd, i) => (
+                                  <div key={i} className="flex items-center justify-between text-xs">
+                                    <span className="font-medium text-foreground">{cmd.orderNumber}</span>
+                                    <span className="text-muted-foreground">{cmd.customerName || "Client"}</span>
+                                    <span className="text-muted-foreground">{paymentLabels[cmd.paymentMethod] || cmd.paymentMethod || "—"}</span>
+                                    <span className="font-semibold text-foreground">{formatPrice(cmd.total)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </td></tr>
+                          )}
+                          {expandedDay === d.date && d.details.length === 0 && (
+                            <tr><td colSpan={4} className="bg-muted/20 px-4 py-2 text-center text-xs text-muted-foreground">Aucune commande ce jour.</td></tr>
+                          )}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-2 flex justify-end text-xs font-semibold text-foreground">
+                  Total : {formatPrice((report?.weeklyCommandes ?? []).reduce((s, d) => s + d.montant, 0))} — {(report?.weeklyCommandes ?? []).reduce((s, d) => s + d.commandes, 0)} commande(s)
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/50 px-4 py-2.5 mb-4">
+                  <button onClick={() => { setLivraisonWeekOffset((o) => o + 1); setExpandedDay(null) }} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Semaine précédente
+                  </button>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-foreground">
+                      {report?.livraisonWeekStart && report?.livraisonWeekEnd
+                        ? `${new Date(report.livraisonWeekStart).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} — ${new Date(report.livraisonWeekEnd).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`
+                        : "Cette semaine"}
+                    </p>
+                    {livraisonWeekOffset > 0 && <p className="text-[10px] text-muted-foreground mt-0.5">{livraisonWeekOffset} semaine(s) précédente(s)</p>}
+                  </div>
+                  <button onClick={() => { setLivraisonWeekOffset((o) => Math.max(0, o - 1)); setExpandedDay(null) }} disabled={livraisonWeekOffset === 0} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                    Semaine suivante <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Livraisons de la semaine</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-xs text-muted-foreground"><tr><th className="pb-2 font-medium">Jour</th><th className="pb-2 font-medium text-right">Total</th><th className="pb-2 font-medium text-right">Livrées</th><th className="pb-2 font-medium w-8"></th></tr></thead>
+                    <tbody className="divide-y divide-border/50">
+                      {(report?.weeklyLivraisons ?? []).map((d) => (
+                        <Fragment key={d.date}>
+                          <tr className="hover:bg-muted/40 cursor-pointer" onClick={() => setExpandedDay(expandedDay === `del-${d.date}` ? null : `del-${d.date}`)}>
+                            <td className="py-2 font-medium text-foreground">{d.name} <span className="text-[10px] text-muted-foreground font-normal ml-1">{new Date(d.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}</span></td>
+                            <td className="py-2 text-right">{d.livraisons}</td>
+                            <td className="py-2 text-right text-green-600 font-semibold">{d.livrees}</td>
+                            <td className="py-2 text-right text-xs text-muted-foreground">{d.livraisons > 0 ? (expandedDay === `del-${d.date}` ? "▲" : "▼") : ""}</td>
+                          </tr>
+                          {expandedDay === `del-${d.date}` && d.details.length > 0 && (
+                            <tr><td colSpan={4} className="bg-muted/20 px-4 py-3">
+                              <div className="space-y-1.5">
+                                {d.details.map((dl, i) => (
+                                  <div key={i} className="flex items-center justify-between text-xs">
+                                    <span className="font-medium text-foreground">{dl.orderNumber}</span>
+                                    <span className="text-muted-foreground">{dl.customer || "Client"}</span>
+                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${dl.status === "DELIVERED" ? "bg-green-100 text-green-700" : dl.status === "IN_TRANSIT" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>{dl.status === "DELIVERED" ? "Livrée" : dl.status === "IN_TRANSIT" ? "En transit" : dl.status === "PICKED_UP" ? "Récupérée" : dl.status}</span>
+                                    <span className="text-muted-foreground truncate max-w-[150px]">{dl.address || "—"}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </td></tr>
+                          )}
+                          {expandedDay === `del-${d.date}` && d.details.length === 0 && (
+                            <tr><td colSpan={4} className="bg-muted/20 px-4 py-2 text-center text-xs text-muted-foreground">Aucune livraison ce jour.</td></tr>
+                          )}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-2 flex justify-end text-xs font-semibold text-foreground">
+                  Total : {(report?.weeklyLivraisons ?? []).reduce((s, d) => s + d.livraisons, 0)} livraison(s) — {(report?.weeklyLivraisons ?? []).reduce((s, d) => s + d.livrees, 0)} livrée(s)
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,1fr)]">
-        <section className="rounded-xl border border-border bg-card shadow-card-soft"><div className="flex items-center justify-between border-b border-border p-5"><div><h2 className="font-semibold text-foreground">Commandes récentes</h2><p className="mt-1 text-xs text-muted-foreground">Suivi des dernières ventes enregistrées</p></div><Link href="/admin/commandes" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="px-5 py-3 font-medium">Commande</th><th className="px-5 py-3 font-medium">Client</th><th className="px-5 py-3 font-medium">Provenance</th><th className="px-5 py-3 font-medium">Montant</th><th className="px-5 py-3 font-medium">Statut</th></tr></thead><tbody className="divide-y divide-border">{recentOrders.map((order) => <tr key={order.id} className="hover:bg-muted/40"><td className="whitespace-nowrap px-5 py-3 font-medium text-foreground">{order.orderNumber}</td><td className="px-5 py-3 text-muted-foreground">{order.customerName || "Client"}</td><td className="px-5 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${sourceLabels[order.source]?.className || "bg-gray-100 text-gray-600"}`}>{sourceLabels[order.source]?.label || order.source || "En ligne"}</span></td><td className="whitespace-nowrap px-5 py-3 font-semibold text-foreground">{formatPrice(order.total)}</td><td className="px-5 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span></td></tr>)}{!loading && recentOrders.length === 0 && <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-muted-foreground">Aucune commande récente.</td></tr>}</tbody></table></div></section>
+        <section className="rounded-xl border border-border bg-card shadow-card-soft">
+          <div className="flex items-center justify-between border-b border-border p-5">
+            <div><h2 className="font-semibold text-foreground">Commandes récentes</h2><p className="mt-1 text-xs text-muted-foreground">Suivi des dernières ventes enregistrées</p></div>
+            <Link href="/admin/commandes" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
+          </div>
+          <div className="flex flex-wrap gap-1.5 border-b border-border px-5 pt-3 pb-0">
+            <button onClick={() => setRecentStatusFilter(null)} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${recentStatusFilter === null ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>Tous ({orders.length})</button>
+            {recentStatuses.map((s) => (
+              <button key={s} onClick={() => setRecentStatusFilter(recentStatusFilter === s ? null : s)} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${recentStatusFilter === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                {getStatusLabel(s)} ({orders.filter((o) => o.status === s).length})
+              </button>
+            ))}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-muted/60 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-3 font-medium">Commande</th>
+                  <th className="px-5 py-3 font-medium">Client</th>
+                  <th className="px-5 py-3 font-medium">Provenance</th>
+                  <th className="px-5 py-3 font-medium">Montant</th>
+                  <th className="px-5 py-3 font-medium">Statut</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {recentOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-muted/40">
+                    <td className="whitespace-nowrap px-5 py-3 font-medium text-foreground">{order.orderNumber}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{order.customerName || "Client"}</td>
+                    <td className="px-5 py-3">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${sourceLabels[order.source]?.className || "bg-gray-100 text-gray-600"}`}>{sourceLabels[order.source]?.label || order.source || "En ligne"}</span>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3 font-semibold text-foreground">{formatPrice(order.total)}</td>
+                    <td className="px-5 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span></td>
+                  </tr>
+                ))}
+                {!loading && recentOrders.length === 0 && <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-muted-foreground">Aucune commande{recentStatusFilter ? " pour ce statut" : " récente"}.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         <section className="rounded-xl border border-border bg-card p-5 shadow-card-soft"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Produits les plus vendus</h2><p className="mt-1 text-xs text-muted-foreground">Sur les sept derniers jours</p></div><BarChart3 className="h-5 w-5 text-primary" /></div><div className="mt-5 space-y-4">{(report?.topProducts ?? []).map((product, index) => <div key={product.name}><div className="mb-1 flex justify-between text-sm"><span className="font-medium text-foreground">{product.name}</span><span className="text-muted-foreground">{product.quantity} unités</span></div><div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(8, product.quantity * 12))}%` }} /></div></div>)}{!loading && !report?.topProducts.length && <p className="text-sm text-muted-foreground">Pas encore de ventes.</p>}</div></section>
       </div>
@@ -156,6 +448,31 @@ export default function DashboardPage() {
           {!loading && (report?.ordersByStatus ?? []).length === 0 && <p className="col-span-full py-8 text-center text-sm text-muted-foreground">Aucune commande.</p>}
         </div>
       </section>
+
+      {(report?.stockAlerts ?? []).length > 0 && (
+        <section className="rounded-xl border border-orange-200 bg-orange-50/50 p-5 shadow-card-soft">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100"><AlertCircle className="h-4 w-4 text-orange-600" /></div>
+              <div><h2 className="font-semibold text-orange-900">Alertes stock bas</h2><p className="mt-0.5 text-xs text-orange-700">{report!.stockAlerts.length} produit(s) en rupture ou stock faible</p></div>
+            </div>
+            <Link href="/admin/stock" className="inline-flex items-center gap-1 text-xs font-semibold text-orange-700 hover:underline">Gérer le stock <ArrowRight className="h-3.5 w-3.5" /></Link>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {report!.stockAlerts.map((alert) => (
+              <div key={alert.variantId} className="flex items-center justify-between rounded-lg border border-orange-200 bg-white px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">{alert.productName}</p>
+                  <p className="text-xs text-muted-foreground">{alert.format} · {alert.categoryName}</p>
+                </div>
+                <div className={`ml-3 shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${alert.stock <= 0 ? "bg-red-100 text-red-700" : alert.stock <= 10 ? "bg-orange-100 text-orange-700" : "bg-yellow-100 text-yellow-700"}`}>
+                  {alert.stock <= 0 ? "Rupture" : `${alert.stock} unités`}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="rounded-xl border border-border bg-card p-5 shadow-card-soft"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Dernières pré-commandes</h2><p className="mt-1 text-xs text-muted-foreground">Pré-commandes les plus récentes</p></div><Link href="/admin/reservations" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link></div><div className="mt-4 divide-y divide-border">{reservations.slice(0, 5).map((res) => <div key={res.id} className="flex items-center justify-between gap-3 py-3 text-sm"><div className="min-w-0"><p className="truncate font-medium text-foreground">{res.client}</p><p className="text-xs text-muted-foreground">{res.type} · {res.date} à {res.heure || "-"}</p></div><div className="flex shrink-0 items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${sourceLabels[res.source]?.className || "bg-gray-100 text-gray-600"}`}>{sourceLabels[res.source]?.label || res.source || "En ligne"}</span><span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{res.status}</span></div></div>)}{!loading && reservations.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Aucune pré-commande pour le moment.</p>}</div></section>
 

@@ -51,7 +51,7 @@ export interface OrderItemInput {
 
 export interface OrderInput {
   orderNumber: string
-  userId?: string
+  userId?: string | null
   customerName: string
   customerEmail: string
   customerPhone: string
@@ -380,18 +380,17 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
   const subtotal = input.items.reduce((s, i) => s + i.price * i.quantity, 0)
 
   const order = await prisma.$transaction(async (tx) => {
+    const variants = await tx.productVariant.findMany({
+      where: { id: { in: input.items.map((i) => i.variantId) } },
+      include: { product: true },
+    })
+    const variantMap = new Map(variants.map((v) => [v.id, v]))
+
     for (const item of input.items) {
-      const variant = await tx.productVariant.findUnique({
-        where: { id: item.variantId },
-        select: { stock: true },
-      })
-
-      if (!variant) {
-        throw new Error(`Variante introuvable pour ${item.name}`)
-      }
-
+      const variant = variantMap.get(item.variantId)
+      if (!variant) throw new Error("Produit introuvable")
       if (variant.stock < item.quantity) {
-        throw new Error(`Stock insuffisant pour ${item.name} ${item.format}`)
+        throw new Error(`Stock insuffisant pour ${variant.product.name} ${variant.format} (disponible: ${variant.stock}, demandé: ${item.quantity})`)
       }
     }
 
@@ -427,34 +426,6 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
       },
       include: { items: true },
     })
-
-    for (const item of input.items) {
-      await tx.productVariant.update({
-        where: { id: item.variantId },
-        data: { stock: { decrement: item.quantity } },
-      })
-      await tx.stockMovement.create({
-        data: {
-          variantId: item.variantId,
-          type: "SALE",
-          quantity: item.quantity,
-          reason: "Vente client",
-          reference: input.orderNumber,
-        },
-      })
-      try {
-        const fifoResult = await allocateStockFIFO(item.variantId, item.quantity, "SALE", input.orderNumber)
-        const orderItem = created.items.find((oi) => oi.variantId === item.variantId)
-        if (orderItem && fifoResult.allocations.length > 0) {
-          await tx.orderItem.update({
-            where: { id: orderItem.id },
-            data: { lotId: fifoResult.allocations[0].lotId },
-          })
-        }
-      } catch {
-        // Lots may not exist yet; graceful fallback
-      }
-    }
 
     return created
   })

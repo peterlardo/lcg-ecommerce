@@ -27,6 +27,12 @@ export async function POST(request: Request) {
         if (!source || source.quantity < quantity) throw new Error("Stock source insuffisant")
         await tx.pointOfSaleStock.update({ where: { id: source.id }, data: { quantity: { decrement: quantity } } })
         await tx.stockMovement.create({ data: { variantId, pointOfSaleId: sourceId, type: "TRANSFER_OUT", quantity, reason: body.reason || "Transfert de stock", reference: destinationId } })
+      } else {
+        if (variant.stock < quantity) {
+          throw new Error(`Stock central insuffisant pour ${variant.product.name} ${variant.format} (disponible: ${variant.stock}, demandé: ${quantity})`)
+        }
+        await tx.productVariant.update({ where: { id: variantId }, data: { stock: { decrement: quantity } } })
+        await tx.stockMovement.create({ data: { variantId, type: "TRANSFER_OUT", quantity, reason: body.reason || "Approvisionnement point de vente depuis stock central", reference: destinationId } })
       }
       await tx.pointOfSaleStock.upsert({ where: { pointOfSaleId_variantId: { pointOfSaleId: destinationId, variantId } }, create: { pointOfSaleId: destinationId, variantId, quantity }, update: { quantity: { increment: quantity } } })
       await tx.stockMovement.create({ data: { variantId, pointOfSaleId: destinationId, type: sourceId ? "TRANSFER_IN" : "IN", quantity, reason: body.reason || (sourceId ? "Transfert de stock" : "Approvisionnement point de vente"), reference: sourceId || null } })
@@ -37,4 +43,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 })
   }
 }
-

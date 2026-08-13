@@ -7,13 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Role {
-  ADMIN
-  STOCK_MANAGER
-  DELIVERY_AGENT
-  CUSTOMER
-}
-
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -54,7 +47,7 @@ model User {
   password      String?
   phone         String?
   image         String?
-  role          Role      @default(CUSTOMER)
+  role          String    @default("CUSTOMER")
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -70,6 +63,18 @@ model User {
   producedLots        ProductionLot[]
 }
 
+model RoleProfile {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  label       String
+  description String?
+  color       String?
+  isActive    Boolean  @default(true)
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model UserPermission {
   id        String  @id @default(cuid())
   userId    String
@@ -82,6 +87,18 @@ model UserPermission {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, module])
+}
+
+model RolePermission {
+  id        String  @id @default(cuid())
+  role      String
+  module    String
+  canView   Boolean @default(false)
+  canCreate Boolean @default(false)
+  canEdit   Boolean @default(false)
+  canDelete Boolean @default(false)
+
+  @@unique([role, module])
 }
 
 model Account {

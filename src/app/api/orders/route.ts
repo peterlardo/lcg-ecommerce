@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { auth } from "@/lib/auth"
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 import { createOrder, type OrderInput } from "@/data/store"
 import { sendOrderEmail } from "@/lib/mailer"
 import { generateOrderNumber } from "@/lib/utils"
+import { pushNotification } from "@/lib/notifications"
 
 const PAYMENT_METHODS = ["CARD", "MOBILE_MONEY", "CASH_ON_DELIVERY"]
 
@@ -23,6 +23,7 @@ export async function GET() {
           include: { variant: { include: { product: true } } },
         },
         delivery: { include: { deliveryAgent: true } },
+        pointOfSale: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
     })
@@ -65,6 +66,8 @@ export async function GET() {
               agent: o.delivery.deliveryAgent?.name ?? null,
             }
           : null,
+        pointOfSaleId: o.pointOfSaleId ?? null,
+        pointOfSale: o.pointOfSale ?? null,
       }))
     )
   } catch (error) {
@@ -75,7 +78,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth()
     const body = await request.json()
     const items = Array.isArray(body.items) ? body.items : []
 
@@ -92,9 +94,9 @@ export async function POST(request: Request) {
 
     const input: OrderInput = {
       orderNumber: body.orderNumber || generateOrderNumber(),
-      userId: session?.user?.id || undefined,
+      userId: null,
       customerName: String(body.customerName),
-      customerEmail: String(body.customerEmail || session?.user?.email || ""),
+      customerEmail: String(body.customerEmail || ""),
       customerPhone: String(body.customerPhone),
       address: String(body.address),
       city: String(body.city || "Brazzaville"),
@@ -138,6 +140,13 @@ export async function POST(request: Request) {
       })),
       subtotal: order.subtotal,
       deliveryFee: order.deliveryFee,
+      total: order.total,
+    })
+
+    pushNotification({
+      type: "new_order",
+      orderNumber: order.orderNumber,
+      customerName: order.customerName ?? "",
       total: order.total,
     })
 

@@ -9,7 +9,9 @@
  * 🟢 You can import this file directly.
  */
 export type * from './models/User'
+export type * from './models/RoleProfile'
 export type * from './models/UserPermission'
+export type * from './models/RolePermission'
 export type * from './models/Account'
 export type * from './models/Session'
 export type * from './models/VerificationToken'

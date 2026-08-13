@@ -3,9 +3,6 @@
 import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-
-const STAFF_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
 
 export default function PersonnelLoginPage() {
   const router = useRouter()
@@ -114,15 +111,6 @@ export default function PersonnelLoginPage() {
               )}
             </button>
           </form>
-
-          <div className="mt-6 border-t border-gray-100 pt-4 text-center">
-            <p className="text-xs text-gray-400">
-              Client LCG ?{" "}
-              <Link href="/auth/connexion" className="font-semibold text-[#1f4fa3] hover:underline">
-                Connexion clients
-              </Link>
-            </p>
-          </div>
         </div>
 
         <p className="mt-4 text-center text-xs text-white/40">

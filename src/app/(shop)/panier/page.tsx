@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
-import { useSession } from "next-auth/react"
 import { useCart } from "@/contexts/cart-context"
+import { useToast } from "@/contexts/toast-context"
 import { formatPrice } from "@/lib/utils"
 import {
   ShoppingCart, Truck, CalendarClock, Plus, Minus, Trash2,
-  ArrowRight, CircleCheck, UserPlus, LogIn, Lock,
+  ArrowRight, CircleCheck,
 } from "lucide-react"
 import { useDeliveryFee } from "@/hooks/use-delivery-fee"
 
@@ -17,8 +17,8 @@ const modes = [
 ]
 
 export default function CartPage() {
-  const { data: session, status } = useSession()
   const { items, subtotal, itemCount, removeItem, updateQuantity, clearCart } = useCart()
+  const { showToast } = useToast()
   const [mode, setMode] = useState("commande")
   const [success, setSuccess] = useState<{ mode: string; ref: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -30,14 +30,6 @@ export default function CartPage() {
   const [adresse, setAdresse] = useState("")
   const [notes, setNotes] = useState("")
   const { deliveryFee, isFreeDelivery } = useDeliveryFee(subtotal)
-
-  const isLoggedIn = !!session?.user
-
-  useEffect(() => {
-    if (session?.user) {
-      if (!nom && session.user.name) setNom(session.user.name)
-    }
-  }, [session])
 
   if (items.length === 0 && !success) {
     return (
@@ -75,12 +67,6 @@ export default function CartPage() {
           Référence <strong className="text-foreground">{success.ref}</strong>. Notre équipe vous contactera très rapidement pour confirmer{" "}
           {success.mode === "reservation" ? "votre pré-commande" : "la livraison"} et le paiement (espèces ou Mobile Money).
         </p>
-        <Link
-          href="/compte/commandes"
-          className="mt-4 text-sm font-semibold text-primary hover:underline"
-        >
-          Voir mes commandes
-        </Link>
         <Link
           href="/produits"
           className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 font-display text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
@@ -140,7 +126,7 @@ export default function CartPage() {
             orderNumber: `LCG-${Date.now().toString(36).toUpperCase().slice(-6)}`,
             customerName: nom,
             customerPhone: telephone,
-            customerEmail: session?.user?.email || "",
+            customerEmail: "",
             address: adresse,
             city: "Brazzaville",
             paymentMethod: "CASH_ON_DELIVERY",
@@ -156,6 +142,11 @@ export default function CartPage() {
       }
       clearCart()
       setSuccess({ mode, ref })
+      showToast(
+        "success",
+        mode === "reservation" ? "Pré-commande enregistrée !" : "Commande enregistrée !",
+        `Référence ${ref} — Notre équipe vous contactera rapidement.`
+      )
     } catch (err) {
       console.error("Erreur :", err)
       setError(err instanceof Error ? err.message : "Une erreur est survenue. Veuillez réessayer.")
@@ -254,59 +245,6 @@ export default function CartPage() {
 
         {/* Right — form */}
         <div className="h-fit rounded-3xl border border-border bg-card p-7 shadow-card-soft lg:col-span-2">
-          {/* Auth gate */}
-          {!isLoggedIn && status !== "loading" && (
-            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                  <Lock className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-display text-sm font-bold text-amber-800">
-                    Compte requis
-                  </h3>
-                  <p className="mt-1 text-sm text-amber-700">
-                    Un compte LCG est obligatoire pour passer commande ou réserver.
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    <Link
-                      href="/auth/inscription?callbackUrl=/panier"
-                      className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
-                    >
-                      <UserPlus className="h-3.5 w-3.5" />
-                      Créer un compte
-                    </Link>
-                    <Link
-                      href="/auth/connexion?callbackUrl=/panier"
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted"
-                    >
-                      <LogIn className="h-3.5 w-3.5" />
-                      Se connecter
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {isLoggedIn && status !== "loading" && (
-            <div className="mb-6 flex items-center gap-3 rounded-2xl bg-primary/5 p-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                {(session?.user?.name || "U").charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold truncate">{session?.user?.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{session?.user?.email}</p>
-              </div>
-              <Link
-                href="/compte"
-                className="text-xs font-semibold text-primary hover:underline"
-              >
-                Mon compte
-              </Link>
-            </div>
-          )}
-
           <form onSubmit={handleSubmit}>
             {/* Segmented control */}
             <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-1.5">
@@ -411,14 +349,12 @@ export default function CartPage() {
 
             <button
               type="submit"
-              disabled={submitting || !isLoggedIn || status === "loading"}
+              disabled={submitting}
               className="mt-6 w-full rounded-full bg-primary py-3.5 font-display text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {!isLoggedIn
-                ? "Connectez-vous pour commander"
-                : submitting
-                  ? "Traitement..."
-                  : `${mode === "reservation" ? "Confirmer la pré-commande" : "Valider la commande"} — ${formatPrice(subtotal + deliveryFee)}`
+              {submitting
+                ? "Traitement..."
+                : `${mode === "reservation" ? "Confirmer la pré-commande" : "Valider la commande"} — ${formatPrice(subtotal + deliveryFee)}`
               }
             </button>
 

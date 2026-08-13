@@ -52,27 +52,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Au moins un article est requis" }, { status: 400 })
     }
 
-    const sale = await (async () => {
-      if (body.pointOfSaleId) {
-        const point = await prisma.pointOfSale.findUnique({ where: { id: body.pointOfSaleId } })
-        if (!point || !point.isActive) throw new Error("Point de vente invalide ou inactif")
-      }
-      const variants = await prisma.productVariant.findMany({
-        where: { id: { in: items.map((item) => item.variantId) } },
-        include: { product: true },
-      })
+    if (body.pointOfSaleId) {
+      const point = await prisma.pointOfSale.findUnique({ where: { id: body.pointOfSaleId } })
+      if (!point || !point.isActive) return NextResponse.json({ error: "Point de vente invalide ou inactif" }, { status: 400 })
+    }
 
-      const variantMap = new Map(variants.map((variant) => [variant.id, variant]))
+    const variants = await prisma.productVariant.findMany({
+      where: { id: { in: items.map((item) => item.variantId) } },
+      include: { product: true },
+    })
+    const variantMap = new Map(variants.map((v) => [v.id, v]))
 
+    const orderNumber = generateOrderNumber()
+
+    const order = await prisma.$transaction(async (tx) => {
       for (const item of items) {
         const variant = variantMap.get(item.variantId)
         if (!variant) throw new Error("Produit introuvable")
-        if (!body.pointOfSaleId && variant.stock < item.quantity) {
-          throw new Error(`Stock insuffisant pour ${variant.product.name} ${variant.format}`)
+
+        if (!body.pointOfSaleId) {
+          if (variant.stock < item.quantity) {
+            throw new Error(`Stock insuffisant pour ${variant.product.name} ${variant.format} (disponible: ${variant.stock}, demandé: ${item.quantity})`)
+          }
+          await tx.productVariant.update({ where: { id: item.variantId }, data: { stock: { decrement: item.quantity } } })
+        } else {
+          const pointStock = await tx.pointOfSaleStock.findUnique({
+            where: { pointOfSaleId_variantId: { pointOfSaleId: body.pointOfSaleId, variantId: item.variantId } },
+          })
+          if (!pointStock || pointStock.quantity < item.quantity) {
+            throw new Error(`Stock insuffisant dans le point de vente pour ${variant.product.name} ${variant.format}`)
+          }
+          await tx.pointOfSaleStock.update({ where: { id: pointStock.id }, data: { quantity: { decrement: item.quantity } } })
         }
-        if (body.pointOfSaleId) {
-          const pointStock = await prisma.pointOfSaleStock.findUnique({ where: { pointOfSaleId_variantId: { pointOfSaleId: body.pointOfSaleId, variantId: item.variantId } } })
-          if (!pointStock || pointStock.quantity < item.quantity) throw new Error(`Stock insuffisant dans le point de vente pour ${variant.product.name} ${variant.format}`)
+
+        if (variant.stock < item.quantity && !body.pointOfSaleId) {
+          throw new Error(`Stock central insuffisant pour ${variant.product.name} ${variant.format}`)
         }
       }
 
@@ -81,8 +95,7 @@ export async function POST(request: Request) {
         return sum + (variant?.price ?? 0) * item.quantity
       }, 0)
 
-      const orderNumber = generateOrderNumber()
-      const order = await prisma.order.create({
+      const createdOrder = await tx.order.create({
         data: {
           orderNumber,
           customerName: body.customerName?.trim() || "Client comptoir",
@@ -111,53 +124,56 @@ export async function POST(request: Request) {
           },
         },
         include: {
-          items: { include: { variant: { include: { product: true } } } },
+          items: true,
         },
       })
 
       for (const item of items) {
-        await prisma.productVariant.update({ where: { id: item.variantId }, data: { stock: { decrement: item.quantity } } })
-        if (body.pointOfSaleId) {
-          const stock = await prisma.pointOfSaleStock.findUnique({ where: { pointOfSaleId_variantId: { pointOfSaleId: body.pointOfSaleId, variantId: item.variantId } } })
-          if (stock && stock.quantity >= item.quantity) {
-            await prisma.pointOfSaleStock.update({ where: { id: stock.id }, data: { quantity: { decrement: item.quantity } } })
-          }
-        }
-
-        try {
-          const fifoResult = await allocateStockFIFO(item.variantId, item.quantity, "SALE", orderNumber)
-          const orderItem = order.items.find((oi) => oi.variantId === item.variantId)
-          if (orderItem && fifoResult.allocations.length > 0) {
-            await prisma.orderItem.update({
-              where: { id: orderItem.id },
-              data: { lotId: fifoResult.allocations[0].lotId },
-            })
-          }
-        } catch {
-          // Lots may not exist yet; fall back to legacy movement
-        }
-
-        await prisma.stockMovement.create({ data: { variantId: item.variantId, pointOfSaleId: body.pointOfSaleId || null, type: "SALE", quantity: item.quantity, reason: "Vente comptoir", reference: orderNumber } })
+        await tx.stockMovement.create({
+          data: {
+            variantId: item.variantId,
+            pointOfSaleId: body.pointOfSaleId || null,
+            type: "SALE",
+            quantity: item.quantity,
+            reason: "Vente comptoir",
+            reference: orderNumber,
+          },
+        })
       }
 
-      return order
-    })()
+      return createdOrder
+    })
+
+    for (const item of items) {
+      try {
+        const fifoResult = await allocateStockFIFO(item.variantId, item.quantity, "SALE", orderNumber)
+        const orderItem = order.items.find((oi) => oi.variantId === item.variantId)
+        if (orderItem && fifoResult.allocations.length > 0) {
+          await prisma.orderItem.update({
+            where: { id: orderItem.id },
+            data: { lotId: fifoResult.allocations[0].lotId },
+          })
+        }
+      } catch (fifoError) {
+        console.error(`FIFO allocation warning for ${item.variantId}:`, fifoError)
+      }
+    }
 
     return NextResponse.json(
       {
-        id: sale.id,
-        orderNumber: sale.orderNumber,
-        customerName: sale.customerName,
-        paymentMethod: sale.paymentMethod,
-        paymentStatus: sale.paymentStatus,
-        status: sale.status,
-        subtotal: sale.subtotal,
-        total: sale.total,
-        createdAt: sale.createdAt.toISOString(),
-        items: sale.items.map((item) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        status: order.status,
+        subtotal: order.subtotal,
+        total: order.total,
+        createdAt: order.createdAt.toISOString(),
+        items: order.items.map((item) => ({
           id: item.id,
-          name: item.variant.product.name,
-          format: item.variant.format,
+          name: (item as any).variant?.product?.name ?? "Produit",
+          format: (item as any).variant?.format ?? "",
           quantity: item.quantity,
           price: item.price,
           total: item.total,

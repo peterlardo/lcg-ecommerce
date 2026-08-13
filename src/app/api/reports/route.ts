@@ -55,6 +55,8 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const period = searchParams.get("period") || "month"
+    const weekOffset = parseInt(searchParams.get("weekOffset") || "0", 10)
+    const livraisonWeekOffset = parseInt(searchParams.get("livraisonWeekOffset") || "0", 10)
 
     const posFilter = await getUserPointOfSaleIds()
     const posIds = posFilter?.posIds ?? null
@@ -66,9 +68,21 @@ export async function GET(request: Request) {
     const sevenDaysAgo = new Date(todayStart)
     sevenDaysAgo.setDate(todayStart.getDate() - 6)
 
+    const weekStart = new Date(todayStart)
+    weekStart.setDate(todayStart.getDate() - todayStart.getDay() + 1 - (weekOffset * 7))
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekStart.getDate() + 6)
+    weekEnd.setHours(23, 59, 59, 999)
+
+    const livraisonWeekStart = new Date(todayStart)
+    livraisonWeekStart.setDate(todayStart.getDate() - todayStart.getDay() + 1 - (livraisonWeekOffset * 7))
+    const livraisonWeekEnd = new Date(livraisonWeekStart)
+    livraisonWeekEnd.setDate(livraisonWeekStart.getDate() + 6)
+    livraisonWeekEnd.setHours(23, 59, 59, 999)
+
     const orderPosFilter = posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}
 
-    const [recentOrders, allOrders, variants, movements, reservations, deliveries, cashSessions, lots] = await Promise.all([
+    const [recentOrders, allOrders, variants, movements, reservations, deliveries, cashSessions, lots, weekOrders, weekReservations, weekDeliveries] = await Promise.all([
       prisma.order.findMany({
         where: { createdAt: { gte: sevenDaysAgo }, ...orderPosFilter },
         include: { items: { include: { variant: { include: { product: true } } } } },
@@ -100,6 +114,20 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
         take: 200,
       }),
+      prisma.order.findMany({
+        where: { createdAt: { gte: weekStart, lte: weekEnd }, ...orderPosFilter },
+        include: { items: { include: { variant: { include: { product: true } } } } },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.reservation.findMany({
+        where: { createdAt: { gte: weekStart, lte: weekEnd }, ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}) },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.delivery.findMany({
+        where: { createdAt: { gte: livraisonWeekStart, lte: livraisonWeekEnd } },
+        include: { order: true },
+        orderBy: { createdAt: "asc" },
+      }),
     ])
 
     const activeRecent = recentOrders.filter((o) => o.status !== "CANCELLED")
@@ -108,6 +136,48 @@ export async function GET(request: Request) {
     const activeAllDelivered = activeAll.filter((o) => ["OUT_FOR_DELIVERY", "DELIVERED"].includes(o.status))
     const todayOrders = activeRecent.filter((o) => o.createdAt >= todayStart)
     const todayOrdersDelivered = activeRecentDelivered.filter((o) => o.createdAt >= todayStart)
+    const todayInDelivery = todayOrders.filter((o) => o.status === "OUT_FOR_DELIVERY")
+    const todayConfirmed = todayOrders.filter((o) => o.status === "CONFIRMED")
+
+    const todayDeliveries = deliveries.filter((d) => d.createdAt >= todayStart)
+    const todayReservations = reservations.filter((r) => r.createdAt >= todayStart)
+    const todayReservationsPending = todayReservations.filter((r) => r.status === "PENDING")
+
+    const activeWeekOrders = weekOrders.filter((o) => o.status !== "CANCELLED")
+
+    const weeklyCommandes = daysArray(weekStart, 7).map((date) => {
+      const key = dayKey(date)
+      const dayOrders = activeWeekOrders.filter((o) => dayKey(o.createdAt) === key)
+      return {
+        name: shortDay(date),
+        date: key,
+        commandes: dayOrders.length,
+        montant: dayOrders.reduce((s, o) => s + o.total, 0),
+        details: dayOrders.map((o) => ({ orderNumber: o.orderNumber, customerName: o.customerName, total: o.total, paymentMethod: o.paymentMethod })),
+      }
+    })
+
+    const weeklyPrecommandes = daysArray(weekStart, 7).map((date) => {
+      const key = dayKey(date)
+      const dayRes = weekReservations.filter((r) => dayKey(r.createdAt) === key)
+      return {
+        name: shortDay(date),
+        date: key,
+        precommandes: dayRes.length,
+      }
+    })
+
+    const weeklyLivraisons = daysArray(weekStart, 7).map((date) => {
+      const key = dayKey(date)
+      const dayDel = weekDeliveries.filter((d) => dayKey(d.createdAt) === key)
+      return {
+        name: shortDay(date),
+        date: key,
+        livraisons: dayDel.length,
+        livrees: dayDel.filter((d) => d.status === "DELIVERED").length,
+        details: dayDel.map((d) => ({ orderNumber: d.order?.orderNumber ?? "—", customer: d.order?.customerName ?? "Client", status: d.status, address: d.address })),
+      }
+    })
 
     const revenue7 = activeRecentDelivered.reduce((s, o) => s + o.total, 0)
     const revenue30 = activeAllDelivered.reduce((s, o) => s + o.total, 0)
@@ -244,16 +314,26 @@ export async function GET(request: Request) {
     return NextResponse.json({
       period,
       periodLabel: getPeriodRange(period, now).label,
+      weekOffset,
+      weekStart: weekStart.toISOString(),
+      weekEnd: weekEnd.toISOString(),
+      livraisonWeekStart: livraisonWeekStart.toISOString(),
+      livraisonWeekEnd: livraisonWeekEnd.toISOString(),
       summary: {
         revenue7, revenue30, todayRevenue, orders7: activeRecent.length, orders30: activeAll.length, todayOrders: todayOrders.length, todayOrdersDelivered: todayOrdersDelivered.length,
         avgOrder: activeAllDelivered.length ? Math.round(revenue30 / activeAllDelivered.length) : 0, topProduct: topProducts[0]?.name ?? "-",
         stockUnits: variants.reduce((s, v) => s + v.stock, 0), totalVariants: variants.length,
+        todayInDelivery: todayInDelivery.length,
+        todayConfirmed: todayConfirmed.length,
         lowStock: stockAlerts.filter((i) => i.stock > 0).length, outOfStock: stockAlerts.filter((i) => i.stock <= 0).length,
         pendingReservations: reservations.filter((r) => r.status === "PENDING").length,
         totalReservations: reservations.length,
         deliveriesInProgress: deliveries.filter((d) => ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(d.status)).length,
         totalDeliveries: deliveries.length,
         deliveredToday: deliveries.filter((d) => d.status === "DELIVERED" && d.deliveredAt && d.deliveredAt >= todayStart).length,
+        todayDeliveries: todayDeliveries.length,
+        todayReservations: todayReservations.length,
+        todayReservationsPending: todayReservationsPending.length,
         cashExpected, cashGap: 0,
         totalProduced: productionSummary.totalProduced, totalLoss: productionSummary.totalLoss,
       },
@@ -262,6 +342,7 @@ export async function GET(request: Request) {
       supplyByDay, supplyByType, supplyMovements: recentMovements.filter((m) => supplyTypes.includes(m.type)),
       ordersByStatus, ordersByDay,
       reservationsByStatus, reservationsByDay, reservations: reservations.map((r) => ({ id: r.id, client: r.client, type: r.type, date: r.date, heure: r.heure, status: r.status })),
+      weeklyCommandes, weeklyPrecommandes, weeklyLivraisons,
       productionByDay, productionSummary, productionMovements: recentMovements.filter((m) => m.type === "PRODUCTION"),
       lots: lots.map((l) => ({
         id: l.id, lotNumber: l.lotNumber, initialQuantity: l.initialQuantity, remainingQuantity: l.remainingQuantity,

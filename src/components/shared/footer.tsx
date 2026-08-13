@@ -30,7 +30,6 @@ export function Footer() {
             <li><Link href="/professionnels" className="text-deep-foreground/80 transition-colors hover:text-deep-foreground">Professionnels</Link></li>
             <li><Link href="/zones-livraison" className="text-deep-foreground/80 transition-colors hover:text-deep-foreground">Zones de livraison</Link></li>
             <li><Link href="/a-propos" className="text-deep-foreground/80 transition-colors hover:text-deep-foreground">Qui sommes-nous</Link></li>
-            <li><Link href="/compte" className="text-deep-foreground/80 transition-colors hover:text-deep-foreground">Mon compte</Link></li>
             <li><Link href="/panier" className="text-deep-foreground/80 transition-colors hover:text-deep-foreground">Mon panier</Link></li>
           </ul>
         </div>

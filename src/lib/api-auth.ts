@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
-type Role = "ADMIN" | "STOCK_MANAGER" | "DELIVERY_AGENT" | "CUSTOMER"
+type Role = string
 
 const MANAGEMENT_ROLES: Role[] = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
 

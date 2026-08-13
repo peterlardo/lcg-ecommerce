@@ -19,7 +19,9 @@ export async function POST(request: Request) {
     const body = await request.json()
     const email = String(body.email || "").trim().toLowerCase()
     const password = String(body.password || "")
-    const role = ROLES.includes(body.role) ? body.role : "CUSTOMER"
+    const requestedRole = String(body.role || "").trim().toUpperCase()
+    const validProfile = await prisma.roleProfile.findUnique({ where: { key: requestedRole } })
+    const role = validProfile ? requestedRole : "CUSTOMER"
     if (!email || password.length < 6) return NextResponse.json({ error: "Email et mot de passe de 6 caractères minimum requis" }, { status: 400 })
     const user = await prisma.user.create({
       data: {

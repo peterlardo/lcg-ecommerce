@@ -1,6 +1,6 @@
 import { DefaultSession } from "next-auth"
 
-type Role = "ADMIN" | "STOCK_MANAGER" | "DELIVERY_AGENT" | "CUSTOMER"
+type Role = string
 type SessionPermission = { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
 
 declare module "next-auth" {

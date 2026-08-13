@@ -350,6 +350,84 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
   }
 }
 
+function getStatusLabelFr(status: string): string {
+  const labels: Record<string, string> = {
+    PENDING: "En attente",
+    CONFIRMED: "Confirmée",
+    PROCESSING: "En production",
+    READY: "Prête",
+    OUT_FOR_DELIVERY: "En livraison",
+    DELIVERED: "Livrée",
+    CANCELLED: "Annulée",
+  }
+  return labels[status] || status
+}
+
+function getStatusColor(status: string): string {
+  const colors: Record<string, string> = {
+    PENDING: "#f59e0b",
+    CONFIRMED: "#3b82f6",
+    PROCESSING: "#8b5cf6",
+    READY: "#06b6d4",
+    OUT_FOR_DELIVERY: "#f97316",
+    DELIVERED: "#10b981",
+    CANCELLED: "#ef4444",
+  }
+  return colors[status] || "#6b7280"
+}
+
+export interface StatusChangeMailData {
+  orderNumber: string
+  customerName: string
+  customerEmail: string
+  newStatus: string
+  total: number
+  items: OrderMailItem[]
+}
+
+function buildStatusChangeHtml(data: StatusChangeMailData): string {
+  const statusLabel = getStatusLabelFr(data.newStatus)
+  const statusColor = getStatusColor(data.newStatus)
+  const inner = `
+    <h1 style="margin: 0; font-size: 22px; color: #111827;">Mise à jour de votre commande</h1>
+    <p style="margin: 6px 0 0; font-size: 14px; color: #6b7280;">Bonjour ${data.customerName}, le statut de votre commande a changé.</p>
+
+    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 18px; margin-top: 18px;">
+      <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #059669; font-weight: 700;">Référence</div>
+      <div style="font-size: 20px; font-weight: 800; color: #047857; margin-top: 2px;">${data.orderNumber}</div>
+    </div>
+
+    <div style="background: ${statusColor}15; border: 1px solid ${statusColor}40; border-radius: 10px; padding: 14px 18px; margin-top: 12px; text-align: center;">
+      <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: ${statusColor}; font-weight: 700;">Nouveau statut</div>
+      <div style="font-size: 20px; font-weight: 800; color: ${statusColor}; margin-top: 4px;">${statusLabel}</div>
+    </div>
+
+    <table style="width: 100%; margin-top: 20px;">
+      <tr>
+        <td style="font-size: 14px; color: #374151;">Montant total</td>
+        <td style="font-size: 14px; font-weight: 700; color: #111827; text-align: right;">${formatPrice(data.total)}</td>
+      </tr>
+    </table>
+  `
+  return shell(`Statut commande ${data.orderNumber}`, statusLabel, inner)
+}
+
+export async function sendStatusChangeEmail(data: StatusChangeMailData): Promise<boolean> {
+  if (!data.customerEmail) return false
+  try {
+    await getTransporter().sendMail({
+      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      to: data.customerEmail,
+      subject: `Commande ${data.orderNumber} — ${getStatusLabelFr(data.newStatus)}`,
+      html: buildStatusChangeHtml(data),
+    })
+    return true
+  } catch (error) {
+    console.error("Échec envoi email changement statut:", error)
+    return false
+  }
+}
+
 function buildPasswordResetHtml(resetUrl: string): string {
   const inner = `
     <h1 style="margin: 0; font-size: 22px; color: #111827;">Réinitialisation du mot de passe</h1>

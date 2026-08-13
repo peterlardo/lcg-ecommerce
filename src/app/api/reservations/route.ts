@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 import { getReservations, addReservation, type ReservationItem } from "@/data/store"
 import { sendReservationEmail } from "@/lib/mailer"
@@ -30,7 +29,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth()
     const body = await request.json()
     const { client, telephone, email, type, date, heure, inviteCount, address, items, notes, pointOfSaleId } = body
 
@@ -50,10 +48,10 @@ export async function POST(request: Request) {
     const source = body.source === "OPERATOR" ? "OPERATOR" : "WEB"
 
     const newRes = await addReservation({
-      userId: session?.user?.id || undefined,
+      userId: null,
       client,
       telephone,
-      email: email || session?.user?.email || "",
+      email: email || "",
       type,
       date,
       heure: heure || "",

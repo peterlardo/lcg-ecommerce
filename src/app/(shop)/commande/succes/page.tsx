@@ -1,13 +1,25 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { CircleCheck, ArrowRight } from "lucide-react"
+import { useToast } from "@/contexts/toast-context"
 
 function SuccessContent() {
   const searchParams = useSearchParams()
   const order = searchParams.get("order")
+  const { showToast } = useToast()
+
+  useEffect(() => {
+    if (order) {
+      showToast(
+        "success",
+        "Commande enregistrée !",
+        `Référence ${order} — Notre équipe vous contactera rapidement pour confirmer la livraison et le paiement.`
+      )
+    }
+  }, [order])
 
   return (
     <div className="mx-auto flex max-w-xl flex-col items-center px-4 py-24 text-center">

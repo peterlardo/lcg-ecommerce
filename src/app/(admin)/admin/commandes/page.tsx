@@ -56,6 +56,8 @@ interface Order {
   createdAt: string
   items: OrderItem[]
   delivery: { address: string; city: string; district: string | null; notes: string | null } | null
+  pointOfSaleId: string | null
+  pointOfSale?: { name: string } | null
 }
 
 const paymentLabels: Record<string, string> = {
@@ -79,6 +81,13 @@ interface DraftItem {
   productId: string
   variantId: string
   quantity: number
+}
+
+interface PointOfSale {
+  id: string
+  name: string
+  code: string
+  isActive: boolean
 }
 
 function formatDate(iso: string): string {
@@ -108,11 +117,22 @@ export default function CommandesPage() {
   const [formError, setFormError] = useState("")
   const [page, setPage] = useState(1)
   const PER_PAGE = 5
+  const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([])
+  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null)
+  const [confirmPosId, setConfirmPosId] = useState("")
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/orders")
-      if (res.ok) setOrders(await res.json())
+      const [ordersRes, posRes] = await Promise.all([
+        fetch("/api/orders"),
+        fetch("/api/points-de-vente"),
+      ])
+      if (ordersRes.ok) setOrders(await ordersRes.json())
+      if (posRes.ok) {
+        const posData = await posRes.json()
+        const pts = posData.points ?? posData
+        setPointsOfSale(Array.isArray(pts) ? pts.filter((p: PointOfSale) => p.isActive) : [])
+      }
     } catch (error) {
       console.error("Erreur chargement commandes:", error)
     } finally {
@@ -142,17 +162,37 @@ export default function CommandesPage() {
   const handleSearchCode = (v: string) => { setSearchCode(v); setPage(1) }
   const handleTab = (t: string) => { setActiveTab(t); setPage(1) }
 
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
+  const handleStatusChange = async (orderId: string, newStatus: string, posId?: string) => {
+    if (newStatus === "CONFIRMED" && !posId) {
+      setConfirmingOrderId(orderId)
+      setConfirmPosId("")
+      return
+    }
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, pointOfSaleId: posId || undefined }),
       })
-      if (res.ok) await load()
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        alert(err?.error || "Erreur lors de la mise à jour")
+        return
+      }
+      await load()
     } catch (error) {
       console.error(`Erreur mise à jour commande ${orderId}:`, error)
     }
+  }
+
+  const handleConfirmWithPOS = async () => {
+    if (!confirmPosId) {
+      alert("Veuillez sélectionner un point de vente")
+      return
+    }
+    await handleStatusChange(confirmingOrderId!, "CONFIRMED", confirmPosId)
+    setConfirmingOrderId(null)
+    setConfirmPosId("")
   }
 
   const addDraftItem = () => {
@@ -386,6 +426,12 @@ export default function CommandesPage() {
                         <span className="font-medium text-gray-500">Paiement: </span>
                         {paymentLabels[order.paymentMethod] || order.paymentMethod || "—"}
                       </p>
+                      {order.pointOfSale && (
+                        <p className="text-gray-700">
+                          <span className="font-medium text-gray-500">Point de vente: </span>
+                          {order.pointOfSale.name}
+                        </p>
+                      )}
                       {order.paymentStatus && (
                         <p className="text-gray-700">
                           <span className="font-medium text-gray-500">Statut paiement: </span>
@@ -656,6 +702,40 @@ export default function CommandesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {confirmingOrderId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Confirmer la commande</h3>
+            <p className="text-sm text-gray-500 mb-4">Sélectionnez le point de vente pour décrémenter le stock.</p>
+            <select
+              value={confirmPosId}
+              onChange={(e) => setConfirmPosId(e.target.value)}
+              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 mb-4"
+            >
+              <option value="">-- Choisir un point de vente --</option>
+              {pointsOfSale.map((pos) => (
+                <option key={pos.id} value={pos.id}>{pos.name} ({pos.code})</option>
+              ))}
+            </select>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setConfirmingOrderId(null); setConfirmPosId("") }}
+                className="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmWithPOS}
+                disabled={!confirmPosId}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Confirmer
+              </button>
+            </div>
           </div>
         </div>
       )}

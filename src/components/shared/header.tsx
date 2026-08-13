@@ -3,9 +3,8 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useCart } from "@/contexts/cart-context"
-import { ShoppingCart, Menu, X, User, LogIn } from "lucide-react"
+import { ShoppingCart, Menu, X } from "lucide-react"
 import { useState } from "react"
-import { useSession } from "next-auth/react"
 
 const navLinks = [
   { href: "/a-propos", label: "Qui sommes-nous" },
@@ -18,10 +17,6 @@ export function Header() {
   const pathname = usePathname()
   const { itemCount } = useCart()
   const [menuOpen, setMenuOpen] = useState(false)
-  const { data: session } = useSession()
-
-  const isLoggedIn = !!session?.user
-
   return (
     <header className="sticky top-0 z-50 bg-background/85 backdrop-blur-lg">
       <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-4">
@@ -59,21 +54,6 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link
-            href={isLoggedIn ? "/compte" : "/auth/connexion"}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title={isLoggedIn ? "Mon compte" : "Se connecter"}
-          >
-            {isLoggedIn ? (
-              <User className="h-4 w-4" />
-            ) : (
-              <LogIn className="h-4 w-4" />
-            )}
-            <span className="hidden xl:inline">
-              {isLoggedIn ? "LCG Clients" : "Connexion"}
-            </span>
-          </Link>
-
           <Link
             href="/panier"
             className="relative inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
@@ -116,18 +96,6 @@ export function Header() {
               </Link>
             ))}
             <hr className="my-2 border-border" />
-            <Link
-              href={isLoggedIn ? "/compte" : "/auth/connexion"}
-              onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-muted-foreground hover:text-primary"
-            >
-              {isLoggedIn ? (
-                <User className="h-4 w-4" />
-              ) : (
-                <LogIn className="h-4 w-4" />
-              )}
-              {isLoggedIn ? "LCG Clients" : "Connexion"}
-            </Link>
             <Link
               href="/panier"
               onClick={() => setMenuOpen(false)}

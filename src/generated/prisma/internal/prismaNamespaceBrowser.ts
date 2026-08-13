@@ -52,7 +52,9 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   User: 'User',
+  RoleProfile: 'RoleProfile',
   UserPermission: 'UserPermission',
+  RolePermission: 'RolePermission',
   Account: 'Account',
   Session: 'Session',
   VerificationToken: 'VerificationToken',
@@ -106,6 +108,21 @@ export const UserScalarFieldEnum = {
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
 
 
+export const RoleProfileScalarFieldEnum = {
+  id: 'id',
+  key: 'key',
+  label: 'label',
+  description: 'description',
+  color: 'color',
+  isActive: 'isActive',
+  isSystem: 'isSystem',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type RoleProfileScalarFieldEnum = (typeof RoleProfileScalarFieldEnum)[keyof typeof RoleProfileScalarFieldEnum]
+
+
 export const UserPermissionScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -117,6 +134,19 @@ export const UserPermissionScalarFieldEnum = {
 } as const
 
 export type UserPermissionScalarFieldEnum = (typeof UserPermissionScalarFieldEnum)[keyof typeof UserPermissionScalarFieldEnum]
+
+
+export const RolePermissionScalarFieldEnum = {
+  id: 'id',
+  role: 'role',
+  module: 'module',
+  canView: 'canView',
+  canCreate: 'canCreate',
+  canEdit: 'canEdit',
+  canDelete: 'canDelete'
+} as const
+
+export type RolePermissionScalarFieldEnum = (typeof RolePermissionScalarFieldEnum)[keyof typeof RolePermissionScalarFieldEnum]
 
 
 export const AccountScalarFieldEnum = {

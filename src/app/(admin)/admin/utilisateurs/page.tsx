@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Camera, Check, Plus, Save, ShieldCheck, UserPlus, Users, X } from "lucide-react"
+import Link from "next/link"
 
 const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "journal-caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "rapports", "controle-distant", "utilisateurs"]
 const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", "journal-caisse": "Journal de caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs" }
-const roles = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "CUSTOMER"]
+
+interface RoleProfile { id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean }
 interface Permission { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
 interface PointOfSale { id: string; name: string; code: string }
 interface User { id: string; name: string | null; email: string; phone: string | null; role: string; isActive: boolean; image: string | null; permissions: Permission[]; managedPointOfSales: PointOfSale[] }
@@ -15,8 +17,11 @@ const emptyPermissions = () => modules.map((module) => ({ module, canView: false
 export default function UtilisateursPage() {
   const [users, setUsers] = useState<User[]>([])
   const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([])
+  const [roleProfiles, setRoleProfiles] = useState<RoleProfile[]>([])
   const [form, setForm] = useState(empty)
   const [selected, setSelected] = useState<string | null>(null)
+  const [editRole, setEditRole] = useState("")
+  const [editActive, setEditActive] = useState(true)
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [createPermissions, setCreatePermissions] = useState<Permission[]>(emptyPermissions())
   const [createPosIds, setCreatePosIds] = useState<string[]>([])
@@ -44,7 +49,12 @@ export default function UtilisateursPage() {
     }
   }
 
-  useEffect(() => { void load(); void loadPOS() }, [])
+  const loadRoles = async () => {
+    const res = await fetch("/api/role-profiles")
+    if (res.ok) setRoleProfiles(await res.json())
+  }
+
+  useEffect(() => { void load(); void loadPOS(); void loadRoles() }, [])
 
   const handlePhotoUpload = async (file: File, forCreate: boolean) => {
     const fd = new FormData()
@@ -73,6 +83,8 @@ export default function UtilisateursPage() {
 
   const selectUser = (user: User) => {
     setSelected(user.id)
+    setEditRole(user.role)
+    setEditActive(user.isActive)
     setPermissions(modules.map((module) => user.permissions.find((permission) => permission.module === module) || { module, canView: user.role === "ADMIN", canCreate: user.role === "ADMIN", canEdit: user.role === "ADMIN", canDelete: user.role === "ADMIN" }))
     setEditPosIds(user.managedPointOfSales.map((p) => p.id))
   }
@@ -80,16 +92,14 @@ export default function UtilisateursPage() {
   const toggleCreateModule = (module: string) => setCreatePermissions((current) => current.map((permission) => permission.module === module ? { ...permission, canView: !permission.canView } : permission))
   const togglePermission = (module: string, action: keyof Omit<Permission, "module">) => setPermissions((current) => current.map((permission) => permission.module === module ? { ...permission, [action]: !permission[action] } : permission))
 
-  const savePermissions = async () => {
+  const saveUser = async () => {
     if (!selected) return
-    const user = users.find((item) => item.id === selected)
-    if (!user) return
     const response = await fetch(`/api/utilisateurs/${selected}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: user.role, isActive: user.isActive, permissions, posIds: editPosIds }),
+      body: JSON.stringify({ role: editRole, isActive: editActive, permissions, posIds: editPosIds }),
     })
-    if (response.ok) { setMessage("Droits et points de vente enregistrés"); await load() } else setError("Impossible d'enregistrer")
+    if (response.ok) { setMessage("Utilisateur mis à jour"); await load() } else setError("Impossible d'enregistrer")
   }
 
   const handleEditPhoto = async (file: File) => {
@@ -106,6 +116,8 @@ export default function UtilisateursPage() {
     } finally { setUploading(false) }
   }
 
+  const getRoleProfile = (key: string) => roleProfiles.find((r) => r.key === key)
+  const activeRoles = roleProfiles.filter((r) => r.isActive)
   const selectedUser = selected ? users.find((u) => u.id === selected) : null
 
   return (
@@ -116,9 +128,14 @@ export default function UtilisateursPage() {
           <h1 className="mt-1 text-2xl font-bold text-foreground">Utilisateurs</h1>
           <p className="mt-1 text-sm text-muted-foreground">Gérer les comptes, rôles, droits d&apos;accès et points de vente assignés.</p>
         </div>
-        <button onClick={() => setShowCreate((v) => !v)} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90">
-          <UserPlus className="h-4 w-4" /> Nouvel utilisateur
-        </button>
+        <div className="flex items-center gap-3">
+          <Link href="/admin/utilisateurs/roles" className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+            <ShieldCheck className="h-4 w-4" /> Profils de rôles
+          </Link>
+          <button onClick={() => setShowCreate((v) => !v)} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90">
+            <UserPlus className="h-4 w-4" /> Nouvel utilisateur
+          </button>
+        </div>
       </div>
 
       {message && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 flex items-center justify-between">{message}<button onClick={() => setMessage("")} className="text-green-500 hover:text-green-700"><X className="h-4 w-4" /></button></div>}
@@ -149,10 +166,17 @@ export default function UtilisateursPage() {
               <input placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground" />
               <input required type="password" placeholder="Mot de passe (min. 6 car.)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground" />
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground">
-                {roles.map((role) => <option key={role}>{role}</option>)}
+                {activeRoles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
               </select>
             </div>
           </div>
+
+          {getRoleProfile(form.role) && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: getRoleProfile(form.role)?.color || "#6b7280" }} />
+              {getRoleProfile(form.role)?.description}
+            </div>
+          )}
 
           <div className="mt-4 border-t border-border pt-4">
             <h3 className="mb-2 text-sm font-semibold text-foreground">Points de vente assignés</h3>
@@ -197,32 +221,44 @@ export default function UtilisateursPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[330px_minmax(0,1fr)]">
         <section className="space-y-3">
           {loading && <p className="text-sm text-muted-foreground">Chargement...</p>}
-          {users.map((user) => (
-            <button key={user.id} onClick={() => selectUser(user)} className={`w-full rounded-xl border bg-card p-4 text-left ${selected === user.id ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  {user.image ? (
-                    <img src={user.image} alt={user.name || ""} className="h-9 w-9 rounded-full object-cover" />
-                  ) : (
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{(user.name || user.email).charAt(0).toUpperCase()}</div>
-                  )}
-                  <div>
-                    <p className="font-semibold text-foreground">{user.name || user.email}</p>
-                    <p className="text-xs text-muted-foreground">{user.email}</p>
+          {users.map((user) => {
+            const rp = getRoleProfile(user.role)
+            return (
+              <button key={user.id} onClick={() => selectUser(user)} className={`w-full rounded-xl border bg-card p-4 text-left ${selected === user.id ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    {user.image ? (
+                      <img src={user.image} alt={user.name || ""} className="h-9 w-9 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{(user.name || user.email).charAt(0).toUpperCase()}</div>
+                    )}
+                    <div>
+                      <p className="font-semibold text-foreground">{user.name || user.email}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
                   </div>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-medium ${user.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{user.isActive ? "Actif" : "Inactif"}</span>
                 </div>
-                <span className={`rounded-full px-2 py-1 text-[10px] font-medium ${user.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{user.isActive ? "Actif" : "Inactif"}</span>
-              </div>
-              <p className="mt-3 text-xs font-medium text-primary">{user.role}</p>
-              {user.managedPointOfSales.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {user.managedPointOfSales.map((pos) => (
-                    <span key={pos.id} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{pos.name}</span>
-                  ))}
+                <div className="mt-3 flex items-center gap-2">
+                  {rp ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${rp.color || "#6b7280"}20`, color: rp.color || "#6b7280" }}>
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: rp.color || "#6b7280" }} />
+                      {rp.label}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{user.role}</span>
+                  )}
                 </div>
-              )}
-            </button>
-          ))}
+                {user.managedPointOfSales.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {user.managedPointOfSales.map((pos) => (
+                      <span key={pos.id} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{pos.name}</span>
+                    ))}
+                  </div>
+                )}
+              </button>
+            )
+          })}
         </section>
 
         {selected && selectedUser && (
@@ -242,10 +278,35 @@ export default function UtilisateursPage() {
                 </div>
                 <div>
                   <h2 className="font-semibold text-foreground">{selectedUser.name || selectedUser.email}</h2>
-                  <p className="text-sm text-muted-foreground">{selectedUser.email} · {selectedUser.role}</p>
+                  <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
                 </div>
               </div>
               <ShieldCheck className="h-6 w-6 text-primary" />
+            </div>
+
+            <div className="mt-5 border-t border-border pt-4">
+              <h3 className="mb-3 text-sm font-semibold text-foreground">Profil & statut</h3>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-muted-foreground">Rôle assigné</label>
+                  <select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground">
+                    {activeRoles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                  </select>
+                  {getRoleProfile(editRole) && (
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: getRoleProfile(editRole)?.color || "#6b7280" }} />
+                      {getRoleProfile(editRole)?.description}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Statut</label>
+                  <button type="button" onClick={() => setEditActive(!editActive)} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${editActive ? "border-green-200 bg-green-50 text-green-700" : "border-gray-200 bg-gray-50 text-gray-600"}`}>
+                    <span className={`h-2 w-2 rounded-full ${editActive ? "bg-green-500" : "bg-gray-400"}`} />
+                    {editActive ? "Actif" : "Inactif"}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="mt-5 border-t border-border pt-4">
@@ -286,7 +347,7 @@ export default function UtilisateursPage() {
             </div>
 
             <div className="mt-5 flex justify-end">
-              <button onClick={savePermissions} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
+              <button onClick={saveUser} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
                 <Save className="h-4 w-4" /> Enregistrer
               </button>
             </div>
