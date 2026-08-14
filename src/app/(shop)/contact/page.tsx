@@ -6,7 +6,7 @@ import type { Metadata } from "next"
 
 const contactCards = [
   { icon: MapPin, title: "Adresse", text: "97 Rue EWO, Ouenzé — Brazzaville, République du Congo" },
-  { icon: Phone, title: "Téléphone", text: "+242 05 123 45 67 — commandes en ligne disponibles 24h/24" },
+  { icon: Phone, title: "Téléphone", text: "+242 06 739 49 49 · +242 05 607 91 91 — commandes en ligne disponibles 24h/24" },
   { icon: Mail, title: "E-mail", text: "contact@lcg.cg" },
   { icon: Clock, title: "Horaires", text: "Lun – Sam : 7h00 – 19h00 · Dim : 8h00 – 13h00" },
 ]

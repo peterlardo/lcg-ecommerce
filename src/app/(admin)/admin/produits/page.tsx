@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Package, Plus, Edit, Trash2, Search, Filter, ChevronDown, X } from "lucide-react"
+import { Package, Plus, Edit, Trash2, Search, Filter, ChevronDown, X, DollarSign, RefreshCw, Check } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { categories } from "@/data/products"
 import type { Product, ProductVariant } from "@/data/products"
@@ -27,6 +27,10 @@ export default function ProduitsPage() {
     variants: [{ ...emptyVariant }],
   })
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<"catalogue" | "prix">("catalogue")
+  const [priceEdits, setPriceEdits] = useState<Record<string, number>>({})
+  const [priceSaving, setPriceSaving] = useState(false)
+  const [priceSaved, setPriceSaved] = useState(false)
 
   useEffect(() => {
     fetchProducts()
@@ -35,11 +39,42 @@ export default function ProduitsPage() {
   const fetchProducts = async () => {
     try {
       const res = await fetch("/api/produits")
-      if (res.ok) setProducts(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setProducts(data)
+        const edits: Record<string, number> = {}
+        for (const p of data) {
+          for (const v of p.variants) {
+            edits[v.id] = v.price
+          }
+        }
+        setPriceEdits(edits)
+      }
     } catch (err) {
       console.error("Erreur:", err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handlePriceSync = async () => {
+    setPriceSaving(true)
+    try {
+      const prices = Object.entries(priceEdits).map(([variantId, price]) => ({ variantId, price }))
+      const res = await fetch("/api/produits/sync-prices", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prices }),
+      })
+      if (res.ok) {
+        setPriceSaved(true)
+        await fetchProducts()
+        setTimeout(() => setPriceSaved(false), 2000)
+      }
+    } catch (err) {
+      console.error("Erreur sync:", err)
+    } finally {
+      setPriceSaving(false)
     }
   }
 
@@ -157,15 +192,110 @@ export default function ProduitsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Produits</h1>
-        <button
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Ajouter un produit
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab("catalogue")}
+            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "catalogue" ? "bg-primary text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            <Package className="h-4 w-4" />
+            Catalogue
+          </button>
+          <button
+            onClick={() => setActiveTab("prix")}
+            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "prix" ? "bg-primary text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            <DollarSign className="h-4 w-4" />
+            Synchroniser les prix
+          </button>
+          {activeTab === "catalogue" && (
+            <button
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Ajouter un produit
+            </button>
+          )}
+        </div>
       </div>
 
+      {activeTab === "prix" ? (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50/80 border-b border-gray-200">
+            <p className="text-sm text-gray-600">
+              <span className="font-semibold text-gray-900">{Object.keys(priceEdits).length}</span> variantes — Modifiez les prix puis cliquez « Synchroniser »
+            </p>
+            <button
+              onClick={handlePriceSync}
+              disabled={priceSaving}
+              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                priceSaved
+                  ? "bg-green-100 text-green-700 border border-green-300"
+                  : "bg-primary text-white hover:opacity-90"
+              } disabled:opacity-60`}
+            >
+              {priceSaved ? (
+                <><Check className="h-4 w-4" /> Sauvegardé !</>
+              ) : priceSaving ? (
+                <><RefreshCw className="h-4 w-4 animate-spin" /> Enregistrement...</>
+              ) : (
+                <><RefreshCw className="h-4 w-4" /> Synchroniser les prix</>
+              )}
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/80">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Produit</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Format</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Prix actuel</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nouveau prix (FCFA)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {products.filter((p) => {
+                  const matchSearch = p.name.toLowerCase().includes(search.toLowerCase())
+                  const matchCat = selectedCategory === "all" || p.categorySlug === selectedCategory
+                  return matchSearch && matchCat
+                }).map((product) =>
+                  product.variants.map((v) => {
+                    const changed = priceEdits[v.id] !== undefined && priceEdits[v.id] !== v.price
+                    return (
+                      <tr key={v.id} className={`hover:bg-gray-50/50 transition-colors ${changed ? "bg-blue-50/40" : ""}`}>
+                        <td className="px-4 py-2.5">
+                          <span className="text-sm font-medium text-gray-900">{product.name}</span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-sm text-gray-600">{v.format}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <span className="text-sm text-gray-500">{formatPrice(v.price)}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <input
+                            type="number"
+                            value={priceEdits[v.id] ?? v.price}
+                            onChange={(e) => setPriceEdits({ ...priceEdits, [v.id]: Number(e.target.value) })}
+                            className={`w-32 text-right rounded-lg border px-2.5 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500/40 ${
+                              changed ? "border-blue-400 bg-blue-50" : "border-gray-300"
+                            }`}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -325,6 +455,8 @@ export default function ProduitsPage() {
               </div>
             ))}
           </div>
+        </>
+        )}
         </>
       )}
 

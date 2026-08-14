@@ -32,7 +32,7 @@ export const products: Product[] = [
     name: "Glaçon Creux",
     subtitle: "Tube",
     description: "Glaçons creux en forme de tube, idéaux pour vos boissons. Leur forme unique permet une fonte lente et régulière, maintenant vos boissons fraîches plus longtemps.",
-    image: "/assets/product-creux.jpg",
+    image: "/assets/glacon-creux.jpeg",
     categoryId: "cat-1",
     categorySlug: "particuliers",
     categoryName: "Particuliers",

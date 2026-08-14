@@ -66,7 +66,7 @@ export default async function HomePage() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-primary">Catalogue</p>
-              <h2 className="mt-2 font-display text-3xl font-extrabold tracking-tight md:text-4xl">Nos glaçons phares</h2>
+              <h2 className="mt-2 font-display text-3xl font-extrabold tracking-tight md:text-4xl">Nos produits phares</h2>
             </div>
             <Link
               href="/produits"
