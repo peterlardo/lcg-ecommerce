@@ -65,14 +65,28 @@ interface SaleHistoryItem {
 
 const paymentMethods = [
   { value: "CASH_ON_DELIVERY", label: "Espèces", icon: Banknote },
-  { value: "MOBILE_MONEY", label: "Mobile Money", icon: Smartphone },
-  { value: "CARD", label: "Carte", icon: CreditCard },
+  { value: "MOBILE_MONEY_MTN", label: "MTN MoMo", icon: Smartphone },
+  { value: "MOBILE_MONEY_AIRTEL", label: "Airtel Money", icon: Smartphone },
+  { value: "CARD", label: "Visa / Carte", icon: CreditCard },
 ]
 
 const paymentLabels: Record<string, string> = {
-  CASH_ON_DELIVERY: "Especes",
-  MOBILE_MONEY: "Mobile Money",
-  CARD: "Carte",
+  CASH_ON_DELIVERY: "Espèces",
+  MOBILE_MONEY_MTN: "MTN MoMo",
+  MOBILE_MONEY_AIRTEL: "Airtel Money",
+  CARD: "Visa / Carte",
+}
+
+const paymentMethodToApi: Record<string, string> = {
+  CASH_ON_DELIVERY: "CASH_ON_DELIVERY",
+  MOBILE_MONEY_MTN: "MOBILE_MONEY",
+  MOBILE_MONEY_AIRTEL: "MOBILE_MONEY",
+  CARD: "CARD",
+}
+
+const mobileProviders: Record<string, "MTN_MOMO" | "AIRTEL_MONEY"> = {
+  MOBILE_MONEY_MTN: "MTN_MOMO",
+  MOBILE_MONEY_AIRTEL: "AIRTEL_MONEY",
 }
 
 export default function VentesPage() {
@@ -101,6 +115,8 @@ export default function VentesPage() {
   const [expandedSale, setExpandedSale] = useState<string | null>(null)
   const [historyPage, setHistoryPage] = useState(1)
   const HISTORY_PER_PAGE = 15
+  const [pendingPayment, setPendingPayment] = useState<{ transactionId: string; reference: string; provider: string } | null>(null)
+  const [pollingStatus, setPollingStatus] = useState<string | null>(null)
 
   const printReceipt = (ticket: SaleReceipt) => {
     const pointOfSale = pointsOfSale.find((point) => point.id === pointOfSaleId)
@@ -195,6 +211,48 @@ export default function VentesPage() {
     if (tab === "historique") loadSalesHistory()
   }, [tab])
 
+  useEffect(() => {
+    if (!pendingPayment) return
+    let cancelled = false
+    let attempts = 0
+    const maxAttempts = 30
+
+    const poll = async () => {
+      if (cancelled || attempts >= maxAttempts) {
+        if (!cancelled) {
+          setPendingPayment(null)
+          setPollingStatus(null)
+          setError("Délai d'attente dépassé. Vérifiez le statut du paiement dans l'historique.")
+        }
+        return
+      }
+      attempts++
+      setPollingStatus(`Vérification... (${attempts}/${maxAttempts})`)
+      try {
+        const res = await fetch(`/api/payments/status?provider=${pendingPayment.provider}&transactionId=${pendingPayment.transactionId}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        if (data.status === "SUCCESSFUL") {
+          setPendingPayment(null)
+          setPollingStatus(null)
+          setSuccess(`Paiement confirmé pour ${pendingPayment.reference}`)
+          loadSalesHistory()
+          return
+        }
+        if (data.status === "FAILED") {
+          setPendingPayment(null)
+          setPollingStatus(null)
+          setError(`Paiement échoué pour ${pendingPayment.reference}`)
+          return
+        }
+      } catch {}
+      setTimeout(poll, 3000)
+    }
+    poll()
+    return () => { cancelled = true }
+  }, [pendingPayment])
+
   const variants = useMemo(() => {
     const posMap = new Map(posStocks.map((s) => [s.variantId, s.quantity]))
     return products.flatMap((product) =>
@@ -271,15 +329,63 @@ export default function VentesPage() {
       return
     }
 
+    if (paymentMethod !== "CASH_ON_DELIVERY" && !customerPhone.trim()) {
+      setError("Numéro de téléphone requis pour ce mode de paiement")
+      return
+    }
+
     setSubmitting(true)
     try {
+      const isMobile = paymentMethod in mobileProviders
+      const isCard = paymentMethod === "CARD"
+
+      if (isMobile || isCard) {
+        const provider = isMobile ? mobileProviders[paymentMethod] : "VISA_CARD"
+        const orderNumber = `LCG-${Date.now()}`
+        const origin = window.location.origin
+
+        const payRes = await fetch("/api/payments/initiate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider,
+            amount: total,
+            phone: customerPhone,
+            reference: orderNumber,
+            description: `Vente LCG - ${cart.map((c) => c.productName).join(", ")}`,
+            origin,
+          }),
+        })
+
+        const payData = await payRes.json()
+        if (!payRes.ok || !payData.success) {
+          throw new Error(payData.error || "Échec de l'initiation du paiement")
+        }
+
+        if (isCard && payData.redirectUrl) {
+          window.open(payData.redirectUrl, "_blank")
+        }
+
+        setPendingPayment({
+          transactionId: payData.transactionId,
+          reference: orderNumber,
+          provider: isMobile ? mobileProviders[paymentMethod] : "VISA_CARD",
+        })
+        setSuccess(`Paiement initié ${isMobile ? `- En attente de confirmation (${provider === "MTN_MOMO" ? "MTN MoMo" : "Airtel Money"})` : "- Veuillez compléter le paiement par carte"}`)
+        setCart([])
+        setCustomerName("")
+        setCustomerPhone("")
+        setNotes("")
+        return
+      }
+
       const res = await fetch("/api/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerName,
           customerPhone,
-          paymentMethod,
+          paymentMethod: paymentMethodToApi[paymentMethod] || "CASH_ON_DELIVERY",
           pointOfSaleId,
           notes,
           items: cart.map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
@@ -599,16 +705,31 @@ export default function VentesPage() {
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm sm:text-base"><span className="font-semibold text-gray-900">Total</span><span className="text-lg sm:text-xl font-bold text-gray-900">{formatPrice(total)}</span></div>
-                <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                   {paymentMethods.map((method) => {
                     const Icon = method.icon
                     return <button key={method.value} onClick={() => setPaymentMethod(method.value)} className={`rounded-lg border px-2 py-2 text-[10px] sm:text-xs font-medium ${paymentMethod === method.value ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}><Icon className="mx-auto mb-1 h-4 w-4" />{method.label}</button>
                   })}
                 </div>
+                {paymentMethod !== "CASH_ON_DELIVERY" && (
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder={paymentMethod === "CARD" ? "Email (optionnel)" : "Numéro de téléphone (ex: 06 XXX XXX)"}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm"
+                  />
+                )}
+                {pendingPayment && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+                    <p className="font-semibold">Paiement en attente: {pendingPayment.reference}</p>
+                    {pollingStatus && <p className="mt-1">{pollingStatus}</p>}
+                  </div>
+                )}
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm" placeholder="Note optionnelle" />
                 <div className="border-t border-gray-200 pt-4">
-                  <button type="button" onClick={submitSale} disabled={submitting || cart.length === 0} aria-label="Valider la vente" className="flex min-h-10 sm:min-h-12 w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-                    {submitting ? "Validation..." : "Valider la vente"}
+                  <button type="button" onClick={submitSale} disabled={submitting || cart.length === 0 || !!pendingPayment} aria-label="Valider la vente" className="flex min-h-10 sm:min-h-12 w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+                    {submitting ? "Validation..." : paymentMethod !== "CASH_ON_DELIVERY" ? "Initier le paiement" : "Valider la vente"}
                   </button>
                   {cart.length === 0 && <p className="mt-2 text-center text-xs text-gray-500">Ajoutez un produit pour activer la validation.</p>}
                 </div>
