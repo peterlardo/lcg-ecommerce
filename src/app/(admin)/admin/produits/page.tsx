@@ -189,13 +189,13 @@ export default function ProduitsPage() {
   })
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Produits</h1>
-        <div className="flex gap-2">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Produits</h1>
+        <div className="flex flex-1 sm:flex-none gap-2">
           <button
             onClick={() => setActiveTab("catalogue")}
-            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === "catalogue" ? "bg-primary text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
             }`}
           >
@@ -204,20 +204,22 @@ export default function ProduitsPage() {
           </button>
           <button
             onClick={() => setActiveTab("prix")}
-            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
               activeTab === "prix" ? "bg-primary text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
             }`}
           >
             <DollarSign className="h-4 w-4" />
-            Synchroniser les prix
+            <span className="hidden xs:inline">Synchroniser les prix</span>
+            <span className="xs:hidden">Prix</span>
           </button>
           {activeTab === "catalogue" && (
             <button
               onClick={openCreate}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
             >
               <Plus className="h-4 w-4" />
-              Ajouter un produit
+              <span className="hidden sm:inline">Ajouter un produit</span>
+              <span className="sm:hidden">Ajouter</span>
             </button>
           )}
         </div>
@@ -225,14 +227,14 @@ export default function ProduitsPage() {
 
       {activeTab === "prix" ? (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50/80 border-b border-gray-200">
-            <p className="text-sm text-gray-600">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50/80 border-b border-gray-200">
+            <p className="text-xs sm:text-sm text-gray-600">
               <span className="font-semibold text-gray-900">{Object.keys(priceEdits).length}</span> variantes — Modifiez les prix puis cliquez « Synchroniser »
             </p>
             <button
               onClick={handlePriceSync}
               disabled={priceSaving}
-              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              className={`inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 priceSaved
                   ? "bg-green-100 text-green-700 border border-green-300"
                   : "bg-primary text-white hover:opacity-90"
@@ -248,13 +250,13 @@ export default function ProduitsPage() {
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[500px]">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50/80">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Produit</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Format</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Prix actuel</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nouveau prix (FCFA)</th>
+                  <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Produit</th>
+                  <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Format</th>
+                  <th className="text-right px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Prix actuel</th>
+                  <th className="text-right px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nouveau prix (FCFA)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -267,21 +269,21 @@ export default function ProduitsPage() {
                     const changed = priceEdits[v.id] !== undefined && priceEdits[v.id] !== v.price
                     return (
                       <tr key={v.id} className={`hover:bg-gray-50/50 transition-colors ${changed ? "bg-blue-50/40" : ""}`}>
-                        <td className="px-4 py-2.5">
+                        <td className="px-3 sm:px-4 py-2 sm:py-2.5">
                           <span className="text-sm font-medium text-gray-900">{product.name}</span>
                         </td>
-                        <td className="px-4 py-2.5">
+                        <td className="px-3 sm:px-4 py-2 sm:py-2.5">
                           <span className="text-sm text-gray-600">{v.format}</span>
                         </td>
-                        <td className="px-4 py-2.5 text-right">
+                        <td className="px-3 sm:px-4 py-2 sm:py-2.5 text-right">
                           <span className="text-sm text-gray-500">{formatPrice(v.price)}</span>
                         </td>
-                        <td className="px-4 py-2.5 text-right">
+                        <td className="px-3 sm:px-4 py-2 sm:py-2.5 text-right">
                           <input
                             type="number"
                             value={priceEdits[v.id] ?? v.price}
                             onChange={(e) => setPriceEdits({ ...priceEdits, [v.id]: Number(e.target.value) })}
-                            className={`w-32 text-right rounded-lg border px-2.5 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500/40 ${
+                            className={`w-24 sm:w-32 text-right rounded-lg border px-2.5 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500/40 ${
                               changed ? "border-blue-400 bg-blue-50" : "border-gray-300"
                             }`}
                           />
@@ -296,7 +298,7 @@ export default function ProduitsPage() {
         </div>
       ) : (
         <>
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
@@ -307,12 +309,12 @@ export default function ProduitsPage() {
             className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
           />
         </div>
-        <div className="relative">
+        <div className="relative sm:w-auto">
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="pl-9 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 appearance-none bg-white"
+            className="w-full sm:w-auto pl-9 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 appearance-none bg-white"
           >
             <option value="all">Toutes catégories</option>
             {categories.map((cat) => (
@@ -326,12 +328,13 @@ export default function ProduitsPage() {
       </div>
 
       {loading ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 sm:p-8 text-center">
           <p className="text-sm text-gray-500">Chargement...</p>
         </div>
       ) : (
         <>
           <div className="hidden lg:block bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50/80">
@@ -403,19 +406,20 @@ export default function ProduitsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             {filtered.length === 0 && (
-              <div className="p-8 text-center">
+              <div className="p-6 sm:p-8 text-center">
                 <Package className="h-10 w-10 text-gray-300 mx-auto mb-3" />
                 <p className="text-sm text-gray-500">Aucun produit trouvé</p>
               </div>
             )}
           </div>
 
-          <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {filtered.map((product) => (
-              <div key={product.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-sm transition-shadow">
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="w-12 h-12 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
+              <div key={product.id} className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 hover:shadow-sm transition-shadow">
+                <div className="flex items-start gap-2.5 sm:gap-3 mb-2.5 sm:mb-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
                     {product.image ? (
                       <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
                     ) : (
@@ -444,7 +448,7 @@ export default function ProduitsPage() {
                     Stock: {getTotalStock(product.variants)}
                   </span>
                 </div>
-                <div className="flex items-center justify-end gap-1 mt-3 pt-3 border-t border-gray-100">
+                <div className="flex items-center justify-end gap-1 mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-gray-100">
                   <button onClick={() => openEdit(product)} className="flex items-center gap-1 px-3 py-1.5 text-xs text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
                     <Edit className="h-3.5 w-3.5" /> Modifier
                   </button>
@@ -461,18 +465,18 @@ export default function ProduitsPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900">
                 {editingId ? "Modifier le produit" : "Ajouter un produit"}
               </h2>
               <button onClick={() => setShowModal(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <label className="block text-sm font-semibold sm:col-span-2">
                   Nom du produit *
                   <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -522,7 +526,7 @@ export default function ProduitsPage() {
                 </label>
               </div>
 
-              <div className="border-t border-gray-200 pt-5">
+              <div className="border-t border-gray-200 pt-4 sm:pt-5">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-gray-900">Variantes</h3>
                   <button onClick={addVariant} className="text-xs font-medium text-primary-600 hover:text-primary-700">
@@ -531,7 +535,7 @@ export default function ProduitsPage() {
                 </div>
                 <div className="space-y-3">
                   {form.variants.map((v, i) => (
-                    <div key={i} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
+                    <div key={i} className="flex items-start gap-2 p-2.5 sm:p-3 bg-gray-50 rounded-lg">
                       <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-2">
                         <input value={v.format} onChange={(e) => updateVariant(i, "format", e.target.value)}
                           className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
@@ -551,7 +555,7 @@ export default function ProduitsPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-3 p-4 sm:p-6 border-t border-gray-200">
               <button onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                 Annuler

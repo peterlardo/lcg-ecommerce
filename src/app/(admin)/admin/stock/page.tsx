@@ -156,10 +156,10 @@ export default function StockPage() {
   const editingStock = payload?.variants.find((variant) => variant.variantId === editingVariant)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestion des stocks</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Gestion des stocks</h1>
           <p className="mt-1 text-sm text-gray-500">Entrées, sorties, production, pertes et seuils critiques.</p>
         </div>
         <button onClick={load} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
@@ -170,10 +170,10 @@ export default function StockPage() {
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">Variantes suivies</p><p className="mt-1 text-xl font-bold text-gray-900">{summary.totalVariants}</p></div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">Unités disponibles</p><p className="mt-1 text-xl font-bold text-gray-900">{summary.totalUnits}</p></div>
-        <div className="rounded-xl border border-yellow-200 bg-yellow-50/50 p-4"><p className="text-xs font-medium text-yellow-700">Stock faible</p><p className="mt-1 text-xl font-bold text-yellow-800">{summary.lowStock}</p></div>
-        <div className="rounded-xl border border-red-200 bg-red-50/50 p-4"><p className="text-xs font-medium text-red-700">Rupture</p><p className="mt-1 text-xl font-bold text-red-800">{summary.outOfStock}</p></div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Variantes suivies</p><p className="mt-1 text-lg sm:text-xl font-bold text-gray-900">{summary.totalVariants}</p></div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Unités disponibles</p><p className="mt-1 text-lg sm:text-xl font-bold text-gray-900">{summary.totalUnits}</p></div>
+        <div className="rounded-xl border border-yellow-200 bg-yellow-50/50 p-3 sm:p-4"><p className="text-xs font-medium text-yellow-700">Stock faible</p><p className="mt-1 text-lg sm:text-xl font-bold text-yellow-800">{summary.lowStock}</p></div>
+        <div className="rounded-xl border border-red-200 bg-red-50/50 p-3 sm:p-4"><p className="text-xs font-medium text-red-700">Rupture</p><p className="mt-1 text-lg sm:text-xl font-bold text-red-800">{summary.outOfStock}</p></div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -205,11 +205,11 @@ export default function StockPage() {
           <table className="w-full">
             <thead className="border-b border-gray-200 bg-gray-50/80">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Produit</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Format</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Prix</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stock</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Mouvement</th>
+                <th className="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Produit</th>
+                <th className="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 hidden sm:table-cell">Format</th>
+                <th className="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 hidden md:table-cell">Prix</th>
+                <th className="px-2 py-2 sm:px-4 sm:py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stock</th>
+                <th className="px-2 py-2 sm:px-4 sm:py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Mouvement</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -220,10 +220,10 @@ export default function StockPage() {
                 const isEditing = editingVariant === variant.variantId
                 return (
                   <tr key={variant.variantId} className={isOut ? "bg-red-50/40" : isLow ? "bg-yellow-50/40" : "hover:bg-gray-50/50"}>
-                    <td className="px-4 py-3"><div className="flex items-center gap-2">{(isLow || isOut) && <AlertCircle className={`h-4 w-4 ${isOut ? "text-red-500" : "text-yellow-500"}`} />}<span className="text-sm font-medium text-gray-900">{variant.productName}</span></div><p className="text-xs text-gray-500">{variant.categoryName}</p></td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{variant.format}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatPrice(variant.price)}</td>
-                    <td className={`px-4 py-3 text-sm font-bold ${isOut ? "text-red-600" : isLow ? "text-yellow-700" : "text-gray-900"}`}>{variant.stock} {variant.unit ?? ""} <button type="button" onClick={() => { setEditingVariant(variant.variantId); setStockTarget(variant.stock) }} className="ml-2 rounded-md border border-primary-300 px-2 py-1 text-[11px] font-semibold text-primary-700 hover:bg-primary-50">Modifier</button></td>
+                    <td className="px-2 py-2 sm:px-4 sm:py-3"><div className="flex items-center gap-2">{(isLow || isOut) && <AlertCircle className={`h-4 w-4 ${isOut ? "text-red-500" : "text-yellow-500"}`} />}<span className="text-xs sm:text-sm font-medium text-gray-900">{variant.productName}</span></div><p className="text-xs text-gray-500">{variant.categoryName}</p></td>
+                    <td className="px-2 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm text-gray-600 hidden sm:table-cell">{variant.format}</td>
+                    <td className="px-2 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm font-medium text-gray-900 hidden md:table-cell">{formatPrice(variant.price)}</td>
+                    <td className={`px-2 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm font-bold ${isOut ? "text-red-600" : isLow ? "text-yellow-700" : "text-gray-900"}`}>{variant.stock} {variant.unit ?? ""} <button type="button" onClick={() => { setEditingVariant(variant.variantId); setStockTarget(variant.stock) }} className="ml-2 rounded-md border border-primary-300 px-2 py-1 text-[11px] font-semibold text-primary-700 hover:bg-primary-50">Modifier</button></td>
                     <td className="px-4 py-3 text-right">
                       {isEditing ? (
                         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -245,7 +245,7 @@ export default function StockPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-5">
+      <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
         <h3 className="mb-3 text-sm font-semibold text-gray-900">Derniers mouvements</h3>
         <div className="space-y-2">
           {(payload?.movements ?? []).slice(0, 8).map((movement) => {
@@ -258,7 +258,7 @@ export default function StockPage() {
       </div>
 
       {editingStock && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="modifier-stock-title">
-        <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+        <div className="w-full max-w-full mx-2 sm:mx-0 sm:max-w-md rounded-xl bg-white p-4 sm:p-6 shadow-xl">
           <div className="flex items-start justify-between gap-4"><div><h2 id="modifier-stock-title" className="text-lg font-semibold text-gray-900">Modifier le stock</h2><p className="mt-1 text-sm text-gray-500">{editingStock.productName} · {editingStock.format}</p></div><button type="button" onClick={() => { setEditingVariant(null); setStockTarget(null) }} className="text-sm text-gray-500 hover:text-gray-900">Fermer</button></div>
           <label className="mt-5 block text-sm font-medium text-gray-700">Nouvelle quantité</label>
           <input autoFocus type="number" min={0} value={stockTarget ?? editingStock.stock} onChange={(event) => setStockTarget(Math.max(0, Number(event.target.value) || 0))} className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30" />

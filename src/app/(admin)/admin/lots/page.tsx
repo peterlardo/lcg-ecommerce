@@ -195,10 +195,10 @@ export default function LotsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Lots</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Lots</h1>
           <p className="mt-1 text-sm text-gray-500">Creer, suivre et gerer les lots de production.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -218,14 +218,14 @@ export default function LotsPage() {
       {success && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">Total lots</p><p className="mt-1 text-xl font-bold text-gray-900">{data?.lots.length ?? 0}</p></div>
-        <div className="rounded-xl border border-green-200 bg-green-50/40 p-4"><p className="text-xs font-medium text-green-700">Lots actifs</p><p className="mt-1 text-xl font-bold text-green-800">{activeLots}</p></div>
-        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4"><p className="text-xs font-medium text-blue-700">Total produit</p><p className="mt-1 text-xl font-bold text-blue-800">{totalProduced}</p></div>
-        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4"><p className="text-xs font-medium text-orange-700">Stock restant</p><p className="mt-1 text-xl font-bold text-orange-800">{totalRemaining}</p></div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Total lots</p><p className="mt-1 text-lg sm:text-xl font-bold text-gray-900">{data?.lots.length ?? 0}</p></div>
+        <div className="rounded-xl border border-green-200 bg-green-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-green-700">Lots actifs</p><p className="mt-1 text-lg sm:text-xl font-bold text-green-800">{activeLots}</p></div>
+        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-blue-700">Total produit</p><p className="mt-1 text-lg sm:text-xl font-bold text-blue-800">{totalProduced}</p></div>
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-orange-700">Stock restant</p><p className="mt-1 text-lg sm:text-xl font-bold text-orange-800">{totalRemaining}</p></div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="rounded-xl border border-gray-200 bg-white p-5">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
+        <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-900"><PackagePlus className="h-4 w-4" /> Nouveau lot</h2>
           <form onSubmit={submitLot} className="space-y-4">
             <label className="block text-sm font-medium text-gray-700">
@@ -257,7 +257,7 @@ export default function LotsPage() {
           </form>
         </section>
 
-        <section className="rounded-xl border border-gray-200 bg-white p-5 lg:col-span-2">
+        <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5 lg:col-span-2">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-semibold text-gray-900">Tous les lots ({filtered.length})</h2>
             <div className="flex gap-2">
@@ -281,14 +281,14 @@ export default function LotsPage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50/80">
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Numero</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Produit</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">Qte</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">Restant</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold uppercase text-gray-500">Statut</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Production</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Expiration</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold uppercase text-gray-500">Actions</th>
+                    <th className="px-2 py-1.5 sm:px-3 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Numero</th>
+                    <th className="px-2 py-1.5 sm:px-3 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500 hidden sm:table-cell">Produit</th>
+                    <th className="px-2 py-1.5 sm:px-3 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500 hidden md:table-cell">Qte</th>
+                    <th className="px-2 py-1.5 sm:px-3 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Restant</th>
+                    <th className="px-2 py-1.5 sm:px-3 sm:py-2 text-center text-xs font-semibold uppercase text-gray-500">Statut</th>
+                    <th className="px-2 py-1.5 sm:px-3 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500 hidden lg:table-cell">Production</th>
+                    <th className="px-2 py-1.5 sm:px-3 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500 hidden lg:table-cell">Expiration</th>
+                    <th className="px-2 py-1.5 sm:px-3 sm:py-2 text-center text-xs font-semibold uppercase text-gray-500">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -297,18 +297,18 @@ export default function LotsPage() {
                     const Icon = st.icon
                     return (
                       <tr key={lot.id} className="hover:bg-gray-50/50 cursor-pointer" onClick={() => openDetail(lot)}>
-                        <td className="px-3 py-2.5 font-mono text-xs font-semibold text-primary-700">{lot.lotNumber}</td>
-                        <td className="px-3 py-2.5">{lot.variant.product.name} <span className="text-gray-400">- {lot.variant.format}</span></td>
-                        <td className="px-3 py-2.5 text-right font-semibold">{lot.initialQuantity}</td>
-                        <td className={`px-3 py-2.5 text-right font-bold ${lot.remainingQuantity === 0 ? "text-gray-400" : "text-gray-900"}`}>{lot.remainingQuantity}</td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${st.color}`}>
+                        <td className="px-2 py-2 sm:px-3 sm:py-2.5 font-mono text-xs font-semibold text-primary-700">{lot.lotNumber}</td>
+                        <td className="px-2 py-2 sm:px-3 sm:py-2.5 hidden sm:table-cell">{lot.variant.product.name} <span className="text-gray-400">- {lot.variant.format}</span></td>
+                        <td className="px-2 py-2 sm:px-3 sm:py-2.5 text-right font-semibold hidden md:table-cell">{lot.initialQuantity}</td>
+                        <td className={`px-2 py-2 sm:px-3 sm:py-2.5 text-right font-bold ${lot.remainingQuantity === 0 ? "text-gray-400" : "text-gray-900"}`}>{lot.remainingQuantity}</td>
+                        <td className="px-2 py-2 sm:px-3 sm:py-2.5 text-center">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-xs font-semibold ${st.color}`}>
                             <Icon className="h-3 w-3" /> {st.label}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-gray-600">{fmtDate(lot.productionDate)}</td>
-                        <td className="px-3 py-2.5 text-gray-600">{lot.expiryDate ? fmtDate(lot.expiryDate) : "-"}</td>
-                        <td className="px-3 py-2.5 text-center">
+                        <td className="px-2 py-2 sm:px-3 sm:py-2.5 text-gray-600 hidden lg:table-cell">{fmtDate(lot.productionDate)}</td>
+                        <td className="px-2 py-2 sm:px-3 sm:py-2.5 text-gray-600 hidden lg:table-cell">{lot.expiryDate ? fmtDate(lot.expiryDate) : "-"}</td>
+                        <td className="px-2 py-2 sm:px-3 sm:py-2.5 text-center">
                           <button onClick={(e) => { e.stopPropagation(); openDetail(lot) }} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="Details">
                             <FileText className="h-4 w-4" />
                           </button>
@@ -328,7 +328,7 @@ export default function LotsPage() {
 
       {selectedLot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelectedLot(null)}>
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[85vh] w-full max-w-full mx-2 sm:mx-0 sm:max-w-2xl overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Lot {selectedLot.lotNumber}</h3>
@@ -404,31 +404,31 @@ export default function LotsPage() {
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-gray-50/80">
                         <tr>
-                          <th className="px-3 py-1.5 text-left text-xs font-semibold uppercase text-gray-500">Type</th>
-                          <th className="px-3 py-1.5 text-right text-xs font-semibold uppercase text-gray-500">Qte</th>
-                          <th className="px-3 py-1.5 text-left text-xs font-semibold uppercase text-gray-500">Reference</th>
-                          <th className="px-3 py-1.5 text-left text-xs font-semibold uppercase text-gray-500">PDV</th>
-                          <th className="px-3 py-1.5 text-left text-xs font-semibold uppercase text-gray-500">Date</th>
+                          <th className="px-2 py-1 sm:px-3 sm:py-1.5 text-left text-xs font-semibold uppercase text-gray-500">Type</th>
+                          <th className="px-2 py-1 sm:px-3 sm:py-1.5 text-right text-xs font-semibold uppercase text-gray-500">Qte</th>
+                          <th className="px-2 py-1 sm:px-3 sm:py-1.5 text-left text-xs font-semibold uppercase text-gray-500 hidden sm:table-cell">Reference</th>
+                          <th className="px-2 py-1 sm:px-3 sm:py-1.5 text-left text-xs font-semibold uppercase text-gray-500 hidden sm:table-cell">PDV</th>
+                          <th className="px-2 py-1 sm:px-3 sm:py-1.5 text-left text-xs font-semibold uppercase text-gray-500">Date</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {selectedLot.allocations.map((a: LotAllocation) => (
                           <tr key={a.id}>
-                            <td className="px-3 py-1.5">
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${a.type === "SALE" ? "bg-blue-100 text-blue-700" : a.type === "LOSS" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
+                            <td className="px-2 py-1 sm:px-3 sm:py-1.5">
+                              <span className={`inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-xs font-semibold ${a.type === "SALE" ? "bg-blue-100 text-blue-700" : a.type === "LOSS" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
                                 {ALLOC_LABEL[a.type] ?? a.type}
                               </span>
                             </td>
-                            <td className="px-3 py-1.5 text-right font-semibold">{a.quantity}</td>
-                            <td className="px-3 py-1.5 font-mono text-xs">{a.reference || "-"}</td>
-                            <td className="px-3 py-1.5">
+                            <td className="px-2 py-1 sm:px-3 sm:py-1.5 text-right font-semibold">{a.quantity}</td>
+                            <td className="px-2 py-1 sm:px-3 sm:py-1.5 font-mono text-xs hidden sm:table-cell">{a.reference || "-"}</td>
+                            <td className="px-2 py-1 sm:px-3 sm:py-1.5 hidden sm:table-cell">
                               {a.pointOfSale ? (
                                 <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">{a.pointOfSale.name}</span>
                               ) : (
                                 <span className="text-gray-400 text-[11px]">—</span>
                               )}
                             </td>
-                            <td className="px-3 py-1.5 text-gray-500">{fmtDateTime(a.createdAt)}</td>
+                            <td className="px-2 py-1 sm:px-3 sm:py-1.5 text-gray-500 text-xs">{fmtDateTime(a.createdAt)}</td>
                           </tr>
                         ))}
                       </tbody>

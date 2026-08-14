@@ -394,21 +394,21 @@ export default function VentesPage() {
   }, [filteredHistory])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mes ventes</h1>
-          <p className="mt-1 text-sm text-gray-500">Ventes effectuées depuis le comptoir et points de vente.</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Mes ventes</h1>
+          <p className="mt-1 text-xs sm:text-sm text-gray-500">Ventes effectuées depuis le comptoir et points de vente.</p>
         </div>
         <button onClick={() => { loadProducts(); if (tab === "historique") loadSalesHistory() }} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
           <RefreshCw className="h-4 w-4" /> Actualiser
         </button>
       </div>
 
-      <div className="flex gap-2 border-b border-gray-200">
+      <div className="flex gap-2 border-b border-gray-200 overflow-x-auto scrollbar-none">
         <button
           onClick={() => setTab("nouvelle")}
-          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+          className={`shrink-0 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
             tab === "nouvelle"
               ? "border-primary text-primary"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -419,7 +419,7 @@ export default function VentesPage() {
         </button>
         <button
           onClick={() => setTab("historique")}
-          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+          className={`shrink-0 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
             tab === "historique"
               ? "border-primary text-primary"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -439,7 +439,7 @@ export default function VentesPage() {
       {tab === "nouvelle" && (
         <>
           {receipt && (
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 space-y-4">
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 sm:p-5 space-y-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-base font-bold text-primary">Vente enregistrée</p>
@@ -450,9 +450,9 @@ export default function VentesPage() {
                 </button>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-[340px_1fr]">
-                <div className="space-y-2 rounded-lg bg-white p-4 border border-gray-200">
+                <div className="space-y-2 rounded-lg bg-white p-3 sm:p-4 border border-gray-200">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Détails</p>
-                  <div className="space-y-1 text-sm">
+                      <div className="space-y-1 text-xs sm:text-sm">
                     <p><span className="text-gray-500">Client :</span> {receipt.customerName || "Client comptoir"}</p>
                     <p><span className="text-gray-500">Paiement :</span> {receipt.paymentMethod === "MOBILE_MONEY" ? "Mobile Money" : receipt.paymentMethod === "CARD" ? "Carte" : "Espèces"}</p>
                     <p><span className="text-gray-500">Statut :</span> <span className="text-green-600 font-medium">Payé</span></p>
@@ -465,7 +465,7 @@ export default function VentesPage() {
                       </div>
                     ))}
                   </div>
-                  <div className="mt-2 border-t border-gray-100 pt-2 flex items-center justify-between text-base font-bold">
+                  <div className="mt-2 border-t border-gray-100 pt-2 flex items-center justify-between text-sm sm:text-base font-bold">
                     <span>Total</span><span>{formatPrice(receipt.total)}</span>
                   </div>
                 </div>
@@ -482,22 +482,22 @@ export default function VentesPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_420px]">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[1fr_420px]">
             <section className="space-y-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un produit, format ou catégorie..." className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-4 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un produit, format ou catégorie..." className="w-full rounded-lg border border-gray-300 py-2 sm:py-2.5 pl-9 pr-4 text-xs sm:text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40" />
               </div>
 
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                {loading && <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 md:col-span-2">Chargement...</div>}
+                {loading && <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 text-center text-xs sm:text-sm text-gray-500 md:col-span-2">Chargement...</div>}
                 {!loading && !pointOfSaleId && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center text-sm text-amber-700 md:col-span-2">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-6 text-center text-xs sm:text-sm text-amber-700 md:col-span-2">
                     Sélectionnez un point de vente pour afficher les produits disponibles.
                   </div>
                 )}
                 {!loading && pointOfSaleId && filteredVariants.length === 0 && (
-                  <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 md:col-span-2">
+                  <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 text-center text-xs sm:text-sm text-gray-500 md:col-span-2">
                     Aucun produit disponible dans ce point de vente.
                   </div>
                 )}
@@ -507,36 +507,36 @@ export default function VentesPage() {
                   const disabled = outOfStock
                   const inCart = cart.some((item) => item.variantId === variant.id)
                   return (
-                    <button key={variant.id} disabled={disabled} onClick={() => addToCart(variant)} className={`rounded-xl border p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${inCart ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600/30" : outOfStock ? "border-red-300 bg-red-50 hover:border-red-400" : lowStock ? "border-red-200 bg-red-50 hover:border-red-300" : "border-gray-200 bg-white hover:border-primary-300"}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{variant.productName}</p>
-                          <p className="mt-1 text-xs text-gray-500">{variant.format} - {variant.categoryName}</p>
+                    <button key={variant.id} disabled={disabled} onClick={() => addToCart(variant)} className={`rounded-xl border p-3 sm:p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${inCart ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600/30" : outOfStock ? "border-red-300 bg-red-50 hover:border-red-400" : lowStock ? "border-red-200 bg-red-50 hover:border-red-300" : "border-gray-200 bg-white hover:border-primary-300"}`}>
+                      <div className="flex items-start justify-between gap-2 sm:gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{variant.productName}</p>
+                          <p className="mt-1 text-[11px] sm:text-xs text-gray-500 truncate">{variant.format} - {variant.categoryName}</p>
                         </div>
-                        <span className="rounded-full bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700">{formatPrice(variant.price)}</span>
+                        <span className="shrink-0 rounded-full bg-primary-50 px-2 py-1 text-[11px] sm:text-xs font-semibold text-primary-700">{formatPrice(variant.price)}</span>
                       </div>
-                      <p className={`mt-3 text-xs font-medium ${variant.stock <= lowStockThreshold ? "text-red-600" : "text-gray-500"}`}>Stock : {variant.stock} {variant.unit ?? ""}</p>
+                      <p className={`mt-2 sm:mt-3 text-[11px] sm:text-xs font-medium ${variant.stock <= lowStockThreshold ? "text-red-600" : "text-gray-500"}`}>Stock : {variant.stock} {variant.unit ?? ""}</p>
                     </button>
                   )
                 })}
               </div>
             </section>
 
-            <aside className="rounded-xl border border-gray-200 bg-white p-5 xl:sticky xl:top-6 xl:self-start">
+            <aside className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5 xl:sticky xl:top-6 xl:self-start">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900"><ReceiptText className="h-4 w-4" /> Ticket de vente</h2>
-                <span className="text-xs text-gray-500">{cart.length} ligne(s)</span>
+                <h2 className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><ReceiptText className="h-4 w-4" /> Ticket de vente</h2>
+                <span className="text-[11px] sm:text-xs text-gray-500">{cart.length} ligne(s)</span>
               </div>
 
               <div className="space-y-3">
-                <label className="block text-xs font-medium text-gray-600">Client
-                  <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="Client comptoir" />
+                <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Client
+                  <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm" placeholder="Client comptoir" />
                 </label>
-                <label className="block text-xs font-medium text-gray-600">Téléphone
-                  <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="Optionnel" />
+                <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Téléphone
+                  <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm" placeholder="Optionnel" />
                 </label>
-                <label className="block text-xs font-medium text-gray-600">Point de vente
-                  <select value={pointOfSaleId} onChange={(e) => setPointOfSaleId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+                <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Point de vente
+                  <select value={pointOfSaleId} onChange={(e) => setPointOfSaleId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs sm:text-sm">
                     <option value="">Sélectionner un point de vente</option>
                     {pointsOfSale.map((point) => <option key={point.id} value={point.id}>{point.name} ({point.code})</option>)}
                   </select>
@@ -574,23 +574,23 @@ export default function VentesPage() {
                 </div>
               )}
 
-              <div className="my-5 space-y-2 border-y border-gray-100 py-4">
+              <div className="my-3 sm:my-5 space-y-2 border-y border-gray-100 py-3 sm:py-4">
                 {cart.map((item) => (
-                  <div key={item.variantId} className="rounded-lg bg-gray-50 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{item.productName}</p>
-                        <p className="text-xs text-gray-500">{item.format}</p>
+                    <div key={item.variantId} className="rounded-lg bg-gray-50 p-2.5 sm:p-3">
+                    <div className="flex items-start justify-between gap-2 sm:gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{item.productName}</p>
+                        <p className="text-[11px] sm:text-xs text-gray-500">{item.format}</p>
                       </div>
                       <button onClick={() => removeItem(item.variantId)} className="text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex items-center rounded-lg border border-gray-200 bg-white">
                         <button onClick={() => updateQuantity(item.variantId, item.quantity - 1)} className="p-1.5 text-gray-500"><Minus className="h-3.5 w-3.5" /></button>
-                        <span className="min-w-8 text-center text-sm font-semibold">{item.quantity}</span>
+                        <span className="min-w-8 text-center text-xs sm:text-sm font-semibold">{item.quantity}</span>
                         <button onClick={() => updateQuantity(item.variantId, item.quantity + 1)} className="p-1.5 text-gray-500"><Plus className="h-3.5 w-3.5" /></button>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900">{formatPrice(item.price * item.quantity)}</span>
+                      <span className="text-xs sm:text-sm font-semibold text-gray-900">{formatPrice(item.price * item.quantity)}</span>
                     </div>
                   </div>
                 ))}
@@ -598,16 +598,16 @@ export default function VentesPage() {
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between text-base"><span className="font-semibold text-gray-900">Total</span><span className="text-xl font-bold text-gray-900">{formatPrice(total)}</span></div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="flex items-center justify-between text-sm sm:text-base"><span className="font-semibold text-gray-900">Total</span><span className="text-lg sm:text-xl font-bold text-gray-900">{formatPrice(total)}</span></div>
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                   {paymentMethods.map((method) => {
                     const Icon = method.icon
-                    return <button key={method.value} onClick={() => setPaymentMethod(method.value)} className={`rounded-lg border px-2 py-2 text-xs font-medium ${paymentMethod === method.value ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}><Icon className="mx-auto mb-1 h-4 w-4" />{method.label}</button>
+                    return <button key={method.value} onClick={() => setPaymentMethod(method.value)} className={`rounded-lg border px-2 py-2 text-[10px] sm:text-xs font-medium ${paymentMethod === method.value ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}><Icon className="mx-auto mb-1 h-4 w-4" />{method.label}</button>
                   })}
                 </div>
-                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="Note optionnelle" />
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm" placeholder="Note optionnelle" />
                 <div className="border-t border-gray-200 pt-4">
-                  <button type="button" onClick={submitSale} disabled={submitting || cart.length === 0} aria-label="Valider la vente" className="flex min-h-12 w-full items-center justify-center rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+                  <button type="button" onClick={submitSale} disabled={submitting || cart.length === 0} aria-label="Valider la vente" className="flex min-h-10 sm:min-h-12 w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
                     {submitting ? "Validation..." : "Valider la vente"}
                   </button>
                   {cart.length === 0 && <p className="mt-2 text-center text-xs text-gray-500">Ajoutez un produit pour activer la validation.</p>}
@@ -620,24 +620,24 @@ export default function VentesPage() {
 
       {tab === "historique" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Ventes aujourd&apos;hui</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">{todayCount}</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+              <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">Ventes aujourd&apos;hui</p>
+              <p className="mt-1 text-xl sm:text-2xl font-bold text-gray-900">{todayCount}</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total aujourd&apos;hui</p>
-              <p className="mt-1 text-2xl font-bold text-primary">{formatPrice(todayTotal)}</p>
+            <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+              <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">Total aujourd&apos;hui</p>
+              <p className="mt-1 text-xl sm:text-2xl font-bold text-primary">{formatPrice(todayTotal)}</p>
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total général</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">{formatPrice(salesHistory.reduce((sum, s) => sum + s.total, 0))}</p>
+            <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+              <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">Total général</p>
+              <p className="mt-1 text-xl sm:text-2xl font-bold text-gray-900">{formatPrice(salesHistory.reduce((sum, s) => sum + s.total, 0))}</p>
             </div>
           </div>
 
           {variantSummary.length > 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Ventes par variante (sacs)</h3>
+            <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+              <h3 className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Ventes par variante (sacs)</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -682,13 +682,13 @@ export default function VentesPage() {
           )}
 
           {posSummary.length > 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Stock décrémenté par point de vente</h3>
+            <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+              <h3 className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Stock décrémenté par point de vente</h3>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {posSummary.map((pos, i) => (
-                  <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-sm font-semibold text-gray-900">{pos.name} <span className="text-xs font-normal text-gray-400">({pos.code})</span></p>
-                    <div className="mt-2 space-y-1 text-xs">
+                  <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 p-2.5 sm:p-3">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-900">{pos.name} <span className="text-[11px] sm:text-xs font-normal text-gray-400">({pos.code})</span></p>
+                    <div className="mt-2 space-y-1 text-[11px] sm:text-xs">
                       <div className="flex justify-between"><span className="text-gray-500">Ventes</span><span className="font-medium text-gray-900">{pos.salesCount}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Articles vendus</span><span className="font-semibold text-primary">{pos.itemsSold} sacs</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">CA total</span><span className="font-medium text-gray-900">{formatPrice(pos.totalRevenue)}</span></div>
@@ -701,13 +701,13 @@ export default function VentesPage() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
-              <button onClick={() => setWeekOffset((v) => v - 1)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">&lsaquo;</button>
-              <div className="flex flex-col items-center min-w-[180px]">
-                <span className="text-sm font-semibold text-gray-900">{weekLabel}</span>
+                <button onClick={() => setWeekOffset((v) => v - 1)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-50">&lsaquo;</button>
+                <div className="flex flex-col items-center min-w-[140px] sm:min-w-[180px]">
+                  <span className="text-xs sm:text-sm font-semibold text-gray-900">{weekLabel}</span>
                 {weekOffset === 0 && <span className="text-[11px] text-primary font-medium">Cette semaine</span>}
                 {weekOffset === -1 && <span className="text-[11px] text-gray-400">Semaine passée</span>}
               </div>
-              <button onClick={() => setWeekOffset((v) => v + 1)} disabled={weekOffset >= 0} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
+                <button onClick={() => setWeekOffset((v) => v + 1)} disabled={weekOffset >= 0} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
               {weekOffset !== 0 && (
                 <button onClick={() => setWeekOffset(0)} className="ml-1 text-xs text-primary hover:underline font-medium">Aujourd&apos;hui</button>
               )}
@@ -719,17 +719,17 @@ export default function VentesPage() {
                 placeholder="Rechercher par numéro, client ou point de vente..."
                 value={historySearch}
                 onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1) }}
-                className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-4 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                className="w-full rounded-lg border border-gray-300 py-2 sm:py-2.5 pl-9 pr-4 text-xs sm:text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
               />
             </div>
           </div>
 
           {historyLoading && (
-            <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">Chargement de l&apos;historique...</div>
+            <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8 text-center text-sm text-gray-500">Chargement de l&apos;historique...</div>
           )}
 
           {!historyLoading && pagedHistory.length === 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+            <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8 text-center text-sm text-gray-500">
               Aucune vente comptoir trouvée.
             </div>
           )}
@@ -738,7 +738,7 @@ export default function VentesPage() {
             <div key={sale.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
               <button
                 onClick={() => setExpandedSale(expandedSale === sale.id ? null : sale.id)}
-                className="w-full text-left p-4 hover:bg-gray-50/50 transition-colors"
+                className="w-full text-left p-3 sm:p-4 hover:bg-gray-50/50 transition-colors"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1 min-w-0">
@@ -775,30 +775,30 @@ export default function VentesPage() {
               </button>
 
               {expandedSale === sale.id && (
-                <div className="border-t border-gray-100 bg-gray-50/50 p-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_280px]">
+                <div className="border-t border-gray-100 bg-gray-50/50 p-3 sm:p-4">
+                  <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-[1fr_280px]">
                     <div>
                       <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Articles</h4>
                       <div className="space-y-2">
                         {sale.items.map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-sm bg-white p-2.5 rounded-lg border border-gray-100">
-                            <div>
+                          <div key={idx} className="flex items-center justify-between text-xs sm:text-sm bg-white p-2 sm:p-2.5 rounded-lg border border-gray-100">
+                            <div className="min-w-0">
                               <span className="font-medium text-gray-900">{item.name}</span>
                               {item.format && <span className="text-gray-500 ml-1.5">{item.format}</span>}
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3">
                               <span className="text-gray-500">×{item.quantity}</span>
-                              <span className="font-semibold text-gray-900 w-24 text-right">{formatPrice(item.total)}</span>
+                              <span className="font-semibold text-gray-900 w-20 sm:w-24 text-right">{formatPrice(item.total)}</span>
                             </div>
                           </div>
                         ))}
-                        <div className="flex items-center justify-between text-sm font-bold pt-2 border-t border-gray-200">
+                        <div className="flex items-center justify-between text-xs sm:text-sm font-bold pt-2 border-t border-gray-200">
                           <span className="text-gray-900">Total</span>
                           <span className="text-gray-900">{formatPrice(sale.total)}</span>
                         </div>
                       </div>
                     </div>
-                    <div className="space-y-2 text-sm bg-white p-3 rounded-lg border border-gray-100 h-fit">
+                    <div className="space-y-2 text-xs sm:text-sm bg-white p-2.5 sm:p-3 rounded-lg border border-gray-100 h-fit">
                       <p><span className="text-gray-500">Client :</span> <span className="font-medium">{sale.customerName}</span></p>
                       {sale.customerPhone && <p><span className="text-gray-500">Téléphone :</span> <span className="font-medium">{sale.customerPhone}</span></p>}
                       <p><span className="text-gray-500">Paiement :</span> <span className="font-medium">{paymentLabels[sale.paymentMethod] || sale.paymentMethod}</span></p>
@@ -813,8 +813,8 @@ export default function VentesPage() {
           ))}
 
           {!historyLoading && filteredHistory.length > 0 && (
-            <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3">
-              <p className="text-xs text-gray-500">
+            <div className="flex flex-col sm:flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 gap-2 sm:gap-0">
+                      <p className="text-[11px] sm:text-xs text-gray-500">
                 {filteredHistory.length} vente{filteredHistory.length > 1 ? "s" : ""} · Page {historyCurrentPage}/{historyTotalPages}
               </p>
               <div className="flex items-center gap-1">

@@ -119,9 +119,9 @@ export default function TracabilitePage() {
   const s = data?.summary
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Traçabilité</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Traçabilité</h1>
         <p className="mt-1 text-sm text-gray-500">Rechercher un lot pour voir son historique complet (productions, ventes, transferts).</p>
       </div>
 
@@ -162,7 +162,7 @@ export default function TracabilitePage() {
 
       {data && (
         <>
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
             <div className="mb-4 flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">{data.lot.lotNumber}</h2>
@@ -191,7 +191,7 @@ export default function TracabilitePage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
             <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-900"><FileText className="h-4 w-4" /> Historique des allocations</h3>
             {data.allocations.length === 0 ? (
               <p className="text-sm text-gray-500">Aucune allocation - ce lot n'a pas encore ete utilise.</p>
@@ -200,24 +200,24 @@ export default function TracabilitePage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Type</th>
-                      <th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Quantite</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Reference</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Point de vente</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Date</th>
+                      <th className="px-2 py-1.5 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Type</th>
+                      <th className="px-2 py-1.5 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Quantite</th>
+                      <th className="px-2 py-1.5 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500 hidden sm:table-cell">Reference</th>
+                      <th className="px-2 py-1.5 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Point de vente</th>
+                      <th className="px-2 py-1.5 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500 hidden sm:table-cell">Date</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {data.allocations.map((a) => (
                       <tr key={a.id} className="hover:bg-gray-50/50">
-                        <td className="px-4 py-2.5">
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${a.type === "SALE" ? "bg-blue-100 text-blue-700" : a.type === "LOSS" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
+                        <td className="px-2 py-2 sm:px-4 sm:py-2.5">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-xs font-semibold ${a.type === "SALE" ? "bg-blue-100 text-blue-700" : a.type === "LOSS" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
                             {ALLOC_LABEL[a.type] ?? a.type}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-right font-semibold">{a.quantity}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs">{a.reference || "-"}</td>
-                        <td className="px-4 py-2.5">
+                        <td className="px-2 py-2 sm:px-4 sm:py-2.5 text-right font-semibold">{a.quantity}</td>
+                        <td className="px-2 py-2 sm:px-4 sm:py-2.5 font-mono text-xs hidden sm:table-cell">{a.reference || "-"}</td>
+                        <td className="px-2 py-2 sm:px-4 sm:py-2.5">
                           {a.pointOfSale ? (
                             <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                               {a.pointOfSale.name} ({a.pointOfSale.code})
@@ -226,7 +226,7 @@ export default function TracabilitePage() {
                             <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-500">{fmtDateTime(a.createdAt)}</td>
+                        <td className="px-2 py-2 sm:px-4 sm:py-2.5 text-gray-500 text-xs hidden sm:table-cell">{fmtDateTime(a.createdAt)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -235,14 +235,14 @@ export default function TracabilitePage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
             <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-900"><Package className="h-4 w-4" /> Mouvements de stock lies</h3>
             {data.movements.length === 0 ? (
               <p className="text-sm text-gray-500">Aucun mouvement de stock lie.</p>
             ) : (
               <div className="space-y-2">
                 {data.movements.map((m: any) => (
-                  <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-2.5 text-sm">
+                  <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 sm:px-4 py-2 sm:py-2.5 text-sm">
                     <div>
                       <p className="font-medium">{m.type}</p>
                       <p className="text-xs text-gray-500">{m.reason || m.reference || "-"}</p>

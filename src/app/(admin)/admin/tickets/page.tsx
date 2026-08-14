@@ -33,36 +33,36 @@ function TicketPreview({ ticket }: { ticket: Ticket }) {
   }, [ticket])
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
-      <div className="flex-1 space-y-3">
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-lg bg-white border border-gray-200 p-3">
+    <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+      <div className="flex-1 space-y-2 sm:space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-sm">
+          <div className="rounded-lg bg-white border border-gray-200 p-2.5 sm:p-3">
             <p className="text-xs font-medium text-gray-500">Numéro</p>
             <p className="mt-1 font-bold text-gray-900 font-mono">{ticket.ticketNumber}</p>
           </div>
-          <div className="rounded-lg bg-white border border-gray-200 p-3">
+          <div className="rounded-lg bg-white border border-gray-200 p-2.5 sm:p-3">
             <p className="text-xs font-medium text-gray-500">Date & heure</p>
             <p className="mt-1 font-semibold text-gray-900">{new Date(ticket.createdAt).toLocaleString("fr-FR")}</p>
           </div>
-          <div className="rounded-lg bg-white border border-gray-200 p-3">
+          <div className="rounded-lg bg-white border border-gray-200 p-2.5 sm:p-3">
             <p className="text-xs font-medium text-gray-500">Client</p>
             <p className="mt-1 font-semibold text-gray-900">{ticket.customerName}</p>
           </div>
-          <div className="rounded-lg bg-white border border-gray-200 p-3">
+          <div className="rounded-lg bg-white border border-gray-200 p-2.5 sm:p-3">
             <p className="text-xs font-medium text-gray-500">Point de vente</p>
             <p className="mt-1 font-semibold text-gray-900">{ticket.pointOfSale ? `${ticket.pointOfSale.name} (${ticket.pointOfSale.code})` : "Non affecté"}</p>
           </div>
-          <div className="rounded-lg bg-white border border-gray-200 p-3">
+          <div className="rounded-lg bg-white border border-gray-200 p-2.5 sm:p-3">
             <p className="text-xs font-medium text-gray-500">Paiement</p>
             <p className="mt-1 font-semibold text-gray-900">{paymentLabels[ticket.paymentMethod || ""] || ticket.paymentMethod || "-"}{ticket.paymentStatus ? ` · ${ticket.paymentStatus}` : ""}</p>
           </div>
-          <div className="rounded-lg bg-primary/5 border border-primary/20 p-3">
+          <div className="rounded-lg bg-primary/5 border border-primary/20 p-2.5 sm:p-3">
             <p className="text-xs font-medium text-primary-700">Total</p>
             <p className="mt-1 text-lg font-bold text-primary">{formatPrice(ticket.total)}</p>
           </div>
         </div>
 
-        <div className="rounded-lg bg-white border border-gray-200 p-3">
+        <div className="rounded-lg bg-white border border-gray-200 p-2.5 sm:p-3">
           <p className="text-xs font-medium text-gray-500 mb-2">Articles</p>
           <div className="divide-y divide-gray-100">
             {ticket.items.map((item) => (
@@ -150,25 +150,25 @@ export default function TicketsPage() {
   const handleDate = (v: string) => { setDate(v); setPage(1) }
   const handlePos = (v: string) => { setPosFilter(v); setPage(1) }
 
-  return <div className="space-y-6">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+  return <div className="space-y-4 sm:space-y-6">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <p className="text-sm text-muted-foreground">Caisse</p>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">Tickets de vente</h1>
+        <h1 className="mt-1 text-xl sm:text-2xl font-bold text-foreground">Tickets de vente</h1>
         <p className="mt-1 text-sm text-muted-foreground">Registre des ventes comptoir et réimpression des tickets.</p>
       </div>
       <p className="text-sm text-muted-foreground">{filtered.length} ticket(s)</p>
     </div>
 
-    <div className="flex flex-col gap-3 sm:flex-row">
+    <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row">
       <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input value={search} onChange={(event) => handleSearch(event.target.value)} placeholder="Rechercher un ticket, client ou point de vente..." className="w-full rounded-lg border border-input bg-background py-2.5 pl-9 pr-3 text-sm text-foreground" />
       </div>
-      <input type="date" value={date} onChange={(event) => handleDate(event.target.value)} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground" />
+      <input type="date" value={date} onChange={(event) => handleDate(event.target.value)} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground sm:w-auto" />
       <div className="relative">
         <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <select value={posFilter} onChange={(event) => handlePos(event.target.value)} className="appearance-none rounded-lg border border-input bg-background py-2.5 pl-9 pr-8 text-sm text-foreground">
+        <select value={posFilter} onChange={(event) => handlePos(event.target.value)} className="appearance-none rounded-lg border border-input bg-background py-2.5 pl-9 pr-8 text-sm text-foreground w-full sm:w-auto">
           <option value="">Tous les points de vente</option>
           {pointsOfSale.map((pos) => <option key={pos.id} value={pos.name}>{pos.name} ({pos.code})</option>)}
         </select>
@@ -176,68 +176,70 @@ export default function TicketsPage() {
     </div>
 
     {loading ? (
-      <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">Chargement des tickets...</div>
+      <div className="rounded-xl border border-border bg-card p-6 sm:p-8 text-center text-sm text-muted-foreground">Chargement des tickets...</div>
     ) : (
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card-soft">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-muted/50 text-xs text-muted-foreground">
-            <tr>
-              <th className="px-5 py-3">Ticket</th>
-              <th className="px-5 py-3">Point de vente</th>
-              <th className="px-5 py-3">Client</th>
-              <th className="px-5 py-3">Paiement</th>
-              <th className="px-5 py-3">Total</th>
-              <th className="px-5 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {paged.map((ticket) => (
-              <Fragment key={ticket.id}>
-                <tr
-                  className={`cursor-pointer transition-colors ${expanded === ticket.id ? "bg-primary/5" : "hover:bg-muted/30"}`}
-                  onClick={() => setExpanded(expanded === ticket.id ? null : ticket.id)}
-                >
-                  <td className="px-5 py-4">
-                    <p className="font-semibold text-foreground">{ticket.ticketNumber}</p>
-                    <p className="text-xs text-muted-foreground">{new Date(ticket.createdAt).toLocaleString("fr-FR")}</p>
-                  </td>
-                  <td className="px-5 py-4 text-muted-foreground">{ticket.pointOfSale ? `${ticket.pointOfSale.name} (${ticket.pointOfSale.code})` : "Non affecté"}</td>
-                  <td className="px-5 py-4 text-foreground">{ticket.customerName}</td>
-                  <td className="px-5 py-4 text-muted-foreground">{paymentLabels[ticket.paymentMethod || ""] || ticket.paymentMethod || "-"}</td>
-                  <td className="px-5 py-4 font-semibold text-foreground">{formatPrice(ticket.total)}</td>
-                  <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={(e) => { e.stopPropagation(); printTicket(ticket) }} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" title="Imprimer">
-                        <Printer className="h-4 w-4" />
-                      </button>
-                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded === ticket.id ? "rotate-180" : ""}`} />
-                    </div>
-                  </td>
-                </tr>
-                {expanded === ticket.id && (
-                  <tr key={`${ticket.id}-detail`}>
-                    <td colSpan={6} className="bg-muted/20 px-5 py-5">
-                      <TicketPreview ticket={ticket} />
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 sm:px-5 py-3 whitespace-nowrap">Ticket</th>
+                <th className="px-3 sm:px-5 py-3 whitespace-nowrap hidden md:table-cell">Point de vente</th>
+                <th className="px-3 sm:px-5 py-3 whitespace-nowrap">Client</th>
+                <th className="px-3 sm:px-5 py-3 whitespace-nowrap hidden sm:table-cell">Paiement</th>
+                <th className="px-3 sm:px-5 py-3 whitespace-nowrap">Total</th>
+                <th className="px-3 sm:px-5 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {paged.map((ticket) => (
+                <Fragment key={ticket.id}>
+                  <tr
+                    className={`cursor-pointer transition-colors ${expanded === ticket.id ? "bg-primary/5" : "hover:bg-muted/30"}`}
+                    onClick={() => setExpanded(expanded === ticket.id ? null : ticket.id)}
+                  >
+                    <td className="px-3 sm:px-5 py-3 sm:py-4">
+                      <p className="font-semibold text-foreground">{ticket.ticketNumber}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(ticket.createdAt).toLocaleString("fr-FR")}</p>
+                    </td>
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 text-muted-foreground hidden md:table-cell">{ticket.pointOfSale ? `${ticket.pointOfSale.name} (${ticket.pointOfSale.code})` : "Non affecté"}</td>
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 text-foreground">{ticket.customerName}</td>
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 text-muted-foreground hidden sm:table-cell">{paymentLabels[ticket.paymentMethod || ""] || ticket.paymentMethod || "-"}</td>
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 font-semibold text-foreground">{formatPrice(ticket.total)}</td>
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={(e) => { e.stopPropagation(); printTicket(ticket) }} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" title="Imprimer">
+                          <Printer className="h-4 w-4" />
+                        </button>
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded === ticket.id ? "rotate-180" : ""}`} />
+                      </div>
                     </td>
                   </tr>
-                )}
-              </Fragment>
-            ))}
-            {!loading && filtered.length === 0 && (
-              <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground"><ReceiptText className="mx-auto mb-2 h-9 w-9 text-muted-foreground/50" />Aucun ticket trouvé.</td></tr>
-            )}
-          </tbody>
-        </table>
+                  {expanded === ticket.id && (
+                    <tr key={`${ticket.id}-detail`}>
+                      <td colSpan={6} className="bg-muted/20 px-3 sm:px-5 py-4 sm:py-5">
+                        <TicketPreview ticket={ticket} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+              {!loading && filtered.length === 0 && (
+                <tr><td colSpan={6} className="px-3 sm:px-5 py-6 sm:py-8 text-center text-sm text-muted-foreground"><ReceiptText className="mx-auto mb-2 h-9 w-9 text-muted-foreground/50" />Aucun ticket trouvé.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {!loading && filtered.length > 0 && (
-          <div className="flex items-center justify-between border-t border-border px-4 py-3">
+          <div className="flex items-center justify-between border-t border-border px-3 sm:px-4 py-2.5 sm:py-3">
             <p className="text-xs text-muted-foreground">{filtered.length} résultat(s) · Page {currentPage}/{totalPages}</p>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
-              <button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []).map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1.5 text-xs text-muted-foreground">…</span> : <button key={p} onClick={() => setPage(p)} className={`min-w-[28px] rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${p === currentPage ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{p}</button>)}
-              <button onClick={() => setPage(currentPage + 1)} disabled={currentPage >= totalPages} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
-              <button onClick={() => setPage(totalPages)} disabled={currentPage >= totalPages} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&raquo;</button>
+            <div className="flex items-center gap-0.5 sm:gap-1">
+              <button onClick={() => setPage(1)} disabled={currentPage <= 1} className="rounded-md px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
+              <button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded-md px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []).map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1 sm:px-1.5 text-xs text-muted-foreground">…</span> : <button key={p} onClick={() => setPage(p)} className={`min-w-[24px] sm:min-w-[28px] rounded-md px-1.5 sm:px-2 py-1 sm:py-1.5 text-xs font-medium transition-colors ${p === currentPage ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{p}</button>)}
+              <button onClick={() => setPage(currentPage + 1)} disabled={currentPage >= totalPages} className="rounded-md px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
+              <button onClick={() => setPage(totalPages)} disabled={currentPage >= totalPages} className="rounded-md px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&raquo;</button>
             </div>
           </div>
         )}

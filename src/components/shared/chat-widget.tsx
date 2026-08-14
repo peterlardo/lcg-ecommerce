@@ -266,9 +266,9 @@ export function ChatWidget() {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 font-sans">
+    <div className="font-sans">
       {isOpen && (
-        <div className="mb-3 w-[360px] h-[500px] rounded-2xl bg-white shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-white flex flex-col md:static md:inset-auto md:bottom-5 md:right-5 md:w-[360px] md:h-[500px] md:rounded-2xl md:shadow-2xl md:border md:border-gray-200">
           <div className="flex items-center gap-3 bg-primary px-4 py-3 text-primary-foreground shrink-0">
             {selectedUser ? (
               <>
@@ -339,7 +339,7 @@ export function ChatWidget() {
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-gray-50/50">
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-gray-50/50 max-md:pb-[env(safe-area-inset-bottom)]">
                 {loadingMessages && (
                   <p className="text-center text-xs text-gray-400 py-4">Chargement...</p>
                 )}
@@ -385,7 +385,7 @@ export function ChatWidget() {
                 </div>
               )}
 
-              <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-2.5 flex items-center gap-2">
+              <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-2.5 flex items-center gap-2 max-md:pb-[calc(0.625rem+env(safe-area-inset-bottom))]">
                 <input
                   ref={fileRef}
                   type="file"
@@ -434,7 +434,7 @@ export function ChatWidget() {
 
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative h-14 w-14 flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-all"
+        className={`fixed z-50 h-14 w-14 flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-all max-md:bottom-5 max-md:right-5 ${isOpen ? "max-md:hidden" : ""} md:bottom-5 md:right-5`}
       >
         {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
         {!isOpen && totalUnread > 0 && (

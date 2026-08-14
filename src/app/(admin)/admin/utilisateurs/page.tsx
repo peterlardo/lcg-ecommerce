@@ -131,11 +131,11 @@ export default function UtilisateursPage() {
   const selectedUser = selected ? users.find((u) => u.id === selected) : null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">Administration</p>
-          <h1 className="mt-1 text-2xl font-bold text-foreground">Utilisateurs</h1>
+          <h1 className="mt-1 text-xl sm:text-2xl font-bold text-foreground">Utilisateurs</h1>
           <p className="mt-1 text-sm text-muted-foreground">Gérer les comptes, rôles, droits d&apos;accès et points de vente assignés.</p>
         </div>
         <div className="flex items-center gap-3">
@@ -152,7 +152,7 @@ export default function UtilisateursPage() {
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between">{error}<button onClick={() => setError("")} className="text-red-500 hover:text-red-700"><X className="h-4 w-4" /></button></div>}
 
       {showCreate && (
-        <form onSubmit={createUser} className="rounded-xl border border-border bg-card p-5">
+        <form onSubmit={createUser} className="rounded-xl border border-border bg-card p-3 sm:p-5">
           <h2 className="mb-4 font-semibold text-foreground">Créer un utilisateur</h2>
 
           <div className="flex flex-col gap-6 sm:flex-row">
@@ -228,7 +228,7 @@ export default function UtilisateursPage() {
         </form>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[330px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[330px_minmax(0,1fr)]">
         <section className="space-y-3">
           {loading && <p className="text-sm text-muted-foreground">Chargement...</p>}
           {users.map((user) => {
@@ -272,7 +272,7 @@ export default function UtilisateursPage() {
         </section>
 
         {selected && selectedUser && (
-          <section className="rounded-xl border border-border bg-card p-5">
+          <section className="rounded-xl border border-border bg-card p-3 sm:p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="relative group">
@@ -356,14 +356,14 @@ export default function UtilisateursPage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[650px] text-left text-sm">
                   <thead className="border-b border-border text-xs text-muted-foreground">
-                    <tr><th className="px-3 py-3">Module</th><th className="px-3 py-3 text-center">Voir</th><th className="px-3 py-3 text-center">Créer</th><th className="px-3 py-3 text-center">Modifier</th><th className="px-3 py-3 text-center">Supprimer</th></tr>
+                    <tr><th className="px-2 py-2 sm:px-3 sm:py-3">Module</th><th className="px-2 py-2 sm:px-3 sm:py-3 text-center">Voir</th><th className="px-2 py-2 sm:px-3 sm:py-3 text-center">Créer</th><th className="px-2 py-2 sm:px-3 sm:py-3 text-center">Modifier</th><th className="px-2 py-2 sm:px-3 sm:py-3 text-center">Supprimer</th></tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {permissions.map((permission) => (
                       <tr key={permission.module}>
-                        <td className="px-3 py-3 font-medium text-foreground">{labels[permission.module]}</td>
+                        <td className="px-2 py-2 sm:px-3 sm:py-3 font-medium text-foreground">{labels[permission.module]}</td>
                         {(["canView", "canCreate", "canEdit", "canDelete"] as const).map((action) => (
-                          <td key={action} className="px-3 py-3 text-center">
+                          <td key={action} className="px-2 py-2 sm:px-3 sm:py-3 text-center">
                             <button type="button" onClick={() => togglePermission(permission.module, action)} className={`mx-auto flex h-7 w-7 items-center justify-center rounded-md border ${permission[action] ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent"}`}><Check className="h-4 w-4" /></button>
                           </td>
                         ))}

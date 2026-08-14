@@ -129,11 +129,11 @@ export default function PointsDeVentePage() {
   const selectedPoint = points.find((point) => point.id === selectedId)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">Réseau commercial</p>
-          <h1 className="mt-1 text-2xl font-bold text-foreground">Points de vente</h1>
+          <h1 className="mt-1 text-xl sm:text-2xl font-bold text-foreground">Points de vente</h1>
           <p className="mt-1 text-sm text-muted-foreground">Agences, stocks, caisses et performances par emplacement.</p>
         </div>
         <button onClick={startCreate} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90">
@@ -145,13 +145,13 @@ export default function PointsDeVentePage() {
       {success && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card p-5"><p className="text-sm text-muted-foreground">Points actifs</p><p className="mt-2 text-2xl font-bold text-foreground">{points.filter((point) => point.isActive).length} <span className="text-sm font-normal text-muted-foreground">/ {points.length}</span></p></div>
-        <div className="rounded-xl border border-border bg-card p-5"><p className="text-sm text-muted-foreground">Chiffre d'affaires réseau</p><p className="mt-2 text-2xl font-bold text-foreground">{formatPrice(Object.values(stats).reduce((sum, value) => sum + value, 0))}</p></div>
-        <div className="rounded-xl border border-border bg-card p-5"><p className="text-sm text-muted-foreground">Pré-commandes rattachées</p><p className="mt-2 text-2xl font-bold text-foreground">{points.reduce((sum, point) => sum + point._count.reservations, 0)}</p></div>
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-5"><p className="text-xs sm:text-sm text-muted-foreground">Points actifs</p><p className="mt-2 text-xl sm:text-2xl font-bold text-foreground">{points.filter((point) => point.isActive).length} <span className="text-xs sm:text-sm font-normal text-muted-foreground">/ {points.length}</span></p></div>
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-5"><p className="text-xs sm:text-sm text-muted-foreground">Chiffre d'affaires réseau</p><p className="mt-2 text-xl sm:text-2xl font-bold text-foreground">{formatPrice(Object.values(stats).reduce((sum, value) => sum + value, 0))}</p></div>
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-5"><p className="text-xs sm:text-sm text-muted-foreground">Pré-commandes rattachées</p><p className="mt-2 text-xl sm:text-2xl font-bold text-foreground">{points.reduce((sum, point) => sum + point._count.reservations, 0)}</p></div>
       </div>
 
       {showForm && (
-        <form onSubmit={savePoint} className="rounded-xl border border-border bg-card p-5 shadow-card-soft">
+        <form onSubmit={savePoint} className="rounded-xl border border-border bg-card p-3 sm:p-5 shadow-card-soft">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-semibold text-foreground">{editing ? "Modifier le point de vente" : "Nouveau point de vente"}</h2>
             <button type="button" onClick={() => setShowForm(false)} className="text-muted-foreground hover:text-foreground"><XCircle className="h-5 w-5" /></button>
@@ -174,7 +174,7 @@ export default function PointsDeVentePage() {
         </form>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[330px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[330px_minmax(0,1fr)]">
         <section className="space-y-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -208,7 +208,7 @@ export default function PointsDeVentePage() {
 
         {selectedPoint && detail && (
           <section className="min-w-0 rounded-xl border border-border bg-card shadow-card-soft">
-            <div className="border-b border-border p-5">
+            <div className="border-b border-border p-3 sm:p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex items-center gap-3">
@@ -231,8 +231,8 @@ export default function PointsDeVentePage() {
             </div>
 
             {tab === "overview" && (
-              <div className="space-y-5 p-5">
-                <div className="rounded-xl border border-primary/30 bg-primary/5 p-5">
+              <div className="space-y-4 sm:space-y-5 p-3 sm:p-5">
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 sm:p-5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-primary/70">Chiffre d'affaires aujourd'hui</p>
                   <p className="mt-2 text-3xl font-bold text-primary">{formatPrice(detail.today.revenue)}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{detail.today.orders} vente(s) aujourd'hui</p>
@@ -294,8 +294,8 @@ export default function PointsDeVentePage() {
             )}
 
             {tab === "stock" && (
-              <div className="space-y-5 p-5">
-                <form onSubmit={submitStock} className="rounded-lg border border-border p-4">
+              <div className="space-y-4 sm:space-y-5 p-3 sm:p-5">
+                <form onSubmit={submitStock} className="rounded-lg border border-border p-3 sm:p-4">
                   <div className="mb-3 flex items-center gap-2"><Boxes className="h-4 w-4 text-primary" /><h3 className="font-semibold text-foreground">Ajouter ou transférer du stock</h3></div>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                     <select required value={stockForm.variantId} onChange={(event) => setStockForm({ ...stockForm, variantId: event.target.value })} className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground">
@@ -314,17 +314,17 @@ export default function PointsDeVentePage() {
                   <table className="w-full text-left text-sm">
                     <thead className="bg-muted/50 text-xs text-muted-foreground">
                       <tr>
-                        <th className="px-4 py-3">Produit</th>
-                        <th className="px-4 py-3">Format</th>
-                        <th className="px-4 py-3">Quantité</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3">Produit</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3">Format</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3">Quantité</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {detail.stocks.map((stock) => (
                         <tr key={stock.id} className="hover:bg-muted/30">
-                          <td className="px-4 py-3 font-medium text-foreground">{stock.variant.product.name}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{stock.variant.format}</td>
-                          <td className="px-4 py-3 font-semibold text-foreground">{stock.quantity}</td>
+                          <td className="px-2 py-2 sm:px-4 sm:py-3 font-medium text-foreground">{stock.variant.product.name}</td>
+                          <td className="px-2 py-2 sm:px-4 sm:py-3 text-muted-foreground">{stock.variant.format}</td>
+                          <td className="px-2 py-2 sm:px-4 sm:py-3 font-semibold text-foreground">{stock.quantity}</td>
                         </tr>
                       ))}
                       {detail.stocks.length === 0 && <tr><td colSpan={3} className="px-4 py-5 text-center text-sm text-muted-foreground">Aucun stock dans ce point de vente.</td></tr>}
@@ -335,8 +335,8 @@ export default function PointsDeVentePage() {
             )}
 
             {tab === "cash" && (
-              <div className="space-y-5 p-5">
-                <div className="flex items-center gap-3 rounded-lg border border-border p-4">
+              <div className="space-y-4 sm:space-y-5 p-3 sm:p-5">
+                <div className="flex items-center gap-3 rounded-lg border border-border p-3 sm:p-4">
                   <Banknote className="h-6 w-6 text-primary" />
                   <div>
                     <p className="font-semibold text-foreground">{detail.openCash ? "Caisse ouverte" : "Aucune caisse ouverte"}</p>
@@ -355,21 +355,21 @@ export default function PointsDeVentePage() {
                       <table className="w-full text-left text-sm">
                         <thead className="bg-muted/50 text-xs text-muted-foreground">
                           <tr>
-                            <th className="px-4 py-2">Semaine</th>
-                            <th className="px-4 py-2">Sessions</th>
-                            <th className="px-4 py-2">Fonds ouverture</th>
-                            <th className="px-4 py-2">Fermeture</th>
-                            <th className="px-4 py-2">Écart</th>
+                            <th className="px-2 py-1.5 sm:px-4 sm:py-2">Semaine</th>
+                            <th className="px-2 py-1.5 sm:px-4 sm:py-2">Sessions</th>
+                            <th className="px-2 py-1.5 sm:px-4 sm:py-2 hidden sm:table-cell">Fonds ouverture</th>
+                            <th className="px-2 py-1.5 sm:px-4 sm:py-2 hidden sm:table-cell">Fermeture</th>
+                            <th className="px-2 py-1.5 sm:px-4 sm:py-2">Écart</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                           {detail.weeklyCash.filter((w) => w.sessions > 0).slice(0, 8).map((week, i) => (
                             <tr key={i} className="hover:bg-muted/30">
-                              <td className="px-4 py-2.5 text-xs text-muted-foreground">{week.label}</td>
-                              <td className="px-4 py-2.5 font-medium text-foreground">{week.sessions}</td>
-                              <td className="px-4 py-2.5 text-foreground">{formatPrice(week.totalOpened)}</td>
-                              <td className="px-4 py-2.5 text-foreground">{week.totalClosed > 0 ? formatPrice(week.totalClosed) : "—"}</td>
-                              <td className={`px-4 py-2.5 font-semibold ${week.totalClosed > 0 && week.totalClosed !== week.totalOpened ? (week.totalClosed > week.totalOpened ? "text-green-600" : "text-red-600") : "text-muted-foreground"}`}>
+                              <td className="px-2 py-2 sm:px-4 sm:py-2.5 text-xs text-muted-foreground">{week.label}</td>
+                              <td className="px-2 py-2 sm:px-4 sm:py-2.5 font-medium text-foreground">{week.sessions}</td>
+                              <td className="px-2 py-2 sm:px-4 sm:py-2.5 text-foreground hidden sm:table-cell">{formatPrice(week.totalOpened)}</td>
+                              <td className="px-2 py-2 sm:px-4 sm:py-2.5 text-foreground hidden sm:table-cell">{week.totalClosed > 0 ? formatPrice(week.totalClosed) : "—"}</td>
+                              <td className={`px-2 py-2 sm:px-4 sm:py-2.5 font-semibold ${week.totalClosed > 0 && week.totalClosed !== week.totalOpened ? (week.totalClosed > week.totalOpened ? "text-green-600" : "text-red-600") : "text-muted-foreground"}`}>
                                 {week.totalClosed > 0 ? formatPrice(week.totalClosed - week.totalOpened) : "—"}
                               </td>
                             </tr>
@@ -405,7 +405,7 @@ export default function PointsDeVentePage() {
             )}
 
             {tab === "history" && (
-              <div className="space-y-4 p-5">
+              <div className="space-y-4 sm:space-y-5 p-3 sm:p-5">
                 <div className="flex items-center gap-2"><History className="h-4 w-4 text-primary" /><h3 className="font-semibold text-foreground">Historique des mouvements</h3></div>
                 <div className="divide-y divide-border rounded-lg border border-border">
                   {detail.movements.map((movement) => (

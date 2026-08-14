@@ -137,10 +137,10 @@ export default function LivraisonsPage() {
   const hasActiveFilters = deliveredSearch || deliveredDateFrom || deliveredDateTo
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Livraisons</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Livraisons</h1>
           <p className="mt-1 text-sm text-gray-500">Suivi distribution, affectation des livreurs et statut terrain.</p>
         </div>
         <button onClick={load} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
@@ -151,16 +151,16 @@ export default function LivraisonsPage() {
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">Livraisons</p><p className="mt-1 text-xl font-bold text-gray-900">{deliveries.length}</p></div>
-        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4"><p className="text-xs font-medium text-orange-700">En cours</p><p className="mt-1 text-xl font-bold text-orange-800">{activeCount}</p></div>
-        <div className="rounded-xl border border-green-200 bg-green-50/40 p-4"><p className="text-xs font-medium text-green-700">Livrées aujourd'hui</p><p className="mt-1 text-xl font-bold text-green-800">{deliveredToday}</p></div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Livraisons</p><p className="mt-1 text-lg sm:text-xl font-bold text-gray-900">{deliveries.length}</p></div>
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-orange-700">En cours</p><p className="mt-1 text-lg sm:text-xl font-bold text-orange-800">{activeCount}</p></div>
+        <div className="rounded-xl border border-green-200 bg-green-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-green-700">Livrées aujourd'hui</p><p className="mt-1 text-lg sm:text-xl font-bold text-green-800">{deliveredToday}</p></div>
       </div>
 
       {loading ? (
         <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">Chargement des livraisons...</div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
+          <div className="space-y-4 sm:space-y-6 lg:col-span-2">
             {statusSections.map((section) => {
               const Icon = section.icon
               const items = section.key === "DELIVERED" ? [] : deliveries.filter((d) => d.status === section.key)
@@ -310,7 +310,7 @@ function DeliveryCard({ delivery, agents, onPatch }: { delivery: Delivery; agent
 
   return (
     <>
-    <div className="rounded-xl border border-gray-200 bg-white p-4 transition-shadow hover:shadow-sm">
+    <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 transition-shadow hover:shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -377,7 +377,7 @@ function DeliveryCard({ delivery, agents, onPatch }: { delivery: Delivery; agent
 
 function DeliveredCard({ delivery }: { delivery: Delivery }) {
   return (
-    <div className="rounded-xl border border-green-200 bg-green-50/30 p-4 transition-shadow hover:shadow-sm">
+    <div className="rounded-xl border border-green-200 bg-green-50/30 p-3 sm:p-4 transition-shadow hover:shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">

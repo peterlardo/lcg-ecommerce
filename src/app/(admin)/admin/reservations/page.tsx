@@ -165,9 +165,9 @@ export default function ReservationsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Pré-commandes</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Pré-commandes</h1>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <p className="text-sm text-gray-500">
             {reservations.filter((r) => r.status === "CONFIRMED").length} confirmée
@@ -381,8 +381,8 @@ export default function ReservationsPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-8">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-full mx-2 sm:mx-0 sm:max-w-2xl my-8">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">Nouvelle pré-commande</h2>
                 <p className="text-xs text-gray-500 mt-0.5">Saisie opérateur — source : Opérateur</p>
@@ -395,7 +395,7 @@ export default function ReservationsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreate} className="p-6 space-y-5">
+            <form onSubmit={handleCreate} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Client *</label>
