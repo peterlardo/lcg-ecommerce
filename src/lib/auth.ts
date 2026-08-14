@@ -9,7 +9,7 @@ type Role = string
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   trustHost: true,
-  session: { strategy: "jwt", maxAge: 30 * 60 },
+  session: { strategy: "jwt" },
   pages: {
     signIn: "/auth/connexion",
   },
