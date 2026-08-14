@@ -52,10 +52,13 @@ export function ChatWidget() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [pendingFile, setPendingFile] = useState<{ url: string; name: string; type: string; size: number } | null>(null)
+  const [peerTyping, setPeerTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const typingSentRef = useRef(false)
 
   const totalUnread = users.reduce((sum, u) => sum + u.unreadCount, 0)
 
@@ -80,7 +83,11 @@ export function ChatWidget() {
     setLoadingMessages(true)
     try {
       const res = await fetch(`/api/chat/messages?userId=${userId}`)
-      if (res.ok) setMessages(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setMessages(data.messages || [])
+        setPeerTyping(data.peerTyping ?? false)
+      }
     } catch {} finally {
       setLoadingMessages(false)
     }
@@ -109,6 +116,7 @@ export function ChatWidget() {
 
   const selectUser = (user: ChatUser) => {
     setSelectedUser(user)
+    setPeerTyping(false)
     void loadMessages(user.id)
   }
 
@@ -116,7 +124,32 @@ export function ChatWidget() {
     setSelectedUser(null)
     setMessages([])
     setPendingFile(null)
+    setPeerTyping(false)
+    void sendTyping(false)
     void loadUsers()
+  }
+
+  const sendTyping = async (isTyping: boolean) => {
+    try {
+      await fetch("/api/chat/typing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isTyping }),
+      })
+    } catch {}
+  }
+
+  const handleInputChange = (value: string) => {
+    setNewMessage(value)
+    if (value.trim() && !typingSentRef.current) {
+      typingSentRef.current = true
+      void sendTyping(true)
+    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    typingTimeoutRef.current = setTimeout(() => {
+      typingSentRef.current = false
+      void sendTyping(false)
+    }, 3000)
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,6 +200,8 @@ export function ChatWidget() {
         setMessages((prev) => [...prev, msg])
         setNewMessage("")
         setPendingFile(null)
+        typingSentRef.current = false
+        void sendTyping(false)
         setUsers((prev) =>
           prev.map((u) =>
             u.id === selectedUser.id
@@ -242,13 +277,20 @@ export function ChatWidget() {
                 </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{selectedUser.name}</p>
-                  <p className="text-[11px] opacity-70 truncate">{roleLabel[selectedUser.role] || selectedUser.role}</p>
+                  {peerTyping ? (
+                    <p className="text-[11px] italic opacity-80 truncate flex items-center gap-1">
+                      <span className="inline-flex gap-0.5"><span className="animate-bounce" style={{animationDelay:"0ms"}}>.</span><span className="animate-bounce" style={{animationDelay:"150ms"}}>.</span><span className="animate-bounce" style={{animationDelay:"300ms"}}>.</span></span>
+                      {" "}en train d&apos;écrire
+                    </p>
+                  ) : (
+                    <p className="text-[11px] opacity-70 truncate">{roleLabel[selectedUser.role] || selectedUser.role}</p>
+                  )}
                 </div>
               </>
             ) : (
               <>
                 <MessageCircle className="h-5 w-5" />
-                <span className="text-sm font-semibold">Messages</span>
+                <span className="text-sm font-semibold">LCG-Box</span>
                 {totalUnread > 0 && (
                   <span className="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">{totalUnread}</span>
                 )}
@@ -367,7 +409,7 @@ export function ChatWidget() {
                   ref={inputRef}
                   type="text"
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => handleInputChange(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={pendingFile ? "Ajouter un commentaire..." : "Votre message..."}
                   className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"

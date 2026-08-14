@@ -35,8 +35,17 @@ export async function GET(request: Request) {
     data: { read: true },
   })
 
-  return NextResponse.json(
-    messages.map((m) => ({
+  const peerPresence = await prisma.chatPresence.findUnique({
+    where: { userId: peerId },
+    select: { lastSeen: true, isTyping: true },
+  })
+
+  const isTyping = peerPresence?.isTyping && peerPresence.lastSeen
+    ? (Date.now() - new Date(peerPresence.lastSeen).getTime()) < 5000
+    : false
+
+  return NextResponse.json({
+    messages: messages.map((m) => ({
       id: m.id,
       content: m.content,
       senderId: m.senderId,
@@ -47,8 +56,9 @@ export async function GET(request: Request) {
       fileName: m.fileName || null,
       fileType: m.fileType || null,
       fileSize: m.fileSize || null,
-    }))
-  )
+    })),
+    peerTyping: isTyping,
+  })
 }
 
 export async function POST(request: Request) {
@@ -95,6 +105,12 @@ export async function POST(request: Request) {
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
     },
+  })
+
+  await prisma.chatPresence.upsert({
+    where: { userId: session.user.id },
+    update: { isTyping: false, lastSeen: new Date() },
+    create: { userId: session.user.id, isTyping: false },
   })
 
   return NextResponse.json(

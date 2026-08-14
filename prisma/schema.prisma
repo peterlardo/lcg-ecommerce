@@ -64,6 +64,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   sentMessages        ChatMessage[]      @relation("ChatSender")
   receivedMessages    ChatMessage[]      @relation("ChatReceiver")
+  chatPresence        ChatPresence?
 }
 
 model RoleProfile {
@@ -424,4 +425,13 @@ model ChatMessage {
   @@index([senderId])
   @@index([receiverId])
   @@index([senderId, receiverId])
+}
+
+model ChatPresence {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  lastSeen  DateTime @default(now())
+  isTyping  Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
