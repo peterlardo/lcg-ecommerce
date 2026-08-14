@@ -140,10 +140,10 @@ export default function ClientsPage() {
   })
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-        <p className="text-sm text-gray-500">{clients.length} clients</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Clients</h1>
+        <p className="text-xs sm:text-sm text-gray-500">{clients.length} clients</p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -154,7 +154,7 @@ export default function ClientsPage() {
             placeholder="Rechercher un client..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+            className="w-full pl-9 pr-4 py-2.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
           />
         </div>
         <div className="relative">
@@ -162,7 +162,7 @@ export default function ClientsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="pl-9 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 appearance-none bg-white"
+            className="pl-9 pr-8 py-2.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 appearance-none bg-white"
           >
             <option value="tous">Tous les statuts</option>
             <option value="actif">Actif</option>
@@ -173,7 +173,7 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2 sm:space-y-3">
         {filtered.map((client) => (
           <div
             key={client.id}
@@ -183,32 +183,32 @@ export default function ClientsPage() {
               onClick={() =>
                 setExpandedId(expandedId === client.id ? null : client.id)
               }
-              className="w-full text-left p-4 hover:bg-gray-50/50 transition-colors"
+              className="w-full text-left p-3 sm:p-4 hover:bg-gray-50/50 transition-colors"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-10 h-10 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm flex-shrink-0">
                     {client.name.charAt(0)}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">
                       {client.name}
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
-                        <Mail className="h-3 w-3" />
+                        <Mail className="h-3 w-3 hidden sm:inline" />
                         {client.email}
                       </span>
-                      <span>•</span>
+                      <span className="hidden sm:inline">•</span>
                       <span className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
+                        <Phone className="h-3 w-3 hidden sm:inline" />
                         {client.phone}
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 sm:text-right">
-                  <div className="text-sm">
+                <div className="flex items-center gap-3 sm:gap-4 sm:text-right">
+                  <div className="text-xs sm:text-sm">
                     <p className="font-medium text-gray-900">
                       {client.ordersCount} commande{client.ordersCount > 1 ? "s" : ""}
                     </p>
@@ -241,13 +241,13 @@ export default function ClientsPage() {
             </button>
 
             {expandedId === client.id && (
-              <div className="border-t border-gray-100 bg-gray-50/50 p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="border-t border-gray-100 bg-gray-50/50 p-3 sm:p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                       Informations
                     </h4>
-                    <div className="bg-white p-3 rounded-lg border border-gray-100 space-y-2 text-sm">
+                    <div className="bg-white p-2.5 sm:p-3 rounded-lg border border-gray-100 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                       <p className="text-gray-700">
                         <span className="font-medium text-gray-500">Ville: </span>
                         {client.city}
@@ -270,11 +270,11 @@ export default function ClientsPage() {
                     <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                       Dernières commandes
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 sm:space-y-2">
                       {client.recentOrders.map((order) => (
                         <div
                           key={order.id}
-                          className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-gray-100 text-sm"
+                          className="flex items-center justify-between bg-white p-2 sm:p-2.5 rounded-lg border border-gray-100 text-xs sm:text-sm"
                         >
                           <div>
                             <p className="text-xs font-mono font-medium text-gray-900">
@@ -283,7 +283,7 @@ export default function ClientsPage() {
                             <p className="text-xs text-gray-500">{order.date}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className="text-xs sm:text-sm font-medium text-gray-900">
                               {formatPrice(order.total)}
                             </p>
                           </div>
@@ -297,9 +297,9 @@ export default function ClientsPage() {
           </div>
         ))}
         {filtered.length === 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-8 text-center">
             <Users className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">Aucun client trouvé</p>
+            <p className="text-xs sm:text-sm text-gray-500">Aucun client trouvé</p>
           </div>
         )}
       </div>

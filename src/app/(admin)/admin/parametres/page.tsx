@@ -141,15 +141,15 @@ export default function ParametresPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Paramètres</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Paramètres</h1>
         <Settings className="h-5 w-5 text-gray-400" />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Paramètres généraux</h3>
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Paramètres généraux</h3>
           <SaveBtn section="generaux" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -163,7 +163,7 @@ export default function ParametresPage() {
               onChange={(e) =>
                 setGeneral((prev) => ({ ...prev, companyName: e.target.value }))
               }
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
           </div>
           <div>
@@ -176,7 +176,7 @@ export default function ParametresPage() {
               onChange={(e) =>
                 setGeneral((prev) => ({ ...prev, email: e.target.value }))
               }
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
           </div>
           <div>
@@ -189,7 +189,7 @@ export default function ParametresPage() {
               onChange={(e) =>
                 setGeneral((prev) => ({ ...prev, phone: e.target.value }))
               }
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
           </div>
           <div>
@@ -202,7 +202,7 @@ export default function ParametresPage() {
               onChange={(e) =>
                 setGeneral((prev) => ({ ...prev, address: e.target.value }))
               }
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
           </div>
           <div>
@@ -215,15 +215,15 @@ export default function ParametresPage() {
               onChange={(e) =>
                 setGeneral((prev) => ({ ...prev, website: e.target.value }))
               }
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Paramètres de livraison</h3>
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Paramètres de livraison</h3>
           <SaveBtn section="livraison" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -240,7 +240,7 @@ export default function ParametresPage() {
                   deliveryFee: parseInt(e.target.value) || 0,
                 }))
               }
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
           </div>
           <div>
@@ -256,7 +256,7 @@ export default function ParametresPage() {
                   freeDeliveryThreshold: parseInt(e.target.value) || 0,
                 }))
               }
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
           </div>
           <div className="md:col-span-2">
@@ -329,12 +329,12 @@ export default function ParametresPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Moyens de paiement</h3>
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Moyens de paiement</h3>
           <SaveBtn section="paiement" />
         </div>
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {[
             { key: "card" as const, label: "Carte bancaire", desc: "Visa, Mastercard" },
             { key: "mobileMoney" as const, label: "Mobile Money", desc: "Airtel Money, MTN Mobile Money" },
@@ -342,11 +342,11 @@ export default function ParametresPage() {
           ].map((item) => (
             <div
               key={item.key}
-              className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100/50 transition-colors"
+              className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-gray-50 hover:bg-gray-100/50 transition-colors"
             >
-              <div>
-                <p className="text-sm font-medium text-gray-900">{item.label}</p>
-                <p className="text-xs text-gray-500">{item.desc}</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-900">{item.label}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">{item.desc}</p>
               </div>
               <button
                 onClick={() => togglePayment(item.key)}
@@ -365,12 +365,12 @@ export default function ParametresPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Notifications</h3>
           <SaveBtn section="notifications" />
         </div>
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {[
             { key: "newOrder" as const, label: "Nouvelle commande", desc: "Notification à chaque nouvelle commande" },
             { key: "deliveryUpdate" as const, label: "Mise à jour livraison", desc: "Changement de statut de livraison" },
@@ -379,11 +379,11 @@ export default function ParametresPage() {
           ].map((item) => (
             <div
               key={item.key}
-              className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100/50 transition-colors"
+              className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-gray-50 hover:bg-gray-100/50 transition-colors"
             >
-              <div>
-                <p className="text-sm font-medium text-gray-900">{item.label}</p>
-                <p className="text-xs text-gray-500">{item.desc}</p>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-900">{item.label}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">{item.desc}</p>
               </div>
               <button
                 onClick={() => toggleNotification(item.key)}

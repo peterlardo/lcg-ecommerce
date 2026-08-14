@@ -48,9 +48,9 @@ export default function MessagesPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Messages</h1>
         <p className="text-sm text-gray-500">
           {messages.filter((m) => !m.lu).length} non lu{messages.filter((m) => !m.lu).length > 1 ? "s" : ""}
         </p>
@@ -82,17 +82,17 @@ export default function MessagesPage() {
       </div>
 
       {loading ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-          <p className="text-sm text-gray-500">Chargement...</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-8 text-center">
+          <p className="text-xs sm:text-sm text-gray-500">Chargement...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-8 text-center">
           <MessageSquare className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm text-gray-500">Aucun message trouvé</p>
+          <p className="text-xs sm:text-sm text-gray-500">Aucun message trouvé</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="lg:col-span-1 space-y-2 sm:space-y-3">
             {filtered.map((msg) => (
               <button
                 key={msg.id}
@@ -100,7 +100,7 @@ export default function MessagesPage() {
                   setSelected(msg)
                   if (!msg.lu) handleMarkRead(msg.id)
                 }}
-                className={`w-full text-left p-4 rounded-xl border transition-all ${
+                className={`w-full text-left p-3 sm:p-4 rounded-xl border transition-all ${
                   selected?.id === msg.id
                     ? "border-primary-300 bg-primary-50/50"
                     : !msg.lu
@@ -116,7 +116,7 @@ export default function MessagesPage() {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <p className={`text-sm truncate ${!msg.lu ? "font-semibold text-gray-900" : "font-medium text-gray-700"}`}>
+                      <p className={`text-xs sm:text-sm truncate ${!msg.lu ? "font-semibold text-gray-900" : "font-medium text-gray-700"}`}>
                         {msg.nom}
                       </p>
                       <span className="text-xs text-gray-400 shrink-0">{msg.createdAt}</span>
@@ -131,10 +131,10 @@ export default function MessagesPage() {
 
           <div className="lg:col-span-2">
             {selected ? (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-start justify-between mb-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+                <div className="flex items-start justify-between mb-4 sm:mb-6">
                   <div>
-                    <h2 className="text-lg font-bold text-gray-900">{selected.nom}</h2>
+                    <h2 className="text-base sm:text-lg font-bold text-gray-900">{selected.nom}</h2>
                     <p className="text-sm text-gray-500">{selected.objet}</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -157,7 +157,7 @@ export default function MessagesPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase">Nom</p>
                     <p className="text-sm text-gray-900 mt-0.5">{selected.nom}</p>
@@ -180,13 +180,13 @@ export default function MessagesPage() {
 
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Message</p>
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{selected.message}</p>
+                  <p className="text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{selected.message}</p>
                 </div>
               </div>
             ) : (
-              <div className="bg-white rounded-xl border border-gray-200 p-8 text-center flex flex-col items-center justify-center min-h-[300px]">
+              <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-8 text-center flex flex-col items-center justify-center min-h-[200px] sm:min-h-[300px]">
                 <MessageSquare className="h-12 w-12 text-gray-300 mb-4" />
-                <p className="text-sm text-gray-500">Sélectionnez un message pour le lire</p>
+                <p className="text-xs sm:text-sm text-gray-500">Sélectionnez un message pour le lire</p>
               </div>
             )}
           </div>
