@@ -4,11 +4,12 @@ import { useState, useCallback } from "react"
 import { AdminSidebar, MobileSidebar } from "@/components/shared/admin-sidebar"
 import { AdminHeader } from "@/components/shared/admin-header"
 import { ChatWidget } from "@/components/shared/chat-widget"
-import { Menu } from "lucide-react"
+import { useInactivityTimer } from "@/hooks/use-inactivity-timer"
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const closeMobile = useCallback(() => setMobileOpen(false), [])
+  useInactivityTimer()
 
   return (
     <div className="flex min-h-screen bg-gray-50">
