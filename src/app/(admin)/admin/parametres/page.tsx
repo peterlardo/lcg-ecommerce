@@ -34,7 +34,7 @@ export default function ParametresPage() {
   const [general, setGeneral] = useState<GeneralSettings>({
     companyName: "LCG - Les Glaçons du Congo",
     email: "contact@lcg.cg",
-    phone: "+242 05 123 45 67",
+    phone: "+242 06 739 49 49",
     address: "15 Avenue de la République, Brazzaville, Congo",
     website: "https://lcg.cg",
   })

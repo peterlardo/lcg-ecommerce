@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { AdminSidebar } from "@/components/shared/admin-sidebar"
 import { AdminHeader } from "@/components/shared/admin-header"
+import { ChatWidget } from "@/components/shared/chat-widget"
 import { auth } from "@/lib/auth"
 
 const ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
@@ -28,6 +29,7 @@ export default async function AdminLayout({
         <AdminHeader />
         <main className="flex-1 p-6">{children}</main>
       </div>
+      <ChatWidget />
     </div>
   )
 }

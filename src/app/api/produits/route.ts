@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       variants: variants.map((v: any) => ({
         format: v.format,
         price: Number(v.price),
-        stock: Number(v.stock) || 0,
+        stock: 0,
         unit: v.unit || null,
       })),
     })

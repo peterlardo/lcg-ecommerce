@@ -33,7 +33,63 @@ export async function GET(req: Request) {
     _count: true,
   })
 
-  return NextResponse.json({ lots, summary })
+  let enrichedLots = lots
+
+  if (withAllocations) {
+    const lotIds = lots.filter((l: any) => l.allocations?.length > 0).map((l: any) => l.id)
+    if (lotIds.length > 0) {
+      const movements = await prisma.stockMovement.findMany({
+        where: { lotId: { in: lotIds }, pointOfSaleId: { not: null } },
+        select: { lotId: true, reference: true, pointOfSaleId: true },
+      })
+
+      const posIds = [...new Set(movements.map((m) => m.pointOfSaleId!).filter(Boolean))]
+      const posList = posIds.length > 0
+        ? await prisma.pointOfSale.findMany({ where: { id: { in: posIds } }, select: { id: true, name: true, code: true } })
+        : []
+      const posMap = new Map(posList.map((p) => [p.id, { name: p.name, code: p.code }]))
+
+      const refToPos = new Map<string, { name: string; code: string }>()
+      for (const m of movements) {
+        if (m.reference && m.pointOfSaleId) {
+          const pos = posMap.get(m.pointOfSaleId)
+          if (pos && !refToPos.has(`${m.lotId}:${m.reference}`)) {
+            refToPos.set(`${m.lotId}:${m.reference}`, pos)
+          }
+        }
+      }
+
+      const orderRefs = new Set<string>()
+      for (const lot of lots) {
+        for (const a of (lot as any).allocations ?? []) {
+          if (a.type === "SALE" && a.reference) orderRefs.add(a.reference)
+        }
+      }
+
+      const orders = orderRefs.size > 0
+        ? await prisma.order.findMany({
+            where: { orderNumber: { in: [...orderRefs] } },
+            select: { orderNumber: true, pointOfSale: { select: { name: true, code: true } } },
+          })
+        : []
+      const orderPosMap = new Map(orders.filter((o) => o.pointOfSale).map((o) => [o.orderNumber, o.pointOfSale!]))
+
+      enrichedLots = lots.map((lot: any) => ({
+        ...lot,
+        allocations: (lot.allocations ?? []).map((a: any) => {
+          let pointOfSale: { name: string; code: string } | null = null
+          if (a.type === "SALE" && a.reference) {
+            pointOfSale = orderPosMap.get(a.reference) ?? null
+          } else if (a.type === "TRANSFER" && a.reference) {
+            pointOfSale = refToPos.get(`${lot.id}:${a.reference}`) ?? null
+          }
+          return { ...a, pointOfSale }
+        }),
+      }))
+    }
+  }
+
+  return NextResponse.json({ lots: enrichedLots, summary })
 }
 
 export async function POST(req: Request) {

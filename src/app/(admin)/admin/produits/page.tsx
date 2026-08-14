@@ -6,7 +6,7 @@ import { formatPrice } from "@/lib/utils"
 import { categories } from "@/data/products"
 import type { Product, ProductVariant } from "@/data/products"
 
-const emptyVariant = { format: "", price: 0, stock: 0, unit: "" }
+const emptyVariant = { format: "", price: 0, unit: "" }
 
 export default function ProduitsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -82,7 +82,6 @@ export default function ProduitsPage() {
       variants: product.variants.map((v) => ({
         format: v.format,
         price: v.price,
-        stock: v.stock,
         unit: v.unit || "",
       })),
     })
@@ -401,16 +400,13 @@ export default function ProduitsPage() {
                 <div className="space-y-3">
                   {form.variants.map((v, i) => (
                     <div key={i} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-2">
                         <input value={v.format} onChange={(e) => updateVariant(i, "format", e.target.value)}
                           className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                           placeholder="Format (ex: sac 1 kg)" />
                         <input type="number" value={v.price || ""} onChange={(e) => updateVariant(i, "price", Number(e.target.value))}
                           className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                           placeholder="Prix FCFA" />
-                        <input type="number" value={v.stock || ""} onChange={(e) => updateVariant(i, "stock", Number(e.target.value))}
-                          className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-                          placeholder="Stock" />
                         <input value={v.unit} onChange={(e) => updateVariant(i, "unit", e.target.value)}
                           className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                           placeholder="Unité (sac, boîte)" />

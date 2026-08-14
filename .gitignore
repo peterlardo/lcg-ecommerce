@@ -42,3 +42,15 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# Debug logs
+dev-output.log
+dev-error.log
+
+# Uploads
+/public/uploads/
+
+# IDE / Tools
+.agents/
+.claude/
+skills-lock.json

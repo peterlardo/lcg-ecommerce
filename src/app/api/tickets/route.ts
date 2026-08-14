@@ -11,7 +11,10 @@ export async function GET() {
 
   const tickets = await prisma.order.findMany({
     where: {
-      notes: { startsWith: "Vente comptoir" },
+      OR: [
+        { notes: { startsWith: "Vente comptoir" } },
+        { ticketGenerated: true },
+      ],
       ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}),
     },
     include: { pointOfSale: { select: { name: true, code: true } }, items: { include: { variant: { include: { product: true } } } } },

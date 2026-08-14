@@ -5,7 +5,7 @@ import { MapPin, Phone, Mail, Clock, Send } from "lucide-react"
 
 const contactCards = [
   { icon: MapPin, title: "Adresse", text: "97 Rue EWO, Ouenzé — Brazzaville, République du Congo" },
-  { icon: Phone, title: "Téléphone", text: "+242 05 123 45 67" },
+  { icon: Phone, title: "Téléphone", text: "+242 06 739 49 49 · +242 05 607 91 91" },
   { icon: Mail, title: "E-mail", text: "contact@lcg.cg" },
   { icon: Clock, title: "Horaires", text: "Lun – Sam : 7h00 – 19h00 · Dim : 8h00 – 13h00" },
 ]

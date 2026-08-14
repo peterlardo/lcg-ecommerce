@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/prisma"
+import type { PrismaClient } from "@/generated/prisma/client"
+
+type TxClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0]
 
 export async function allocateStockFIFO(variantId: string, quantity: number, type: string, reference?: string) {
-  const lots = await prisma.productionLot.findMany({
+  return allocateStockFIFOTx(prisma, variantId, quantity, type, reference)
+}
+
+export async function allocateStockFIFOTx(tx: TxClient, variantId: string, quantity: number, type: string, reference?: string) {
+  const lots = await tx.productionLot.findMany({
     where: { variantId, status: "ACTIVE", remainingQuantity: { gt: 0 } },
     orderBy: [{ productionDate: "asc" }, { createdAt: "asc" }],
   })
@@ -20,37 +27,38 @@ export async function allocateStockFIFO(variantId: string, quantity: number, typ
     throw new Error(`Stock insuffisant par lots: ${remaining} unites manquantes pour la variante ${variantId}`)
   }
 
-  const results = await prisma.$transaction(async (tx) => {
-    const created: any[] = []
-    for (const alloc of allocations) {
-      await tx.productionLot.update({
-        where: { id: alloc.lotId },
-        data: { remainingQuantity: { decrement: alloc.quantity } },
-      })
+  const created: any[] = []
+  for (const alloc of allocations) {
+    await tx.productionLot.update({
+      where: { id: alloc.lotId },
+      data: { remainingQuantity: { decrement: alloc.quantity } },
+    })
 
-      const lot = await tx.productionLot.findUnique({ where: { id: alloc.lotId } })
-      if (lot && lot.remainingQuantity <= 0) {
-        await tx.productionLot.update({ where: { id: alloc.lotId }, data: { status: "EXHAUSTED" } })
-      }
-
-      const allocation = await tx.lotAllocation.create({
-        data: { lotId: alloc.lotId, quantity: alloc.quantity, type, reference },
-      })
-      created.push(allocation)
+    const lot = await tx.productionLot.findUnique({ where: { id: alloc.lotId } })
+    if (lot && lot.remainingQuantity <= 0) {
+      await tx.productionLot.update({ where: { id: alloc.lotId }, data: { status: "EXHAUSTED" } })
     }
-    return created
-  })
 
-  return { allocations: results, totalAllocated: quantity - remaining }
+    const allocation = await tx.lotAllocation.create({
+      data: { lotId: alloc.lotId, quantity: alloc.quantity, type, reference },
+    })
+    created.push(allocation)
+  }
+
+  return { allocations: created, totalAllocated: quantity - remaining }
 }
 
 export async function allocateStockFEFO(variantId: string, quantity: number, type: string, reference?: string) {
-  const lots = await prisma.productionLot.findMany({
+  return allocateStockFEFOTx(prisma, variantId, quantity, type, reference)
+}
+
+export async function allocateStockFEFOTx(tx: TxClient, variantId: string, quantity: number, type: string, reference?: string) {
+  const lots = await tx.productionLot.findMany({
     where: { variantId, status: "ACTIVE", remainingQuantity: { gt: 0 }, expiryDate: { not: null } },
     orderBy: [{ expiryDate: "asc" }, { productionDate: "asc" }, { createdAt: "asc" }],
   })
 
-  const lotsWithoutExpiry = await prisma.productionLot.findMany({
+  const lotsWithoutExpiry = await tx.productionLot.findMany({
     where: { variantId, status: "ACTIVE", remainingQuantity: { gt: 0 }, expiryDate: null },
     orderBy: [{ productionDate: "asc" }, { createdAt: "asc" }],
   })
@@ -71,28 +79,25 @@ export async function allocateStockFEFO(variantId: string, quantity: number, typ
     throw new Error(`Stock insuffisant par lots: ${remaining} unites manquantes`)
   }
 
-  const results = await prisma.$transaction(async (tx) => {
-    const created: any[] = []
-    for (const alloc of allocations) {
-      await tx.productionLot.update({
-        where: { id: alloc.lotId },
-        data: { remainingQuantity: { decrement: alloc.quantity } },
-      })
+  const created: any[] = []
+  for (const alloc of allocations) {
+    await tx.productionLot.update({
+      where: { id: alloc.lotId },
+      data: { remainingQuantity: { decrement: alloc.quantity } },
+    })
 
-      const lot = await tx.productionLot.findUnique({ where: { id: alloc.lotId } })
-      if (lot && lot.remainingQuantity <= 0) {
-        await tx.productionLot.update({ where: { id: alloc.lotId }, data: { status: "EXHAUSTED" } })
-      }
-
-      const allocation = await tx.lotAllocation.create({
-        data: { lotId: alloc.lotId, quantity: alloc.quantity, type, reference },
-      })
-      created.push(allocation)
+    const lot = await tx.productionLot.findUnique({ where: { id: alloc.lotId } })
+    if (lot && lot.remainingQuantity <= 0) {
+      await tx.productionLot.update({ where: { id: alloc.lotId }, data: { status: "EXHAUSTED" } })
     }
-    return created
-  })
 
-  return { allocations: results, totalAllocated: quantity - remaining }
+    const allocation = await tx.lotAllocation.create({
+      data: { lotId: alloc.lotId, quantity: alloc.quantity, type, reference },
+    })
+    created.push(allocation)
+  }
+
+  return { allocations: created, totalAllocated: quantity - remaining }
 }
 
 export async function generateLotNumber(): Promise<string> {

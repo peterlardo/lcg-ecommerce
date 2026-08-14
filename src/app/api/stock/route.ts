@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { getProducts } from "@/data/store"
+import { allocateStockFIFOTx } from "@/lib/lot-utils"
 
 const NEGATIVE_TYPES = new Set(["OUT", "SALE", "LOSS", "TRANSFER_OUT", "ADJUSTMENT_OUT"])
 const POSITIVE_TYPES = new Set(["IN", "PRODUCTION", "TRANSFER_IN", "RETURN", "ADJUSTMENT_IN", "CANCEL_RESTOCK"])
@@ -89,24 +90,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Variante et quantité requises" }, { status: 400 })
     }
 
-    const result = await (async () => {
-      const variant = await prisma.productVariant.findUnique({ where: { id: variantId } })
+    const result = await prisma.$transaction(async (tx) => {
+      const variant = await tx.productVariant.findUnique({ where: { id: variantId } })
       if (!variant) throw new Error("Variante introuvable")
 
       const delta = stockDelta(type, quantity)
       const nextStock = variant.stock + delta
       if (nextStock < 0) throw new Error("Stock insuffisant pour ce mouvement")
 
-      const updated = await prisma.productVariant.update({
+      const updated = await tx.productVariant.update({
         where: { id: variantId },
         data: { stock: nextStock },
       })
-      const movement = await prisma.stockMovement.create({
+      const movement = await tx.stockMovement.create({
         data: { variantId, type, quantity, reason, reference },
       })
 
+      if (POSITIVE_TYPES.has(type)) {
+        const now = new Date()
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "")
+        const lotCount = await tx.productionLot.count()
+        const lotNumber = `LOT-${dateStr}-${String(lotCount + 1).padStart(3, "0")}`
+        await tx.productionLot.create({
+          data: {
+            lotNumber,
+            variantId,
+            initialQuantity: quantity,
+            remainingQuantity: quantity,
+            productionDate: new Date(),
+          },
+        })
+      } else if (NEGATIVE_TYPES.has(type)) {
+        try {
+          await allocateStockFIFOTx(tx, variantId, quantity, type, reference ?? `ADJ-${movement.id}`)
+        } catch (err) {
+          console.error(`FIFO allocation warning for manual ${type}:`, err)
+        }
+      }
+
       return { updated, movement }
-    })()
+    })
 
     return NextResponse.json({
       stock: result.updated.stock,

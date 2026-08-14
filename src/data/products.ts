@@ -39,9 +39,9 @@ export const products: Product[] = [
     isFeatured: true,
     badge: "Best-seller",
     variants: [
-      { id: "var-1-1", format: "1kg", price: 1000, stock: 100, unit: "sac" },
-      { id: "var-1-2", format: "2kg", price: 1500, stock: 80, unit: "sac" },
-      { id: "var-1-3", format: "5kg", price: 4000, stock: 50, unit: "sac" },
+      { id: "var-1-1", format: "1kg", price: 1000, stock: 0, unit: "sac" },
+      { id: "var-1-2", format: "2kg", price: 1500, stock: 0, unit: "sac" },
+      { id: "var-1-3", format: "5kg", price: 4000, stock: 0, unit: "sac" },
     ],
   },
   {
@@ -56,9 +56,9 @@ export const products: Product[] = [
     isFeatured: true,
     badge: null,
     variants: [
-      { id: "var-2-1", format: "1kg", price: 1000, stock: 100, unit: "sac" },
-      { id: "var-2-2", format: "2kg", price: 1500, stock: 80, unit: "sac" },
-      { id: "var-2-3", format: "5kg", price: 4000, stock: 50, unit: "sac" },
+      { id: "var-2-1", format: "1kg", price: 1000, stock: 0, unit: "sac" },
+      { id: "var-2-2", format: "2kg", price: 1500, stock: 0, unit: "sac" },
+      { id: "var-2-3", format: "5kg", price: 4000, stock: 0, unit: "sac" },
     ],
   },
   {
@@ -73,9 +73,9 @@ export const products: Product[] = [
     isFeatured: true,
     badge: null,
     variants: [
-      { id: "var-3-1", format: "1kg", price: 2000, stock: 60, unit: "sac" },
-      { id: "var-3-2", format: "2kg", price: 2500, stock: 45, unit: "sac" },
-      { id: "var-3-3", format: "5kg", price: 4500, stock: 30, unit: "sac" },
+      { id: "var-3-1", format: "1kg", price: 2000, stock: 0, unit: "sac" },
+      { id: "var-3-2", format: "2kg", price: 2500, stock: 0, unit: "sac" },
+      { id: "var-3-3", format: "5kg", price: 4500, stock: 0, unit: "sac" },
     ],
   },
   {
@@ -90,9 +90,9 @@ export const products: Product[] = [
     isFeatured: true,
     badge: null,
     variants: [
-      { id: "var-4-1", format: "1kg", price: 1500, stock: 60, unit: "sac" },
-      { id: "var-4-2", format: "2kg", price: 2500, stock: 45, unit: "sac" },
-      { id: "var-4-3", format: "5kg", price: 5500, stock: 30, unit: "sac" },
+      { id: "var-4-1", format: "1kg", price: 1500, stock: 0, unit: "sac" },
+      { id: "var-4-2", format: "2kg", price: 2500, stock: 0, unit: "sac" },
+      { id: "var-4-3", format: "5kg", price: 5500, stock: 0, unit: "sac" },
     ],
   },
 ]

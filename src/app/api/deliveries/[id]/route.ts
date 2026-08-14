@@ -39,7 +39,11 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
       await prisma.order.update({ where: { id: delivery.orderId }, data: { status: "OUT_FOR_DELIVERY" } })
     }
     if (data.status === "DELIVERED") {
-      await prisma.order.update({ where: { id: delivery.orderId }, data: { status: "DELIVERED" } })
+      const order = await prisma.order.findUnique({ where: { id: delivery.orderId }, select: { source: true } })
+      await prisma.order.update({
+        where: { id: delivery.orderId },
+        data: { status: "DELIVERED", ...(order?.source === "WEB" ? { ticketGenerated: true } : {}) },
+      })
     }
 
     return NextResponse.json({ id: delivery.id, status: delivery.status })

@@ -32,6 +32,7 @@ interface Allocation {
   type: string
   reference: string | null
   createdAt: string
+  pointOfSale: { name: string; code: string } | null
 }
 
 interface TraceData {
@@ -202,6 +203,7 @@ export default function TracabilitePage() {
                       <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Type</th>
                       <th className="px-4 py-2 text-right text-xs font-semibold uppercase text-gray-500">Quantite</th>
                       <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Reference</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Point de vente</th>
                       <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Date</th>
                     </tr>
                   </thead>
@@ -215,6 +217,15 @@ export default function TracabilitePage() {
                         </td>
                         <td className="px-4 py-2.5 text-right font-semibold">{a.quantity}</td>
                         <td className="px-4 py-2.5 font-mono text-xs">{a.reference || "-"}</td>
+                        <td className="px-4 py-2.5">
+                          {a.pointOfSale ? (
+                            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                              {a.pointOfSale.name} ({a.pointOfSale.code})
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2.5 text-gray-500">{fmtDateTime(a.createdAt)}</td>
                       </tr>
                     ))}

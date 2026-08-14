@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 import { generateOrderNumber } from "@/lib/utils"
-import { allocateStockFIFO } from "@/lib/lot-utils"
+import { allocateStockFIFOTx } from "@/lib/lot-utils"
 
 const PAYMENT_METHODS = ["CASH_ON_DELIVERY", "MOBILE_MONEY", "CARD"] as const
 
@@ -38,6 +38,50 @@ function normalizeItems(value: unknown): SaleItemInput[] {
       return variantId ? { variantId, quantity } : null
     })
     .filter((item): item is SaleItemInput => Boolean(item))
+}
+
+export async function GET() {
+  const forbidden = await requireManagementAccess()
+  if (forbidden) return forbidden
+
+  const posFilter = await getUserPointOfSaleIds()
+  const posIds = posFilter?.posIds ?? null
+
+  const sales = await prisma.order.findMany({
+    where: {
+      notes: { startsWith: "Vente comptoir" },
+      ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}),
+    },
+    include: {
+      pointOfSale: { select: { id: true, name: true, code: true } },
+      items: { include: { variant: { include: { product: true } } } },
+    },
+    orderBy: { createdAt: "desc" },
+  })
+
+  return NextResponse.json(
+    sales.map((sale) => ({
+      id: sale.id,
+      orderNumber: sale.orderNumber,
+      customerName: sale.customerName || "Client comptoir",
+      customerPhone: sale.customerPhone || "",
+      paymentMethod: sale.paymentMethod,
+      paymentStatus: sale.paymentStatus,
+      status: sale.status,
+      total: sale.total,
+      notes: sale.notes,
+      createdAt: sale.createdAt.toISOString(),
+      pointOfSale: sale.pointOfSale,
+      items: sale.items.map((item) => ({
+        id: item.id,
+        name: (item as any).variant?.product?.name ?? "Produit",
+        format: (item as any).variant?.format ?? "",
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+      })),
+    }))
+  )
 }
 
 export async function POST(request: Request) {
@@ -84,10 +128,6 @@ export async function POST(request: Request) {
           }
           await tx.pointOfSaleStock.update({ where: { id: pointStock.id }, data: { quantity: { decrement: item.quantity } } })
         }
-
-        if (variant.stock < item.quantity && !body.pointOfSaleId) {
-          throw new Error(`Stock central insuffisant pour ${variant.product.name} ${variant.format}`)
-        }
       }
 
       const subtotal = items.reduce((sum, item) => {
@@ -123,9 +163,7 @@ export async function POST(request: Request) {
             }),
           },
         },
-        include: {
-          items: true,
-        },
+        include: { items: { include: { variant: { include: { product: true } } } } },
       })
 
       for (const item of items) {
@@ -141,23 +179,23 @@ export async function POST(request: Request) {
         })
       }
 
+      for (const item of items) {
+        try {
+          const fifoResult = await allocateStockFIFOTx(tx, item.variantId, item.quantity, "SALE", orderNumber)
+          const orderItem = createdOrder.items.find((oi) => oi.variantId === item.variantId)
+          if (orderItem && fifoResult.allocations.length > 0) {
+            await tx.orderItem.update({
+              where: { id: orderItem.id },
+              data: { lotId: fifoResult.allocations[0].lotId },
+            })
+          }
+        } catch (fifoError) {
+          console.error(`FIFO allocation warning for ${item.variantId}:`, fifoError)
+        }
+      }
+
       return createdOrder
     })
-
-    for (const item of items) {
-      try {
-        const fifoResult = await allocateStockFIFO(item.variantId, item.quantity, "SALE", orderNumber)
-        const orderItem = order.items.find((oi) => oi.variantId === item.variantId)
-        if (orderItem && fifoResult.allocations.length > 0) {
-          await prisma.orderItem.update({
-            where: { id: orderItem.id },
-            data: { lotId: fifoResult.allocations[0].lotId },
-          })
-        }
-      } catch (fifoError) {
-        console.error(`FIFO allocation warning for ${item.variantId}:`, fifoError)
-      }
-    }
 
     return NextResponse.json(
       {

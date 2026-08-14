@@ -156,11 +156,11 @@ export async function createProduct(
       badge: data.badge,
       isFeatured: data.isFeatured || false,
       isActive: true,
-      variants: {
+    variants: {
         create: data.variants.map((v) => ({
           format: v.format,
           price: v.price,
-          stock: v.stock,
+          stock: 0,
           unit: v.unit,
         })),
       },
@@ -185,13 +185,15 @@ export async function updateProduct(
   if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured
   if (data.badge !== undefined) updateData.badge = data.badge
   if (data.variants) {
+    const existingVariants = await prisma.productVariant.findMany({ where: { productId: id } })
+    const existingStockMap = new Map(existingVariants.map((v) => [v.format, v.stock]))
     await prisma.productVariant.deleteMany({ where: { productId: id } })
     await prisma.productVariant.createMany({
       data: data.variants.map((v) => ({
         productId: id,
         format: v.format,
         price: v.price,
-        stock: v.stock,
+        stock: existingStockMap.get(v.format) ?? 0,
         unit: v.unit,
       })),
     })

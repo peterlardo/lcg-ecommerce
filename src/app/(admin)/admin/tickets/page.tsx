@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { ChevronDown, Filter, Printer, ReceiptText, Search } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml } from "@/lib/ticket-template"
@@ -9,6 +9,92 @@ interface Ticket { id: string; ticketNumber: string; customerName: string; payme
 const paymentLabels: Record<string, string> = { CARD: "Carte", MOBILE_MONEY: "Mobile Money", CASH_ON_DELIVERY: "Espèces" }
 
 const PER_PAGE = 5
+
+function TicketPreview({ ticket }: { ticket: Ticket }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  useEffect(() => {
+    if (!iframeRef.current) return
+    const html = buildTicketHtml({
+      orderNumber: ticket.ticketNumber,
+      customerName: ticket.customerName,
+      paymentMethod: ticket.paymentMethod,
+      paymentStatus: ticket.paymentStatus,
+      total: ticket.total,
+      createdAt: ticket.createdAt,
+      pointOfSale: ticket.pointOfSale,
+      items: ticket.items,
+    })
+    const doc = iframeRef.current.contentDocument
+    if (!doc) return
+    doc.open()
+    doc.write(html)
+    doc.close()
+  }, [ticket])
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex-1 space-y-3">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="rounded-lg bg-white border border-gray-200 p-3">
+            <p className="text-xs font-medium text-gray-500">Numéro</p>
+            <p className="mt-1 font-bold text-gray-900 font-mono">{ticket.ticketNumber}</p>
+          </div>
+          <div className="rounded-lg bg-white border border-gray-200 p-3">
+            <p className="text-xs font-medium text-gray-500">Date & heure</p>
+            <p className="mt-1 font-semibold text-gray-900">{new Date(ticket.createdAt).toLocaleString("fr-FR")}</p>
+          </div>
+          <div className="rounded-lg bg-white border border-gray-200 p-3">
+            <p className="text-xs font-medium text-gray-500">Client</p>
+            <p className="mt-1 font-semibold text-gray-900">{ticket.customerName}</p>
+          </div>
+          <div className="rounded-lg bg-white border border-gray-200 p-3">
+            <p className="text-xs font-medium text-gray-500">Point de vente</p>
+            <p className="mt-1 font-semibold text-gray-900">{ticket.pointOfSale ? `${ticket.pointOfSale.name} (${ticket.pointOfSale.code})` : "Non affecté"}</p>
+          </div>
+          <div className="rounded-lg bg-white border border-gray-200 p-3">
+            <p className="text-xs font-medium text-gray-500">Paiement</p>
+            <p className="mt-1 font-semibold text-gray-900">{paymentLabels[ticket.paymentMethod || ""] || ticket.paymentMethod || "-"}{ticket.paymentStatus ? ` · ${ticket.paymentStatus}` : ""}</p>
+          </div>
+          <div className="rounded-lg bg-primary/5 border border-primary/20 p-3">
+            <p className="text-xs font-medium text-primary-700">Total</p>
+            <p className="mt-1 text-lg font-bold text-primary">{formatPrice(ticket.total)}</p>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-white border border-gray-200 p-3">
+          <p className="text-xs font-medium text-gray-500 mb-2">Articles</p>
+          <div className="divide-y divide-gray-100">
+            {ticket.items.map((item) => (
+              <div key={`${item.name}-${item.format}`} className="flex items-center justify-between py-2 text-sm">
+                <div>
+                  <span className="font-medium text-gray-900">{item.name}</span>
+                  <span className="ml-1 text-gray-500">{item.format}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-500">x{item.quantity}</span>
+                  <span className="font-semibold text-gray-900">{formatPrice(item.total)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center gap-3 lg:w-[320px] shrink-0">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Aperçu du ticket</p>
+        <div className="rounded-xl border border-gray-200 shadow-lg overflow-hidden bg-white" style={{ width: 280 }}>
+          <iframe
+            ref={iframeRef}
+            title={`Ticket ${ticket.ticketNumber}`}
+            className="w-full border-0"
+            style={{ height: 520 }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function TicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([])
@@ -107,7 +193,10 @@ export default function TicketsPage() {
           <tbody className="divide-y divide-border">
             {paged.map((ticket) => (
               <Fragment key={ticket.id}>
-                <tr className="hover:bg-muted/30">
+                <tr
+                  className={`cursor-pointer transition-colors ${expanded === ticket.id ? "bg-primary/5" : "hover:bg-muted/30"}`}
+                  onClick={() => setExpanded(expanded === ticket.id ? null : ticket.id)}
+                >
                   <td className="px-5 py-4">
                     <p className="font-semibold text-foreground">{ticket.ticketNumber}</p>
                     <p className="text-xs text-muted-foreground">{new Date(ticket.createdAt).toLocaleString("fr-FR")}</p>
@@ -117,29 +206,18 @@ export default function TicketsPage() {
                   <td className="px-5 py-4 text-muted-foreground">{paymentLabels[ticket.paymentMethod || ""] || ticket.paymentMethod || "-"}</td>
                   <td className="px-5 py-4 font-semibold text-foreground">{formatPrice(ticket.total)}</td>
                   <td className="px-5 py-4 text-right">
-                    <button onClick={() => setExpanded(expanded === ticket.id ? null : ticket.id)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" title="Voir le ticket">
-                      <ChevronDown className={`h-4 w-4 transition-transform ${expanded === ticket.id ? "rotate-180" : ""}`} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); printTicket(ticket) }} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" title="Imprimer">
+                        <Printer className="h-4 w-4" />
+                      </button>
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expanded === ticket.id ? "rotate-180" : ""}`} />
+                    </div>
                   </td>
                 </tr>
                 {expanded === ticket.id && (
                   <tr key={`${ticket.id}-detail`}>
-                    <td colSpan={6} className="bg-muted/30 px-5 py-4">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="space-y-2">
-                          {ticket.items.map((item) => (
-                            <div key={`${item.name}-${item.format}`} className="flex gap-4 text-sm">
-                              <span className="text-foreground">{item.name} {item.format}</span>
-                              <span className="text-muted-foreground">x{item.quantity}</span>
-                              <span className="font-medium text-foreground">{formatPrice(item.total)}</span>
-                            </div>
-                          ))}
-                          <div className="border-t border-border pt-2 text-sm font-semibold text-foreground">Total : {formatPrice(ticket.total)}</div>
-                        </div>
-                        <button onClick={() => printTicket(ticket)} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
-                          <Printer className="h-4 w-4" /> Imprimer
-                        </button>
-                      </div>
+                    <td colSpan={6} className="bg-muted/20 px-5 py-5">
+                      <TicketPreview ticket={ticket} />
                     </td>
                   </tr>
                 )}

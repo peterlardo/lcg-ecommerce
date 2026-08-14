@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Banknote, BookOpen, Calculator, ChevronDown, Clock, CreditCard, RefreshCw, Smartphone, WalletCards } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 
+interface PointOfSale { id: string; name: string; code: string }
+
 interface PaymentBreakdown {
   method: string
   total: number
@@ -92,9 +94,12 @@ export default function CaissePage() {
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [journalPage, setJournalPage] = useState(1)
   const JOURNAL_PER_PAGE = 5
+  const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([])
+  const [posFilter, setPosFilter] = useState("")
 
   const handleFrom = (v: string) => { setFrom(v); setJournalPage(1) }
   const handleTo = (v: string) => { setTo(v); setJournalPage(1) }
+  const handlePosFilter = (v: string) => { setPosFilter(v); setJournalPage(1) }
 
   const load = async () => {
     setError("")
@@ -114,6 +119,7 @@ export default function CaissePage() {
     setJournalLoading(true)
     try {
       const params = new URLSearchParams({ from, to })
+      if (posFilter) params.set("pointOfSaleId", posFilter)
       const res = await fetch(`/api/reports/journal-caisse?${params}`)
       if (!res.ok) throw new Error("Impossible de charger le journal")
       setJournalData(await res.json())
@@ -122,10 +128,13 @@ export default function CaissePage() {
     } finally {
       setJournalLoading(false)
     }
-  }, [from, to])
+  }, [from, to, posFilter])
 
   useEffect(() => {
     void load()
+    fetch("/api/points-de-vente").then((r) => r.ok ? r.json() : { points: [] }).then((data) => {
+      setPointsOfSale((data.points ?? []).filter((p: PointOfSale & { isActive: boolean }) => p.isActive))
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -233,6 +242,13 @@ export default function CaissePage() {
           {journalError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{journalError}</div>}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              Point de vente
+              <select value={posFilter} onChange={(e) => handlePosFilter(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40">
+                <option value="">Tous les points de vente</option>
+                {pointsOfSale.map((pos) => <option key={pos.id} value={pos.id}>{pos.name} ({pos.code})</option>)}
+              </select>
+            </label>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
               Du
               <input type="date" value={from} onChange={(e) => handleFrom(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40" />

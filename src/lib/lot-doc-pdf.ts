@@ -4,7 +4,7 @@ import { LOGO_BASE64 } from "./logo-base64"
 const COMPANY = {
   name: "LCG - La Congolaise des Glac\u00e7ons",
   address: "15 Avenue de la R\u00e9publique, Brazzaville, Congo",
-  phone: "+242 05 123 45 67",
+  phone: "+242 06 739 49 49 / +242 05 607 91 91",
   email: "contact@lcg.cg",
 }
 

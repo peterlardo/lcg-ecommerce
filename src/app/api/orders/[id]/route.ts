@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { sendStatusChangeEmail } from "@/lib/mailer"
 import { pushNotification } from "@/lib/notifications"
+import { allocateStockFIFOTx } from "@/lib/lot-utils"
 
 const VALID_STATUS = [
   "PENDING",
@@ -81,6 +82,12 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
               reference: previous.orderNumber,
             },
           })
+
+          try {
+            await allocateStockFIFOTx(tx, item.variantId, item.quantity, "SALE", previous.orderNumber)
+          } catch (fifoError) {
+            console.error(`FIFO allocation warning for ${item.variantId}:`, fifoError)
+          }
         }
 
         await tx.order.update({
@@ -144,15 +151,34 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
             })
           }
         }
+
+        const lotAllocations = await tx.lotAllocation.findMany({
+          where: { reference: previous.orderNumber },
+        })
+        if (lotAllocations.length > 0) {
+          for (const alloc of lotAllocations) {
+            await tx.productionLot.update({
+              where: { id: alloc.lotId },
+              data: {
+                remainingQuantity: { increment: alloc.quantity },
+                status: "ACTIVE",
+              },
+            })
+          }
+          await tx.lotAllocation.deleteMany({ where: { reference: previous.orderNumber } })
+        }
       }
 
-      const updateData: Record<string, string> = { status }
+      const updateData: Record<string, string | boolean> = { status }
 
       if ((status === "OUT_FOR_DELIVERY" || status === "DELIVERED") && previous.paymentStatus !== "PAID") {
         updateData.paymentStatus = "PAID"
       }
       if (status === "CANCELLED" && previous.paymentStatus === "PAID") {
         updateData.paymentStatus = "REFUNDED"
+      }
+      if (status === "DELIVERED" && previous.source === "WEB") {
+        updateData.ticketGenerated = true
       }
 
       const updated = await tx.order.update({ where: { id }, data: updateData })

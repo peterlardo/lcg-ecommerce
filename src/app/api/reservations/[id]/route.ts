@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { getReservationById, updateReservationStatus } from "@/data/store"
 import { sendReservationConfirmedEmail } from "@/lib/mailer"
 import { generateOrderNumber } from "@/lib/utils"
-import { allocateStockFIFO } from "@/lib/lot-utils"
+import { allocateStockFIFOTx } from "@/lib/lot-utils"
 
 interface ReservationItem {
   name: string
@@ -101,7 +101,7 @@ async function confirmReservation(id: string) {
         },
       })
       try {
-        await allocateStockFIFO(v.variant!.id, v.quantity, "RESERVATION", orderNumber)
+        await allocateStockFIFOTx(tx, v.variant!.id, v.quantity, "RESERVATION", orderNumber)
       } catch {
         // Graceful: lots may not exist
       }
@@ -140,7 +140,6 @@ async function cancelReservation(id: string) {
   const reservation = await prisma.reservation.findUnique({ where: { id } })
   if (!reservation) throw new Error("Réservation introuvable")
 
-  // If it was confirmed and has a linked order, restore stock and cancel the order
   if (reservation.orderId) {
     const order = await prisma.order.findUnique({
       where: { id: reservation.orderId },
@@ -149,23 +148,63 @@ async function cancelReservation(id: string) {
 
     if (order && order.status !== "CANCELLED") {
       await prisma.$transaction(async (tx) => {
-        // Restore stock for each item
-        for (const item of order.items) {
-          await tx.productVariant.update({
-            where: { id: item.variantId },
-            data: { stock: { increment: item.quantity } },
-          })
-          await tx.stockMovement.create({
-            data: {
-              variantId: item.variantId,
-              type: "CANCELLATION",
-              quantity: item.quantity,
-              reason: "Annulation pré-commande",
-              reference: order.orderNumber,
-            },
+        if (order.pointOfSaleId) {
+          for (const item of order.items) {
+            const posStock = await tx.pointOfSaleStock.findUnique({
+              where: { pointOfSaleId_variantId: { pointOfSaleId: order.pointOfSaleId, variantId: item.variantId } },
+            })
+            if (posStock) {
+              await tx.pointOfSaleStock.update({
+                where: { id: posStock.id },
+                data: { quantity: { increment: item.quantity } },
+              })
+            } else {
+              await tx.pointOfSaleStock.create({
+                data: { pointOfSaleId: order.pointOfSaleId, variantId: item.variantId, quantity: item.quantity },
+              })
+            }
+            await tx.stockMovement.create({
+              data: {
+                variantId: item.variantId,
+                pointOfSaleId: order.pointOfSaleId,
+                type: "CANCEL_RESTOCK",
+                quantity: item.quantity,
+                reason: "Retour stock POS après annulation pré-commande",
+                reference: order.orderNumber,
+              },
+            })
+          }
+        } else {
+          for (const item of order.items) {
+            await tx.productVariant.update({
+              where: { id: item.variantId },
+              data: { stock: { increment: item.quantity } },
+            })
+            await tx.stockMovement.create({
+              data: {
+                variantId: item.variantId,
+                type: "CANCELLATION",
+                quantity: item.quantity,
+                reason: "Annulation pré-commande",
+                reference: order.orderNumber,
+              },
+            })
+          }
+        }
+
+        const lotAllocations = await tx.lotAllocation.findMany({
+          where: { reference: order.orderNumber },
+        })
+        for (const alloc of lotAllocations) {
+          await tx.productionLot.update({
+            where: { id: alloc.lotId },
+            data: { remainingQuantity: { increment: alloc.quantity }, status: "ACTIVE" },
           })
         }
-        // Cancel the order
+        if (lotAllocations.length > 0) {
+          await tx.lotAllocation.deleteMany({ where: { reference: order.orderNumber } })
+        }
+
         await tx.order.update({
           where: { id: order.id },
           data: { status: "CANCELLED" },

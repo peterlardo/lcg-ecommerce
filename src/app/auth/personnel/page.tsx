@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 export default function PersonnelLoginPage() {
   const router = useRouter()
@@ -110,6 +111,15 @@ export default function PersonnelLoginPage() {
                 "Accéder au tableau de bord"
               )}
             </button>
+
+            <div className="text-center">
+              <Link
+                href="/auth/forgot-password"
+                className="text-sm text-gray-500 underline underline-offset-4 transition-colors hover:text-gray-700"
+              >
+                Mot de passe oublié ?
+              </Link>
+            </div>
           </form>
         </div>
 

@@ -37,6 +37,7 @@ interface LotAllocation {
   type: string
   reference: string | null
   createdAt: string
+  pointOfSale: { name: string; code: string } | null
 }
 
 interface LotSummary {
@@ -406,6 +407,32 @@ export default function ProductionPage() {
                 <Trash2 className="h-3 w-3" /> Supprimer
               </button>
             </div>
+
+            {(() => {
+              const transfers = (selectedLot.allocations ?? []).filter((a: LotAllocation) => a.type === "TRANSFER" && a.pointOfSale)
+              if (transfers.length === 0) return null
+              const byPos = new Map<string, { name: string; code: string; qty: number }>()
+              for (const t of transfers) {
+                const key = t.pointOfSale!.code
+                const existing = byPos.get(key)
+                if (existing) existing.qty += t.quantity
+                else byPos.set(key, { name: t.pointOfSale!.name, code: t.pointOfSale!.code, qty: t.quantity })
+              }
+              return (
+                <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-2">PDV ayant reçu ce lot</p>
+                  <div className="space-y-1.5">
+                    {Array.from(byPos.values()).map((p) => (
+                      <div key={p.code} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-700">{p.name} <span className="text-xs text-gray-400">({p.code})</span></span>
+                        <span className="font-semibold text-amber-700">{p.qty} unités</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
             <div className="max-h-60 overflow-y-auto">
               {(selectedLot.allocations ?? []).length === 0 ? (
                 <p className="text-sm text-gray-500">Aucune allocation (lot non encore utilise).</p>
@@ -416,6 +443,7 @@ export default function ProductionPage() {
                       <th className="px-3 py-1.5 text-left text-xs font-semibold uppercase text-gray-500">Type</th>
                       <th className="px-3 py-1.5 text-right text-xs font-semibold uppercase text-gray-500">Qte</th>
                       <th className="px-3 py-1.5 text-left text-xs font-semibold uppercase text-gray-500">Reference</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-semibold uppercase text-gray-500">PDV</th>
                       <th className="px-3 py-1.5 text-left text-xs font-semibold uppercase text-gray-500">Date</th>
                     </tr>
                   </thead>
@@ -425,6 +453,13 @@ export default function ProductionPage() {
                         <td className="px-3 py-1.5">{ALLOC_TYPE[a.type] ?? a.type}</td>
                         <td className="px-3 py-1.5 text-right font-semibold">{a.quantity}</td>
                         <td className="px-3 py-1.5 font-mono text-xs">{a.reference || "-"}</td>
+                        <td className="px-3 py-1.5">
+                          {a.pointOfSale ? (
+                            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">{a.pointOfSale.name}</span>
+                          ) : (
+                            <span className="text-gray-400 text-[11px]">—</span>
+                          )}
+                        </td>
                         <td className="px-3 py-1.5 text-gray-500">{fmtDateTime(a.createdAt)}</td>
                       </tr>
                     ))}
