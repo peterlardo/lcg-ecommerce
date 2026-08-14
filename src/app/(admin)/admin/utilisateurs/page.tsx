@@ -26,6 +26,10 @@ export default function UtilisateursPage() {
   const [createPermissions, setCreatePermissions] = useState<Permission[]>(emptyPermissions())
   const [createPosIds, setCreatePosIds] = useState<string[]>([])
   const [editPosIds, setEditPosIds] = useState<string[]>([])
+  const [editName, setEditName] = useState("")
+  const [editEmail, setEditEmail] = useState("")
+  const [editPhone, setEditPhone] = useState("")
+  const [editPassword, setEditPassword] = useState("")
   const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState("")
@@ -83,6 +87,10 @@ export default function UtilisateursPage() {
 
   const selectUser = (user: User) => {
     setSelected(user.id)
+    setEditName(user.name || "")
+    setEditEmail(user.email)
+    setEditPhone(user.phone || "")
+    setEditPassword("")
     setEditRole(user.role)
     setEditActive(user.isActive)
     setPermissions(modules.map((module) => user.permissions.find((permission) => permission.module === module) || { module, canView: user.role === "ADMIN", canCreate: user.role === "ADMIN", canEdit: user.role === "ADMIN", canDelete: user.role === "ADMIN" }))
@@ -94,12 +102,14 @@ export default function UtilisateursPage() {
 
   const saveUser = async () => {
     if (!selected) return
+    const payload: Record<string, unknown> = { name: editName, phone: editPhone, role: editRole, isActive: editActive, permissions, posIds: editPosIds }
+    if (editPassword.trim()) payload.password = editPassword.trim()
     const response = await fetch(`/api/utilisateurs/${selected}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: editRole, isActive: editActive, permissions, posIds: editPosIds }),
+      body: JSON.stringify(payload),
     })
-    if (response.ok) { setMessage("Utilisateur mis à jour"); await load() } else setError("Impossible d'enregistrer")
+    if (response.ok) { setMessage("Utilisateur mis à jour"); setEditPassword(""); await load() } else setError("Impossible d'enregistrer")
   }
 
   const handleEditPhoto = async (file: File) => {
@@ -286,7 +296,25 @@ export default function UtilisateursPage() {
 
             <div className="mt-5 border-t border-border pt-4">
               <h3 className="mb-3 text-sm font-semibold text-foreground">Profil & statut</h3>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Nom</label>
+                  <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground" placeholder="Nom complet" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Email</label>
+                  <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground" placeholder="email@lcg.cg" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Téléphone</label>
+                  <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground" placeholder="+242 ..." />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Nouveau mot de passe (optionnel)</label>
+                  <input type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground" placeholder="Laisser vide pour garder" />
+                </div>
+              </div>
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="flex-1">
                   <label className="mb-1 block text-xs text-muted-foreground">Rôle assigné</label>
                   <select value={editRole} onChange={(e) => setEditRole(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground">

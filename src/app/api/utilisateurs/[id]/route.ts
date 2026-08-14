@@ -9,7 +9,7 @@ export async function PATCH(request: Request, context: { params: Promise<unknown
   try {
     const { id } = (await context.params) as { id: string }
     const body = await request.json()
-    const data: Record<string, unknown> = { name: body.name?.trim() || null, phone: body.phone?.trim() || null, role: body.role, isActive: body.isActive }
+    const data: Record<string, unknown> = { name: body.name?.trim() || null, email: body.email?.trim() || undefined, phone: body.phone?.trim() || null, role: body.role, isActive: body.isActive }
     if (body.password) data.password = await bcrypt.hash(String(body.password), 12)
     if (body.image !== undefined) data.image = body.image || null
     const user = await prisma.user.update({ where: { id }, data: data as never })
