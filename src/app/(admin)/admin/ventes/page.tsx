@@ -115,7 +115,7 @@ export default function VentesPage() {
   const [expandedSale, setExpandedSale] = useState<string | null>(null)
   const [historyPage, setHistoryPage] = useState(1)
   const HISTORY_PER_PAGE = 15
-  const [pendingPayment, setPendingPayment] = useState<{ transactionId: string; reference: string; provider: string } | null>(null)
+  const [pendingPayment, setPendingPayment] = useState<{ transactionId: string; reference: string; provider: string; paymentMethod: string; items: SaleCartItem[]; customerName: string; customerPhone: string; pointOfSaleId: string; notes: string } | null>(null)
   const [pollingStatus, setPollingStatus] = useState<string | null>(null)
 
   const printReceipt = (ticket: SaleReceipt) => {
@@ -234,9 +234,33 @@ export default function VentesPage() {
         const data = await res.json()
         if (cancelled) return
         if (data.status === "SUCCESSFUL") {
+          try {
+            const saleRes = await fetch("/api/sales", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                customerName: pendingPayment.customerName,
+                customerPhone: pendingPayment.customerPhone,
+                paymentMethod: paymentMethodToApi[pendingPayment.paymentMethod] || "CASH_ON_DELIVERY",
+                pointOfSaleId: pendingPayment.pointOfSaleId,
+                notes: `Paiement ${pendingPayment.provider} - ${pendingPayment.transactionId}`,
+                items: pendingPayment.items.map((item: any) => ({ variantId: item.variantId, quantity: item.quantity })),
+              }),
+            })
+            if (saleRes.ok) {
+              const saleData = await saleRes.json()
+              setSuccess(`Paiement confirmé et vente ${saleData.orderNumber} enregistrée - ${formatPrice(saleData.total)}`)
+              setReceipt(saleData)
+              await loadProducts()
+              await loadPosStock(pendingPayment.pointOfSaleId)
+            } else {
+              setSuccess(`Paiement confirmé pour ${pendingPayment.reference}. Créez la vente manuellement.`)
+            }
+          } catch {
+            setSuccess(`Paiement confirmé pour ${pendingPayment.reference}. Créez la vente manuellement.`)
+          }
           setPendingPayment(null)
           setPollingStatus(null)
-          setSuccess(`Paiement confirmé pour ${pendingPayment.reference}`)
           loadSalesHistory()
           return
         }
@@ -370,6 +394,12 @@ export default function VentesPage() {
           transactionId: payData.transactionId,
           reference: orderNumber,
           provider: isMobile ? mobileProviders[paymentMethod] : "VISA_CARD",
+          paymentMethod: paymentMethod,
+          items: [...cart],
+          customerName,
+          customerPhone,
+          pointOfSaleId,
+          notes,
         })
         setSuccess(`Paiement initié ${isMobile ? `- En attente de confirmation (${provider === "MTN_MOMO" ? "MTN MoMo" : "Airtel Money"})` : "- Veuillez compléter le paiement par carte"}`)
         setCart([])
