@@ -6,6 +6,28 @@ import { AirtelApi } from "@lepresk/momo-api"
 
 export type PaymentProvider = "MTN_MOMO" | "AIRTEL_MONEY" | "VISA_CARD"
 
+const isSimulation = () => process.env.PAYMENT_SIMULATION === "true"
+
+function generateFakeTxId() {
+  return `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+}
+
+// --- Simulation mode (no real API calls) ---
+async function simulatePayment(
+  provider: PaymentProvider,
+  amount: number,
+  phone: string,
+  reference: string
+): Promise<PaymentInitiationResult> {
+  console.log(`[SIMULATION] ${provider} payment of ${amount} XAF from ${phone} (ref: ${reference})`)
+  const txId = generateFakeTxId()
+  return { success: true, transactionId: txId, reference, status: "PENDING" }
+}
+
+async function simulateCheckStatus(transactionId: string): Promise<PaymentStatusResult> {
+  return { success: true, status: "SUCCESSFUL", transactionId }
+}
+
 export interface PaymentInitiationResult {
   success: boolean
   transactionId?: string
@@ -206,6 +228,7 @@ export async function initiatePayment(
   description?: string,
   origin?: string
 ): Promise<PaymentInitiationResult> {
+  if (isSimulation()) return simulatePayment(provider, amount, phone, reference)
   switch (provider) {
     case "MTN_MOMO":
       return initiateMtnPayment(amount, phone, reference, description)
@@ -222,6 +245,7 @@ export async function checkPaymentStatus(
   provider: PaymentProvider,
   transactionId: string
 ): Promise<PaymentStatusResult> {
+  if (isSimulation()) return simulateCheckStatus(transactionId)
   switch (provider) {
     case "MTN_MOMO":
       return checkMtnStatus(transactionId)
