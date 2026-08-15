@@ -2,11 +2,18 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { prisma } from "@/lib/prisma"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2026-07-29.dahlia",
-})
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) return null
+  return new Stripe(key, { apiVersion: "2026-07-29.dahlia" })
+}
 
 export async function POST(request: Request) {
+  const stripe = getStripe()
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe not configured" }, { status: 503 })
+  }
+
   const body = await request.text()
   const signature = request.headers.get("stripe-signature")
 
