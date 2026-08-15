@@ -8,7 +8,13 @@ function createPrismaClient(): PrismaClient {
   try {
     const { Pool } = require("pg")
     const { PrismaPg } = require("@prisma/adapter-pg")
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5, connectionTimeoutMillis: 30000, idleTimeoutMillis: 30000, keepAlive: true })
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: process.env.NODE_ENV === "production" ? 2 : 5,
+      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 15000,
+      keepAlive: true,
+    })
     const adapter = new PrismaPg(pool)
     return new PrismaClient({ adapter, transactionOptions: { timeout: 20000 } } as any)
   } catch {
