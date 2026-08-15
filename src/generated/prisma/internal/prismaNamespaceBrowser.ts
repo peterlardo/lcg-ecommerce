@@ -55,6 +55,7 @@ export const ModelName = {
   RoleProfile: 'RoleProfile',
   UserPermission: 'UserPermission',
   RolePermission: 'RolePermission',
+  PasswordResetToken: 'PasswordResetToken',
   Account: 'Account',
   Session: 'Session',
   VerificationToken: 'VerificationToken',
@@ -72,7 +73,9 @@ export const ModelName = {
   Reservation: 'Reservation',
   PointOfSale: 'PointOfSale',
   PointOfSaleStock: 'PointOfSaleStock',
-  CashSession: 'CashSession'
+  CashSession: 'CashSession',
+  ChatMessage: 'ChatMessage',
+  ChatPresence: 'ChatPresence'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -147,6 +150,17 @@ export const RolePermissionScalarFieldEnum = {
 } as const
 
 export type RolePermissionScalarFieldEnum = (typeof RolePermissionScalarFieldEnum)[keyof typeof RolePermissionScalarFieldEnum]
+
+
+export const PasswordResetTokenScalarFieldEnum = {
+  id: 'id',
+  token: 'token',
+  userId: 'userId',
+  expiresAt: 'expiresAt',
+  createdAt: 'createdAt'
+} as const
+
+export type PasswordResetTokenScalarFieldEnum = (typeof PasswordResetTokenScalarFieldEnum)[keyof typeof PasswordResetTokenScalarFieldEnum]
 
 
 export const AccountScalarFieldEnum = {
@@ -258,6 +272,7 @@ export const OrderScalarFieldEnum = {
   notes: 'notes',
   pointOfSaleId: 'pointOfSaleId',
   source: 'source',
+  ticketGenerated: 'ticketGenerated',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -419,6 +434,32 @@ export const CashSessionScalarFieldEnum = {
 } as const
 
 export type CashSessionScalarFieldEnum = (typeof CashSessionScalarFieldEnum)[keyof typeof CashSessionScalarFieldEnum]
+
+
+export const ChatMessageScalarFieldEnum = {
+  id: 'id',
+  senderId: 'senderId',
+  receiverId: 'receiverId',
+  content: 'content',
+  read: 'read',
+  createdAt: 'createdAt',
+  fileUrl: 'fileUrl',
+  fileName: 'fileName',
+  fileType: 'fileType',
+  fileSize: 'fileSize'
+} as const
+
+export type ChatMessageScalarFieldEnum = (typeof ChatMessageScalarFieldEnum)[keyof typeof ChatMessageScalarFieldEnum]
+
+
+export const ChatPresenceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  lastSeen: 'lastSeen',
+  isTyping: 'isTyping'
+} as const
+
+export type ChatPresenceScalarFieldEnum = (typeof ChatPresenceScalarFieldEnum)[keyof typeof ChatPresenceScalarFieldEnum]
 
 
 export const SortOrder = {

@@ -38,6 +38,11 @@ export type UserPermission = Prisma.UserPermissionModel
  */
 export type RolePermission = Prisma.RolePermissionModel
 /**
+ * Model PasswordResetToken
+ * 
+ */
+export type PasswordResetToken = Prisma.PasswordResetTokenModel
+/**
  * Model Account
  * 
  */
@@ -127,3 +132,13 @@ export type PointOfSaleStock = Prisma.PointOfSaleStockModel
  * 
  */
 export type CashSession = Prisma.CashSessionModel
+/**
+ * Model ChatMessage
+ * 
+ */
+export type ChatMessage = Prisma.ChatMessageModel
+/**
+ * Model ChatPresence
+ * 
+ */
+export type ChatPresence = Prisma.ChatPresenceModel

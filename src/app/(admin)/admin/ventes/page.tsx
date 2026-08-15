@@ -279,20 +279,25 @@ export default function VentesPage() {
 
   const variants = useMemo(() => {
     const posMap = new Map(posStocks.map((s) => [s.variantId, s.quantity]))
+    const hasPos = pointOfSaleId !== ""
     return products.flatMap((product) =>
-      product.variants.map((variant) => ({
-        productId: product.id,
-        productName: product.name,
-        categoryName: product.categoryName ?? "Sans catégorie",
-        ...variant,
-        stock: posMap.has(variant.id) ? posMap.get(variant.id)! : variant.stock,
-        _isPosStock: posMap.has(variant.id),
-      }))
+      product.variants.map((variant) => {
+        const inPos = posMap.has(variant.id)
+        const effectiveStock = hasPos ? (inPos ? posMap.get(variant.id)! : 0) : variant.stock
+        return {
+          productId: product.id,
+          productName: product.name,
+          categoryName: product.categoryName ?? "Sans catégorie",
+          ...variant,
+          stock: effectiveStock,
+          _isPosStock: inPos,
+        }
+      })
     )
-  }, [products, posStocks])
+  }, [products, posStocks, pointOfSaleId])
 
   const filteredVariants = variants.filter((variant) => {
-    if (pointOfSaleId && (!variant._isPosStock || variant.stock <= 0)) return false
+    if (variant.stock <= 0) return false
     const term = search.toLowerCase()
     return `${variant.productName} ${variant.format} ${variant.categoryName}`.toLowerCase().includes(term)
   })
@@ -693,7 +698,7 @@ export default function VentesPage() {
                           unit: v.unit,
                         }))
                       )
-                      return allVariants.map((v, i) => {
+                      return allVariants.filter((v) => v.stock > 0).map((v, i) => {
                         const isOut = v.stock <= 0
                         const isLow = v.stock > 0 && v.stock <= lowStockThreshold
                         return (

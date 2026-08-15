@@ -15,7 +15,7 @@ export function useInactivityTimer(enabled = true) {
     const resetTimer = () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
       timeoutRef.current = setTimeout(() => {
-        signOut({ callbackUrl: "/auth/connexion?reason=timeout" })
+        signOut({ callbackUrl: "/auth/personnel?reason=timeout" })
       }, INACTIVITY_TIMEOUT)
     }
 
