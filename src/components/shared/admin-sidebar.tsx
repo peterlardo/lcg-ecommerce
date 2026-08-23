@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { useState, useEffect } from "react"
 import {
   BarChart3,
+  Boxes,
   CalendarRange,
   ChevronLeft,
   ChevronRight,
@@ -49,6 +50,7 @@ const sidebarGroups = [
     title: "Opérations",
     links: [
       { href: "/admin/stock", label: "Stock", icon: Warehouse },
+      { href: "/admin/stock-comptoir", label: "Stock Comptoir", icon: Boxes },
       { href: "/admin/production", label: "Production", icon: Factory },
       { href: "/admin/lots", label: "Lots", icon: ScanBarcode },
       { href: "/admin/tracabilite", label: "Traçabilité", icon: ScanBarcode },
