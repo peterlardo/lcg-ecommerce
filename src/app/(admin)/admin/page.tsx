@@ -35,6 +35,7 @@ interface ReportData {
   paymentBreakdown30: { method: string; total: number; count: number }[]
   topProducts: { name: string; quantity: number; revenue: number }[]
   ordersByStatus: { status: string; count: number; total: number }[]
+  reservationsByStatus: { pending: number; confirmed: number; cancelled: number; total: number }
   reservations: { id: string; client: string; type: string; date: string; heure: string; status: string }[]
   weeklyCommandes: { name: string; date: string; commandes: number; montant: number; details: { orderNumber: string; customerName: string; total: number; paymentMethod: string }[] }[]
   weeklyPrecommandes: { name: string; date: string; precommandes: number }[]
@@ -83,6 +84,7 @@ export default function DashboardPage() {
   const [livraisonWeekOffset, setLivraisonWeekOffset] = useState(0)
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [recentStatusFilter, setRecentStatusFilter] = useState<string | null>(null)
+  const [recentTab, setRecentTab] = useState<"commandes" | "precommandes">("commandes")
   const { notifications, newCount, dismiss, dismissAll } = useNotifications(15000)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
 
@@ -178,7 +180,19 @@ export default function DashboardPage() {
               <p className="mt-0.5 text-[10px] text-muted-foreground sm:mt-1 sm:text-xs">{formatPrice(item.total)}</p>
             </div>
           ))}
-          {!loading && (report?.ordersByStatus ?? []).length === 0 && <p className="col-span-full py-6 text-center text-sm text-muted-foreground sm:py-8">Aucune commande.</p>}
+          {report?.reservationsByStatus && report.reservationsByStatus.pending > 0 && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-2 text-center sm:p-4">
+              <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 sm:px-2.5 sm:py-1 sm:text-xs">Précommande en attente</span>
+              <p className="mt-2 text-xl font-bold text-blue-900 sm:mt-3 sm:text-2xl">{report.reservationsByStatus.pending}</p>
+            </div>
+          )}
+          {report?.reservationsByStatus && report.reservationsByStatus.confirmed > 0 && (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-2 text-center sm:p-4">
+              <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 sm:px-2.5 sm:py-1 sm:text-xs">Précommande confirmée</span>
+              <p className="mt-2 text-xl font-bold text-green-900 sm:mt-3 sm:text-2xl">{report.reservationsByStatus.confirmed}</p>
+            </div>
+          )}
+          {!loading && (report?.ordersByStatus ?? []).length === 0 && (!report?.reservationsByStatus || (report.reservationsByStatus.pending + report.reservationsByStatus.confirmed) === 0) && <p className="col-span-full py-6 text-center text-sm text-muted-foreground sm:py-8">Aucune commande.</p>}
         </div>
       </section>
 
@@ -402,43 +416,79 @@ export default function DashboardPage() {
         <section className="rounded-xl border border-border bg-card shadow-card-soft">
           <div className="flex items-center justify-between border-b border-border p-3 sm:p-5">
             <div><h2 className="font-semibold text-foreground">Commandes récentes</h2><p className="mt-1 text-xs text-muted-foreground">Suivi des dernières ventes enregistrées</p></div>
-            <Link href="/admin/commandes" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <Link href={recentTab === "commandes" ? "/admin/commandes" : "/admin/reservations"} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
-          <div className="flex flex-wrap gap-1.5 border-b border-border px-3 pt-2 pb-0 sm:px-5 sm:pt-3">
-            <button onClick={() => setRecentStatusFilter(null)} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${recentStatusFilter === null ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>Tous ({orders.length})</button>
-            {recentStatuses.map((s) => (
-              <button key={s} onClick={() => setRecentStatusFilter(recentStatusFilter === s ? null : s)} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${recentStatusFilter === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
-                {getStatusLabel(s)} ({orders.filter((o) => o.status === s).length})
-              </button>
-            ))}
+          <div className="flex gap-1.5 border-b border-border px-3 pt-2 pb-0 sm:px-5 sm:pt-3">
+            <button onClick={() => setRecentTab("commandes")} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${recentTab === "commandes" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>Commandes ({orders.length})</button>
+            <button onClick={() => setRecentTab("precommandes")} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${recentTab === "precommandes" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>Précommandes ({reservations.length})</button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-muted/60 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 font-medium sm:px-5 sm:py-3">Commande</th>
-                  <th className="hidden px-3 py-2 font-medium sm:table-cell sm:px-5 sm:py-3">Client</th>
-                  <th className="hidden px-3 py-2 font-medium sm:table-cell sm:px-5 sm:py-3">Provenance</th>
-                  <th className="px-3 py-2 font-medium sm:px-5 sm:py-3">Montant</th>
-                  <th className="px-3 py-2 font-medium sm:px-5 sm:py-3">Statut</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {recentOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-muted/40">
-                    <td className="whitespace-nowrap px-3 py-2.5 font-medium text-foreground sm:px-5 sm:py-3">{order.orderNumber}</td>
-                    <td className="hidden px-3 py-2.5 text-muted-foreground sm:table-cell sm:px-5 sm:py-3">{order.customerName || "Client"}</td>
-                    <td className="hidden px-3 py-2.5 sm:table-cell sm:px-5 sm:py-3">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${sourceLabels[order.source]?.className || "bg-gray-100 text-gray-600"}`}>{sourceLabels[order.source]?.label || order.source || "En ligne"}</span>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-foreground sm:px-5 sm:py-3">{formatPrice(order.total)}</td>
-                    <td className="px-3 py-2.5 sm:px-5 sm:py-3"><span className={`rounded-full px-2 py-0.5 text-[10px] font-medium sm:px-2.5 sm:py-1 sm:text-xs ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span></td>
-                  </tr>
+          {recentTab === "commandes" ? (
+            <>
+              <div className="flex flex-wrap gap-1.5 border-b border-border px-3 pt-2 pb-0 sm:px-5 sm:pt-3">
+                <button onClick={() => setRecentStatusFilter(null)} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${recentStatusFilter === null ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>Tous ({orders.length})</button>
+                {recentStatuses.map((s) => (
+                  <button key={s} onClick={() => setRecentStatusFilter(recentStatusFilter === s ? null : s)} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${recentStatusFilter === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                    {getStatusLabel(s)} ({orders.filter((o) => o.status === s).length})
+                  </button>
                 ))}
-                {!loading && recentOrders.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground sm:px-5 sm:py-8">Aucune commande{recentStatusFilter ? " pour ce statut" : " récente"}.</td></tr>}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-muted/60 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 font-medium sm:px-5 sm:py-3">Commande</th>
+                      <th className="hidden px-3 py-2 font-medium sm:table-cell sm:px-5 sm:py-3">Client</th>
+                      <th className="hidden px-3 py-2 font-medium sm:table-cell sm:px-5 sm:py-3">Provenance</th>
+                      <th className="px-3 py-2 font-medium sm:px-5 sm:py-3">Montant</th>
+                      <th className="px-3 py-2 font-medium sm:px-5 sm:py-3">Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {recentOrders.map((order) => (
+                      <tr key={order.id} className="hover:bg-muted/40">
+                        <td className="whitespace-nowrap px-3 py-2.5 font-medium text-foreground sm:px-5 sm:py-3">{order.orderNumber}</td>
+                        <td className="hidden px-3 py-2.5 text-muted-foreground sm:table-cell sm:px-5 sm:py-3">{order.customerName || "Client"}</td>
+                        <td className="hidden px-3 py-2.5 sm:table-cell sm:px-5 sm:py-3">
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${sourceLabels[order.source]?.className || "bg-gray-100 text-gray-600"}`}>{sourceLabels[order.source]?.label || order.source || "En ligne"}</span>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-foreground sm:px-5 sm:py-3">{formatPrice(order.total)}</td>
+                        <td className="px-3 py-2.5 sm:px-5 sm:py-3"><span className={`rounded-full px-2 py-0.5 text-[10px] font-medium sm:px-2.5 sm:py-1 sm:text-xs ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span></td>
+                      </tr>
+                    ))}
+                    {!loading && recentOrders.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground sm:px-5 sm:py-8">Aucune commande{recentStatusFilter ? " pour ce statut" : " récente"}.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-muted/60 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium sm:px-5 sm:py-3">Client</th>
+                    <th className="px-3 py-2 font-medium sm:px-5 sm:py-3">Type</th>
+                    <th className="hidden px-3 py-2 font-medium sm:table-cell sm:px-5 sm:py-3">Date</th>
+                    <th className="hidden px-3 py-2 font-medium sm:table-cell sm:px-5 sm:py-3">Provenance</th>
+                    <th className="px-3 py-2 font-medium sm:px-5 sm:py-3">Statut</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {reservations.map((res) => (
+                    <tr key={res.id} className="hover:bg-muted/40">
+                      <td className="whitespace-nowrap px-3 py-2.5 font-medium text-foreground sm:px-5 sm:py-3">{res.client}</td>
+                      <td className="px-3 py-2.5 text-muted-foreground sm:px-5 sm:py-3">{res.type}</td>
+                      <td className="hidden px-3 py-2.5 text-muted-foreground sm:table-cell sm:px-5 sm:py-3">{res.date} à {res.heure || "—"}</td>
+                      <td className="hidden px-3 py-2.5 sm:table-cell sm:px-5 sm:py-3">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${sourceLabels[res.source]?.className || "bg-gray-100 text-gray-600"}`}>{sourceLabels[res.source]?.label || res.source || "En ligne"}</span>
+                      </td>
+                      <td className="px-3 py-2.5 sm:px-5 sm:py-3"><span className={`rounded-full px-2 py-0.5 text-[10px] font-medium sm:px-2.5 sm:py-1 sm:text-xs ${getStatusColor(res.status)}`}>{getStatusLabel(res.status)}</span></td>
+                    </tr>
+                  ))}
+                  {!loading && reservations.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground sm:px-5 sm:py-8">Aucune précommande récente.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Produits les plus vendus</h2><p className="mt-1 text-xs text-muted-foreground">Sur les sept derniers jours</p></div><BarChart3 className="h-5 w-5 text-primary" /></div><div className="mt-3 space-y-3 sm:mt-5 sm:space-y-4">{(report?.topProducts ?? []).map((product, index) => <div key={product.name}><div className="mb-1 flex justify-between text-sm"><span className="font-medium text-foreground">{product.name}</span><span className="text-muted-foreground">{product.quantity} unités</span></div><div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(8, product.quantity * 12))}%` }} /></div></div>)}{!loading && !report?.topProducts.length && <p className="text-sm text-muted-foreground">Pas encore de ventes.</p>}</div></section>
