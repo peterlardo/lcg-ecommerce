@@ -38,11 +38,7 @@ export async function POST(request: Request) {
         await tx.productVariant.update({ where: { id: variantId }, data: { stock: { decrement: quantity } } })
         await tx.stockMovement.create({ data: { variantId, type: "TRANSFER_OUT", quantity, reason: body.reason || "Approvisionnement point de vente depuis stock central", reference: transferRef } })
 
-        try {
-          await allocateStockFIFOTx(tx, variantId, quantity, "TRANSFER", transferRef)
-        } catch (fifoError) {
-          console.error(`FIFO allocation warning (transfer):`, fifoError)
-        }
+        await allocateStockFIFOTx(tx, variantId, quantity, "TRANSFER", transferRef)
       }
       await tx.pointOfSaleStock.upsert({ where: { pointOfSaleId_variantId: { pointOfSaleId: destinationId, variantId } }, create: { pointOfSaleId: destinationId, variantId, quantity }, update: { quantity: { increment: quantity } } })
       await tx.stockMovement.create({ data: { variantId, pointOfSaleId: destinationId, type: sourceId ? "TRANSFER_IN" : "IN", quantity, reason: body.reason || (sourceId ? "Transfert de stock" : "Approvisionnement point de vente"), reference: transferRef } })

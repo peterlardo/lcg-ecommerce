@@ -109,3 +109,13 @@ export async function generateLotNumber(): Promise<string> {
   const seq = String(count + 1).padStart(3, "0")
   return `LOT-${dateStr}-${seq}`
 }
+
+export async function generateLotNumberTx(tx: TxClient): Promise<string> {
+  const now = new Date()
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "")
+  const count = await tx.productionLot.count({
+    where: { createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } },
+  })
+  const seq = String(count + 1).padStart(3, "0")
+  return `LOT-${dateStr}-${seq}`
+}

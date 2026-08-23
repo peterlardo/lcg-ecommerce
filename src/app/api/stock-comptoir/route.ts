@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
-import { allocateStockFIFOTx } from "@/lib/lot-utils"
+import { allocateStockFIFOTx, generateLotNumberTx } from "@/lib/lot-utils"
 
 export const dynamic = "force-dynamic"
 
@@ -184,12 +184,35 @@ export async function POST(request: Request) {
           create: { pointOfSaleId: comptoir.id, variantId, quantity: target },
         })
 
-        if (delta !== 0) {
+        if (delta > 0) {
+          // Le stock ajouté doit être couvert par un lot pour garder la traçabilité FIFO
+          await tx.productionLot.create({
+            data: {
+              lotNumber: await generateLotNumberTx(tx),
+              variantId,
+              initialQuantity: delta,
+              remainingQuantity: delta,
+              notes: reason || "Ajustement comptoir (définition)",
+            },
+          })
           await tx.stockMovement.create({
             data: {
               variantId,
               pointOfSaleId: comptoir.id,
-              type: delta > 0 ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT",
+              type: "ADJUSTMENT_IN",
+              quantity: delta,
+              reason: reason || "Définition manuelle du stock comptoir",
+              reference,
+            },
+          })
+        } else if (delta < 0) {
+          // Stock retiré : allouer les lots correspondants, bloquant si couverture insuffisante
+          await allocateStockFIFOTx(tx, variantId, Math.abs(delta), "ADJUSTMENT_OUT", reference)
+          await tx.stockMovement.create({
+            data: {
+              variantId,
+              pointOfSaleId: comptoir.id,
+              type: "ADJUSTMENT_OUT",
               quantity: Math.abs(delta),
               reason: reason || "Définition manuelle du stock comptoir",
               reference,
@@ -209,11 +232,7 @@ export async function POST(request: Request) {
         data: { variantId, type: "TRANSFER_OUT", quantity: qty, reason: reason || "Approvisionnement comptoir", reference },
       })
 
-      try {
-        await allocateStockFIFOTx(tx, variantId, qty, "TRANSFER", reference)
-      } catch (e) {
-        console.error("FIFO allocation failed (comptoir):", e)
-      }
+      await allocateStockFIFOTx(tx, variantId, qty, "TRANSFER", reference)
 
       const updated = await tx.pointOfSaleStock.upsert({
         where: { pointOfSaleId_variantId: { pointOfSaleId: comptoir.id, variantId } },

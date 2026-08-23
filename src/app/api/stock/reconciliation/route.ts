@@ -35,7 +35,7 @@ export async function GET() {
       posTotal,
       lotsRemaining,
       totalAll,
-      hasDiscrepancy: centralStock < 0 || v.pointOfSaleStocks.some((ps) => ps.quantity < 0) || (lotsRemaining > 0 && Math.abs(lotsRemaining - totalAll) > 0),
+      hasDiscrepancy: centralStock < 0 || v.pointOfSaleStocks.some((ps) => ps.quantity < 0) || lotsRemaining !== totalAll,
     }
   })
 

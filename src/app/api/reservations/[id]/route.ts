@@ -100,11 +100,7 @@ async function confirmReservation(id: string) {
           reference: orderNumber,
         },
       })
-      try {
-        await allocateStockFIFOTx(tx, v.variant!.id, v.quantity, "RESERVATION", orderNumber)
-      } catch {
-        // Graceful: lots may not exist
-      }
+      await allocateStockFIFOTx(tx, v.variant!.id, v.quantity, "RESERVATION", orderNumber)
     }
 
     // Link order to reservation
@@ -148,48 +144,22 @@ async function cancelReservation(id: string) {
 
     if (order && order.status !== "CANCELLED") {
       await prisma.$transaction(async (tx) => {
-        if (order.pointOfSaleId) {
-          for (const item of order.items) {
-            const posStock = await tx.pointOfSaleStock.findUnique({
-              where: { pointOfSaleId_variantId: { pointOfSaleId: order.pointOfSaleId, variantId: item.variantId } },
-            })
-            if (posStock) {
-              await tx.pointOfSaleStock.update({
-                where: { id: posStock.id },
-                data: { quantity: { increment: item.quantity } },
-              })
-            } else {
-              await tx.pointOfSaleStock.create({
-                data: { pointOfSaleId: order.pointOfSaleId, variantId: item.variantId, quantity: item.quantity },
-              })
-            }
-            await tx.stockMovement.create({
-              data: {
-                variantId: item.variantId,
-                pointOfSaleId: order.pointOfSaleId,
-                type: "CANCEL_RESTOCK",
-                quantity: item.quantity,
-                reason: "Retour stock POS après annulation pré-commande",
-                reference: order.orderNumber,
-              },
-            })
-          }
-        } else {
-          for (const item of order.items) {
-            await tx.productVariant.update({
-              where: { id: item.variantId },
-              data: { stock: { increment: item.quantity } },
-            })
-            await tx.stockMovement.create({
-              data: {
-                variantId: item.variantId,
-                type: "CANCELLATION",
-                quantity: item.quantity,
-                reason: "Annulation pré-commande",
-                reference: order.orderNumber,
-              },
-            })
-          }
+        // Les pré-commandes confirmées sont toujours débitées du stock central
+        // (confirmReservation), jamais du stock POS — restauration au central uniquement
+        for (const item of order.items) {
+          await tx.productVariant.update({
+            where: { id: item.variantId },
+            data: { stock: { increment: item.quantity } },
+          })
+          await tx.stockMovement.create({
+            data: {
+              variantId: item.variantId,
+              type: "CANCELLATION",
+              quantity: item.quantity,
+              reason: "Annulation pré-commande",
+              reference: order.orderNumber,
+            },
+          })
         }
 
         const lotAllocations = await tx.lotAllocation.findMany({

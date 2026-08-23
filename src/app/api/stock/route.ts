@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { getProducts } from "@/data/store"
-import { allocateStockFIFOTx } from "@/lib/lot-utils"
+import { allocateStockFIFOTx, generateLotNumberTx } from "@/lib/lot-utils"
 
 const NEGATIVE_TYPES = new Set(["OUT", "SALE", "LOSS", "TRANSFER_OUT", "ADJUSTMENT_OUT"])
 const POSITIVE_TYPES = new Set(["IN", "PRODUCTION", "TRANSFER_IN", "RETURN", "ADJUSTMENT_IN", "CANCEL_RESTOCK"])
@@ -107,13 +107,9 @@ export async function POST(request: Request) {
       })
 
       if (POSITIVE_TYPES.has(type)) {
-        const now = new Date()
-        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "")
-        const lotCount = await tx.productionLot.count()
-        const lotNumber = `LOT-${dateStr}-${String(lotCount + 1).padStart(3, "0")}`
         await tx.productionLot.create({
           data: {
-            lotNumber,
+            lotNumber: await generateLotNumberTx(tx),
             variantId,
             initialQuantity: quantity,
             remainingQuantity: quantity,
@@ -121,11 +117,7 @@ export async function POST(request: Request) {
           },
         })
       } else if (NEGATIVE_TYPES.has(type)) {
-        try {
-          await allocateStockFIFOTx(tx, variantId, quantity, type, reference ?? `ADJ-${movement.id}`)
-        } catch (err) {
-          console.error(`FIFO allocation warning for manual ${type}:`, err)
-        }
+        await allocateStockFIFOTx(tx, variantId, quantity, type, reference ?? `ADJ-${movement.id}`)
       }
 
       return { updated, movement }

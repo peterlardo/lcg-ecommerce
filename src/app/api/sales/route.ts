@@ -180,17 +180,13 @@ export async function POST(request: Request) {
       }
 
       for (const item of items) {
-        try {
-          const fifoResult = await allocateStockFIFOTx(tx, item.variantId, item.quantity, "SALE", orderNumber)
-          const orderItem = createdOrder.items.find((oi) => oi.variantId === item.variantId)
-          if (orderItem && fifoResult.allocations.length > 0) {
-            await tx.orderItem.update({
-              where: { id: orderItem.id },
-              data: { lotId: fifoResult.allocations[0].lotId },
-            })
-          }
-        } catch (fifoError) {
-          console.error(`FIFO allocation warning for ${item.variantId}:`, fifoError)
+        const fifoResult = await allocateStockFIFOTx(tx, item.variantId, item.quantity, "SALE", orderNumber)
+        const orderItem = createdOrder.items.find((oi) => oi.variantId === item.variantId)
+        if (orderItem && fifoResult.allocations.length > 0) {
+          await tx.orderItem.update({
+            where: { id: orderItem.id },
+            data: { lotId: fifoResult.allocations[0].lotId },
+          })
         }
       }
 

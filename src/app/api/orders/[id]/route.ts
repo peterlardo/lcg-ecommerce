@@ -53,6 +53,10 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
         }
 
         for (const item of previous.items) {
+          // Les commandes issues d'une pré-commande ont déjà été débitées du stock
+          // central lors de la confirmation de la réservation (voir confirmReservation)
+          if (previous.source === "RESERVATION") break
+
           const posStock = await tx.pointOfSaleStock.findUnique({
             where: { pointOfSaleId_variantId: { pointOfSaleId, variantId: item.variantId } },
           })
@@ -83,11 +87,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
             },
           })
 
-          try {
-            await allocateStockFIFOTx(tx, item.variantId, item.quantity, "SALE", previous.orderNumber)
-          } catch (fifoError) {
-            console.error(`FIFO allocation warning for ${item.variantId}:`, fifoError)
-          }
+          await allocateStockFIFOTx(tx, item.variantId, item.quantity, "SALE", previous.orderNumber)
         }
 
         await tx.order.update({
@@ -99,7 +99,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
       if (status === "CANCELLED" && previous.status !== "CANCELLED") {
         const statusSetStock = ["CONFIRMED", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(previous.status)
 
-        if (statusSetStock && previous.pointOfSaleId) {
+        if (statusSetStock && previous.pointOfSaleId && previous.source !== "RESERVATION") {
           for (const item of previous.items) {
             const posStock = await tx.pointOfSaleStock.findUnique({
               where: { pointOfSaleId_variantId: { pointOfSaleId: previous.pointOfSaleId, variantId: item.variantId } },
