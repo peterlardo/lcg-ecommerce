@@ -2,24 +2,9 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { allocateStockFIFOTx, generateLotNumberTx } from "@/lib/lot-utils"
+import { getOrCreateComptoir } from "@/lib/comptoir"
 
 export const dynamic = "force-dynamic"
-
-const COMPTOIR_CODE = "PDV-COMPTOIR"
-
-async function getOrCreateComptoir() {
-  return prisma.pointOfSale.upsert({
-    where: { code: COMPTOIR_CODE },
-    update: {},
-    create: {
-      name: "Comptoir LCG",
-      code: COMPTOIR_CODE,
-      address: "Dépôt central LCG",
-      city: "Brazzaville",
-      isActive: true,
-    },
-  })
-}
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 function startOfWeek(d: Date) { const x = startOfDay(d); const day = (x.getDay() + 6) % 7; x.setDate(x.getDate() - day); return x }

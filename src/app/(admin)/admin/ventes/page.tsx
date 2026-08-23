@@ -170,7 +170,8 @@ export default function VentesPage() {
         const payload = await pointsRes.json()
         const points = (Array.isArray(payload) ? payload : payload.points) as PointOfSale[]
         setPointsOfSale(points.filter((point) => point.isActive))
-        setPointOfSaleId((current) => current || points.find((point) => point.isActive)?.id || "")
+        const comptoir = points.find((point) => point.code === "PDV-COMPTOIR" && point.isActive)
+        setPointOfSaleId((current) => current || comptoir?.id || points.find((point) => point.isActive)?.id || "")
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de chargement")

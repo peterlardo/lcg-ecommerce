@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
+import { getOrCreateComptoir } from "@/lib/comptoir"
 
 async function getNextCode() {
   const existing = await prisma.pointOfSale.findMany({ select: { code: true } })
@@ -13,6 +14,7 @@ async function getNextCode() {
 export async function GET() {
   const forbidden = await requireManagementAccess()
   if (forbidden) return forbidden
+  await getOrCreateComptoir()
   const points = await prisma.pointOfSale.findMany({
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     include: {
