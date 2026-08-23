@@ -120,7 +120,7 @@ export function AdminSidebar({ onMobileClose }: { onMobileClose?: () => void }) 
         <div className="flex min-h-[65px] items-center border-b border-white/10 p-4">
           <Link href="/admin" className="flex min-w-0 items-center gap-2 font-bold text-primary-foreground">
             <img src="/logo.jpeg" alt="LCG" className="h-7 w-7 shrink-0 rounded-full" />
-            <span className={`${collapsed ? "hidden" : "block"} truncate`}>LCG Admin</span>
+            <span className={`${collapsed ? "hidden" : "block"} truncate`}>LCG Gestion des Ventes</span>
           </Link>
         </div>
         <button
@@ -162,7 +162,7 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
         <div className="flex min-h-[65px] items-center justify-between border-b border-white/10 p-4">
           <Link href="/admin" onClick={onClose} className="flex min-w-0 items-center gap-2 font-bold text-primary-foreground">
             <img src="/logo.jpeg" alt="LCG" className="h-7 w-7 shrink-0 rounded-full" />
-            <span className="truncate">LCG Admin</span>
+            <span className="truncate">LCG Gestion des Ventes</span>
           </Link>
           <button onClick={onClose} className="rounded-lg p-1.5 text-primary-foreground/70 hover:bg-white/10 hover:text-primary-foreground">
             <X className="h-5 w-5" />
