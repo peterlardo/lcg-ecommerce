@@ -130,6 +130,7 @@ export default function CartPage() {
             address: adresse,
             city: "Brazzaville",
             paymentMethod: "CASH_ON_DELIVERY",
+            deliveryFee,
             notes,
           }),
         })
@@ -357,6 +358,12 @@ export default function CartPage() {
                 : `${mode === "reservation" ? "Confirmer la pré-commande" : "Valider la commande"} — ${formatPrice(subtotal + deliveryFee)}`
               }
             </button>
+
+            {error && (
+              <p className="mt-3 rounded-xl bg-destructive/10 px-4 py-3 text-center text-sm font-medium text-destructive">
+                {error}
+              </p>
+            )}
 
             <p className="mt-3 text-center text-xs text-muted-foreground">
               Paiement à la livraison : espèces ou Mobile Money.

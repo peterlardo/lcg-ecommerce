@@ -104,6 +104,7 @@ export async function POST(request: Request) {
       paymentMethod,
       source: body.source === "OPERATOR" ? "OPERATOR" : "WEB",
       notes: body.notes ? String(body.notes) : undefined,
+      deliveryFee: Number(body.deliveryFee) || 0,
       items: items.map((item: any) => ({
         productId: String(item.productId || ""),
         variantId: String(item.variantId || ""),

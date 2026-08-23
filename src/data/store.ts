@@ -61,6 +61,7 @@ export interface OrderInput {
   paymentMethod: string
   source?: string
   notes?: string
+  deliveryFee?: number
   items: OrderItemInput[]
 }
 
@@ -391,9 +392,6 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
     for (const item of input.items) {
       const variant = variantMap.get(item.variantId)
       if (!variant) throw new Error("Produit introuvable")
-      if (variant.stock < item.quantity) {
-        throw new Error(`Stock insuffisant pour ${variant.product.name} ${variant.format} (disponible: ${variant.stock}, demandé: ${item.quantity})`)
-      }
     }
 
     const created = await tx.order.create({
@@ -406,8 +404,8 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
         paymentMethod: input.paymentMethod as any,
         source: input.source || "WEB",
         subtotal,
-        deliveryFee: 0,
-        total: subtotal,
+        deliveryFee: input.deliveryFee || 0,
+        total: subtotal + (input.deliveryFee || 0),
         items: {
           create: input.items.map((i) => ({
             productId: i.productId,

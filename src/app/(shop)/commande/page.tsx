@@ -70,6 +70,7 @@ export default function CommandePage() {
           city: form.city,
           district: form.district,
           paymentMethod: paymentMap[paymentMethod] || "CASH_ON_DELIVERY",
+          deliveryFee,
           notes: form.notes,
           items: items.map((i) => ({
             productId: i.productId,
