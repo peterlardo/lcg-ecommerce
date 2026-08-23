@@ -165,6 +165,23 @@ export default function DashboardPage() {
         {stats.map((stat) => { const Icon = stat.icon; return <div key={stat.label} className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-muted-foreground sm:text-sm">{stat.label}</p><p className="mt-2 text-xl font-bold text-foreground sm:text-2xl">{stat.value}</p></div><div className={`flex h-9 w-9 items-center justify-center rounded-full sm:h-11 sm:w-11 ${stat.tone}`}><Icon className="h-4 w-4 sm:h-5 sm:w-5" /></div></div><p className="mt-3 text-xs text-muted-foreground sm:mt-4">{stat.detail}</p></div> })}
       </div>
 
+      <section className="rounded-xl border border-border bg-card shadow-card-soft">
+        <div className="flex items-center justify-between border-b border-border p-3 sm:p-5">
+          <div><h2 className="font-semibold text-foreground">Statut des commandes</h2><p className="mt-1 text-xs text-muted-foreground">Vue d&apos;ensemble de toutes les commandes du système</p></div>
+          <Link href="/admin/commandes" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
+        </div>
+        <div className="grid grid-cols-2 gap-2 p-3 sm:gap-4 sm:p-5 sm:grid-cols-3 lg:grid-cols-7">
+          {(report?.ordersByStatus ?? []).map((item) => (
+            <div key={item.status} className="rounded-xl border border-border bg-muted/40 p-2 text-center sm:p-4">
+              <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium sm:px-2.5 sm:py-1 sm:text-xs ${getStatusColor(item.status)}`}>{getStatusLabel(item.status)}</span>
+              <p className="mt-2 text-xl font-bold text-foreground sm:mt-3 sm:text-2xl">{item.count}</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground sm:mt-1 sm:text-xs">{formatPrice(item.total)}</p>
+            </div>
+          ))}
+          {!loading && (report?.ordersByStatus ?? []).length === 0 && <p className="col-span-full py-6 text-center text-sm text-muted-foreground sm:py-8">Aucune commande.</p>}
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-foreground">Statistiques des ventes</h2><p className="mt-1 text-xs text-muted-foreground">Vue d&apos;ensemble des ventes et commandes</p></div><div className="flex overflow-x-auto rounded-lg border border-border bg-muted p-1"><button onClick={() => setChartMode("revenu")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "revenu" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Revenus</button><button onClick={() => setChartMode("confirmees")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "confirmees" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Confirmées ({confirmedOrders.length})</button><button onClick={() => setChartMode("production")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "production" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>En production ({productionOrders.length})</button><button onClick={() => setChartMode("livrees")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "livrees" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Livrées ({deliveredOrders.length})</button></div></div>
@@ -426,23 +443,6 @@ export default function DashboardPage() {
 
         <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Produits les plus vendus</h2><p className="mt-1 text-xs text-muted-foreground">Sur les sept derniers jours</p></div><BarChart3 className="h-5 w-5 text-primary" /></div><div className="mt-3 space-y-3 sm:mt-5 sm:space-y-4">{(report?.topProducts ?? []).map((product, index) => <div key={product.name}><div className="mb-1 flex justify-between text-sm"><span className="font-medium text-foreground">{product.name}</span><span className="text-muted-foreground">{product.quantity} unités</span></div><div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(8, product.quantity * 12))}%` }} /></div></div>)}{!loading && !report?.topProducts.length && <p className="text-sm text-muted-foreground">Pas encore de ventes.</p>}</div></section>
       </div>
-
-      <section className="rounded-xl border border-border bg-card shadow-card-soft">
-        <div className="flex items-center justify-between border-b border-border p-3 sm:p-5">
-          <div><h2 className="font-semibold text-foreground">Statut des commandes</h2><p className="mt-1 text-xs text-muted-foreground">Vue d&apos;ensemble de toutes les commandes du système</p></div>
-          <Link href="/admin/commandes" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
-        </div>
-        <div className="grid grid-cols-2 gap-2 p-3 sm:gap-4 sm:p-5 sm:grid-cols-3 lg:grid-cols-7">
-          {(report?.ordersByStatus ?? []).map((item) => (
-            <div key={item.status} className="rounded-xl border border-border bg-muted/40 p-2 text-center sm:p-4">
-              <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium sm:px-2.5 sm:py-1 sm:text-xs ${getStatusColor(item.status)}`}>{getStatusLabel(item.status)}</span>
-              <p className="mt-2 text-xl font-bold text-foreground sm:mt-3 sm:text-2xl">{item.count}</p>
-              <p className="mt-0.5 text-[10px] text-muted-foreground sm:mt-1 sm:text-xs">{formatPrice(item.total)}</p>
-            </div>
-          ))}
-          {!loading && (report?.ordersByStatus ?? []).length === 0 && <p className="col-span-full py-6 text-center text-sm text-muted-foreground sm:py-8">Aucune commande.</p>}
-        </div>
-      </section>
 
       {(report?.stockAlerts ?? []).length > 0 && (
         <section className="rounded-xl border border-orange-200 bg-orange-50/50 p-3 shadow-card-soft sm:p-5">
