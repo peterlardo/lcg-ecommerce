@@ -268,7 +268,7 @@ export function ChatWidget() {
   return (
     <div className="font-sans">
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-white flex flex-col md:static md:inset-auto md:bottom-5 md:right-5 md:w-[360px] md:h-[500px] md:rounded-2xl md:shadow-2xl md:border md:border-gray-200">
+        <div className="fixed inset-0 z-50 bg-white flex flex-col md:inset-auto md:bottom-5 md:right-5 md:w-[360px] md:h-[500px] md:rounded-2xl md:shadow-2xl md:border md:border-gray-200">
           <div className="flex items-center gap-3 bg-primary px-4 py-3 text-primary-foreground shrink-0">
             {selectedUser ? (
               <>

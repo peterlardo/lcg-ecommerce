@@ -77,7 +77,7 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
-  const [chartMode, setChartMode] = useState<"revenu" | "confirmees" | "production" | "livrees" | "ventesjour">("revenu")
+  const [chartMode, setChartMode] = useState<"revenu" | "confirmees" | "production" | "livrees">("revenu")
   const [encaissementsTab, setEncaissementsTab] = useState<"aujourdhui" | "semaine">("aujourdhui")
   const [weekOffset, setWeekOffset] = useState(0)
   const [livraisonWeekOffset, setLivraisonWeekOffset] = useState(0)
@@ -115,7 +115,7 @@ export default function DashboardPage() {
     { label: "Confirmé", value: String(summary?.todayConfirmed ?? 0), detail: "Commandes confirmées aujourd'hui", icon: CheckCircle2, tone: "text-green-600 bg-green-100" },
     { label: "Commandes totales", value: String(summary?.todayOrders ?? 0), detail: `${formatPrice(summary?.todayRevenue ?? 0)} de ventes`, icon: ShoppingCart, tone: "text-primary bg-primary/10" },
     { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: `${summary?.todayOrdersDelivered ?? 0} livrée(s)`, icon: CircleDollarSign, tone: "text-emerald-600 bg-emerald-100" },
-    { label: "Précommandes", value: String(summary?.todayReservations ?? 0), detail: `${summary?.todayReservationsPending ?? 0} en attente`, icon: ClipboardList, tone: "text-blue-600 bg-blue-100" },
+    { label: "Commandes", value: String(summary?.orders30 ?? 0), detail: `${report?.periodLabel ?? "Mois"} — ${summary?.todayOrders ?? 0} aujourd'hui`, icon: ClipboardList, tone: "text-blue-600 bg-blue-100" },
   ]
 
   const paymentData = useMemo(() => (report?.paymentBreakdown ?? []).map((item) => ({ ...item, name: paymentLabels[item.method] ?? item.method })), [report])
@@ -127,11 +127,6 @@ export default function DashboardPage() {
   const confirmedOrders = useMemo(() => orders.filter((o) => o.status === "CONFIRMED"), [orders])
   const productionOrders = useMemo(() => orders.filter((o) => o.status === "PROCESSING"), [orders])
   const deliveredOrders = useMemo(() => orders.filter((o) => o.status === "DELIVERED"), [orders])
-  const todaySalesOrders = useMemo(() => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return orders.filter((o) => o.status === "DELIVERED" && new Date(o.createdAt) >= today)
-  }, [orders])
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null)
 
   return (
@@ -172,10 +167,10 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-foreground">Statistiques des ventes</h2><p className="mt-1 text-xs text-muted-foreground">Vue d&apos;ensemble des ventes et commandes</p></div><div className="flex overflow-x-auto rounded-lg border border-border bg-muted p-1"><button onClick={() => setChartMode("revenu")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "revenu" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Revenus</button><button onClick={() => setChartMode("confirmees")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "confirmees" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Confirmées ({confirmedOrders.length})</button><button onClick={() => setChartMode("production")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "production" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>En production ({productionOrders.length})</button><button onClick={() => setChartMode("livrees")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "livrees" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Livrées ({deliveredOrders.length})</button><button onClick={() => setChartMode("ventesjour")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "ventesjour" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Ventes du jour ({todaySalesOrders.length})</button></div></div>
-          {chartMode === "confirmees" || chartMode === "production" || chartMode === "livrees" || chartMode === "ventesjour" ? (() => {
-            const list = chartMode === "confirmees" ? confirmedOrders : chartMode === "production" ? productionOrders : chartMode === "ventesjour" ? todaySalesOrders : deliveredOrders
-            const emptyMsg = chartMode === "confirmees" ? "Aucune commande confirmée." : chartMode === "production" ? "Aucune commande en production." : chartMode === "ventesjour" ? "Aucune vente aujourd'hui." : "Aucune commande livrée."
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-foreground">Statistiques des ventes</h2><p className="mt-1 text-xs text-muted-foreground">Vue d&apos;ensemble des ventes et commandes</p></div><div className="flex overflow-x-auto rounded-lg border border-border bg-muted p-1"><button onClick={() => setChartMode("revenu")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "revenu" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Revenus</button><button onClick={() => setChartMode("confirmees")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "confirmees" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Confirmées ({confirmedOrders.length})</button><button onClick={() => setChartMode("production")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "production" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>En production ({productionOrders.length})</button><button onClick={() => setChartMode("livrees")} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium ${chartMode === "livrees" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Livrées ({deliveredOrders.length})</button></div></div>
+          {chartMode === "confirmees" || chartMode === "production" || chartMode === "livrees" ? (() => {
+            const list = chartMode === "confirmees" ? confirmedOrders : chartMode === "production" ? productionOrders : deliveredOrders
+            const emptyMsg = chartMode === "confirmees" ? "Aucune commande confirmée." : chartMode === "production" ? "Aucune commande en production." : "Aucune commande livrée."
             return (
               <div className="mt-4">
                 {list.length === 0 ? (
