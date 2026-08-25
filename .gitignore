@@ -46,6 +46,11 @@ next-env.d.ts
 # Local Netlify folder
 .netlify
 
+# Cloudflare
+.open-next
+.wrangler
+cloudflare-env.d.ts
+
 # Debug logs
 dev-output.log
 dev-error.log

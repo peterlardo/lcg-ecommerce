@@ -6,8 +6,37 @@ import { getProducts } from "@/data/store"
 import { Snowflake, ArrowRight, Droplets, ShieldCheck, Truck, CalendarClock } from "lucide-react"
 import { FaqSection } from "@/components/shared/faq-section"
 import { ContactSection } from "@/components/shared/contact-section"
+import { siteConfig } from "@/lib/site"
 
 export const dynamic = "force-dynamic"
+
+const localBusinessJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  name: siteConfig.name,
+  description: siteConfig.description,
+  url: siteConfig.url,
+  image: `${siteConfig.url}${siteConfig.ogImage}`,
+  logo: `${siteConfig.url}/logo-lcg-white-hd.png`,
+  telephone: siteConfig.phones,
+  priceRange: "FCFA",
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: siteConfig.address.street,
+    addressLocality: siteConfig.address.city,
+    addressCountry: siteConfig.address.country,
+  },
+  areaServed: {
+    "@type": "City",
+    name: "Brazzaville",
+  },
+  openingHoursSpecification: {
+    "@type": "OpeningHoursSpecification",
+    dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    opens: "07:00",
+    closes: "19:00",
+  },
+}
 
 export default async function HomePage() {
   const allProducts = await getProducts()
@@ -15,6 +44,10 @@ export default async function HomePage() {
 
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
+      />
       {/* Hero Slider */}
       <HeroSlider />
 

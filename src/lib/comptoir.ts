@@ -1,9 +1,9 @@
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 
 export const COMPTOIR_CODE = "PDV-COMPTOIR"
 
 export async function getOrCreateComptoir() {
-  return prisma.pointOfSale.upsert({
+  return getPrisma().pointOfSale.upsert({
     where: { code: COMPTOIR_CODE },
     update: {},
     create: {

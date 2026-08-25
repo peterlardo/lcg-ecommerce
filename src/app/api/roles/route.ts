@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
 const MODULES = [
@@ -14,10 +14,10 @@ export async function GET() {
   if (forbidden) return forbidden
 
   try {
-    const profiles = await prisma.roleProfile.findMany({ where: { isActive: true }, orderBy: { createdAt: "asc" } })
+    const profiles = await getPrisma().roleProfile.findMany({ where: { isActive: true }, orderBy: { createdAt: "asc" } })
     const roleKeys = profiles.map((p) => p.key)
 
-    const rolePermissions = await prisma.rolePermission.findMany({
+    const rolePermissions = await getPrisma().rolePermission.findMany({
       where: { role: { in: roleKeys } },
       orderBy: [{ role: "asc" }, { module: "asc" }],
     })
@@ -36,7 +36,7 @@ export async function GET() {
       }),
     }))
 
-    const userCounts = await prisma.user.groupBy({
+    const userCounts = await getPrisma().user.groupBy({
       by: ["role"],
       _count: { id: true },
     })
@@ -64,7 +64,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Permissions invalides" }, { status: 400 })
     }
 
-    await prisma.$transaction(async (tx) => {
+    await getPrisma().$transaction(async (tx) => {
       await tx.rolePermission.deleteMany({ where: { role } })
 
       const data = permissions

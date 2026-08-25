@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { sendStatusChangeEmail } from "@/lib/mailer"
 import { pushNotification } from "@/lib/notifications"
@@ -28,7 +28,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
       return NextResponse.json({ error: "Statut invalide" }, { status: 400 })
     }
 
-    const order = await prisma.$transaction(async (tx) => {
+    const order = await getPrisma().$transaction(async (tx) => {
       const previous = await tx.order.findUnique({
         where: { id },
         select: {
@@ -199,7 +199,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
       return updated
     })
 
-    const fullOrder = await prisma.order.findUnique({
+    const fullOrder = await getPrisma().order.findUnique({
       where: { id },
       select: {
         orderNumber: true, customerName: true, customerEmail: true,

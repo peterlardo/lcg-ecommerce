@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 
 type Role = string
 
@@ -35,7 +35,7 @@ export async function getUserPointOfSaleIds(): Promise<UserPOSFilter | null> {
 
   if (role === "ADMIN") return { userId, role, posIds: null }
 
-  const posList = await prisma.pointOfSale.findMany({
+  const posList = await getPrisma().pointOfSale.findMany({
     where: { managerUserId: userId },
     select: { id: true },
   })
@@ -51,7 +51,7 @@ export async function requireModuleAccess(module: string, action: PermissionActi
   if (role === "ADMIN") return null
   if (!role || !MANAGEMENT_ROLES.includes(role)) return NextResponse.json({ error: "Acces non autorise" }, { status: 403 })
 
-  const permission = await prisma.userPermission.findUnique({
+  const permission = await getPrisma().userPermission.findUnique({
     where: { userId_module: { userId: session.user.id, module } },
   })
   const key = `can${action.charAt(0).toUpperCase()}${action.slice(1)}` as PermissionKey

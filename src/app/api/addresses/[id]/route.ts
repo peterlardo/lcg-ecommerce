@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 
 export async function PATCH(
   request: Request,
@@ -14,7 +14,7 @@ export async function PATCH(
   const { id } = (await context.params) as { id: string }
   const userId = session.user.id as string
 
-  const existing = await prisma.address.findFirst({
+  const existing = await getPrisma().address.findFirst({
     where: { id, userId },
   })
 
@@ -25,13 +25,13 @@ export async function PATCH(
   const body = await request.json()
 
   if (body.isDefault) {
-    await prisma.address.updateMany({
+    await getPrisma().address.updateMany({
       where: { userId },
       data: { isDefault: false },
     })
   }
 
-  const updated = await prisma.address.update({
+  const updated = await getPrisma().address.update({
     where: { id },
     data: {
       label: body.label !== undefined ? body.label : undefined,
@@ -57,7 +57,7 @@ export async function DELETE(
   const { id } = (await context.params) as { id: string }
   const userId = session.user.id as string
 
-  const existing = await prisma.address.findFirst({
+  const existing = await getPrisma().address.findFirst({
     where: { id, userId },
   })
 
@@ -65,7 +65,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Adresse introuvable" }, { status: 404 })
   }
 
-  await prisma.address.delete({ where: { id } })
+  await getPrisma().address.delete({ where: { id } })
 
   return NextResponse.json({ ok: true })
 }

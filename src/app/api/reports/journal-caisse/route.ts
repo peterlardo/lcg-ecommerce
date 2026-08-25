@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 
 function startOfDay(date: Date) {
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       : {}
 
     const [sessions, orders] = await Promise.all([
-      prisma.cashSession.findMany({
+      getPrisma().cashSession.findMany({
         where: {
           openedAt: { gte: from, lte: to },
           ...posWhere,
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
         include: { pointOfSale: { select: { id: true, name: true, code: true } } },
         orderBy: { openedAt: "desc" },
       }),
-      prisma.order.findMany({
+      getPrisma().order.findMany({
         where: {
           createdAt: { gte: from, lte: to },
           status: { not: "CANCELLED" },

@@ -1,9 +1,9 @@
 import "dotenv/config";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 import { generateLotNumber } from "@/lib/lot-utils";
 
 async function main() {
-  const variants = await prisma.productVariant.findMany({
+  const variants = await getPrisma().productVariant.findMany({
     include: { product: true, pointOfSaleStocks: true, productionLots: true },
   });
 
@@ -19,7 +19,7 @@ async function main() {
 
     if (gap > 0) {
       const lotNumber = await generateLotNumber();
-      await prisma.$transaction(async (tx) => {
+      await getPrisma().$transaction(async (tx) => {
         await tx.productionLot.create({
           data: {
             lotNumber,
@@ -59,4 +59,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  .finally(() => getPrisma().$disconnect());

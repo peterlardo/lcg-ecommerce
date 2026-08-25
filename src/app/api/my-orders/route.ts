@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 
 export async function GET() {
   const session = await auth()
@@ -12,7 +12,7 @@ export async function GET() {
   const email = session.user.email ?? undefined
 
   const [orders, reservations] = await Promise.all([
-    prisma.order.findMany({
+    getPrisma().order.findMany({
       where: {
         OR: [
           { userId },
@@ -27,7 +27,7 @@ export async function GET() {
       },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.reservation.findMany({
+    getPrisma().reservation.findMany({
       where: {
         OR: [
           { userId },

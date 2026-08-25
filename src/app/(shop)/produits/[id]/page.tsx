@@ -1,11 +1,41 @@
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import type { Metadata } from "next"
 import { getProductById, getProducts } from "@/data/store"
 import { ProductCard } from "@/components/shared/product-card"
 import { ProductVariantSelector } from "./variant-selector"
+import { siteConfig } from "@/lib/site"
 
 export const dynamic = "force-dynamic"
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  const product = await getProductById(id)
+
+  if (!product) {
+    return { title: "Produit introuvable" }
+  }
+
+  const description =
+    product.description ??
+    `${product.name} en eau minérale — ${product.categoryName}. Disponible en plusieurs formats avec livraison rapide à Brazzaville.`
+
+  return {
+    title: product.name,
+    description,
+    alternates: { canonical: `/produits/${product.id}` },
+    openGraph: {
+      title: `${product.name} | LCG`,
+      description,
+      images: product.image ? [product.image] : undefined,
+    },
+  }
+}
 
 export default async function ProductDetailPage({
   params,
@@ -24,8 +54,41 @@ export default async function ProductDetailPage({
     .filter((p) => p.categorySlug === product.categorySlug && p.id !== product.id)
     .slice(0, 4)
 
+  const minPrice = product.variants.length
+    ? Math.min(...product.variants.map((v) => v.price))
+    : undefined
+
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description ?? product.name,
+    image: product.image ? `${siteConfig.url}${product.image}` : undefined,
+    category: product.categoryName ?? undefined,
+    brand: {
+      "@type": "Brand",
+      name: "LCG — La Congolaise des Glaçons",
+    },
+    ...(minPrice !== undefined && {
+      offers: {
+        "@type": "AggregateOffer",
+        priceCurrency: "XAF",
+        lowPrice: minPrice,
+        availability:
+          product.variants.some((v) => v.stock > 0)
+            ? "https://schema.org/InStock"
+            : "https://schema.org/PreOrder",
+      },
+    }),
+  }
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
+    <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
+
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
         <Link href="/" className="hover:text-primary transition-colors">Accueil</Link>

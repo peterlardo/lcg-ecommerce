@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
 export async function PATCH(request: Request, context: { params: Promise<unknown> }) {
@@ -20,7 +20,7 @@ export async function PATCH(request: Request, context: { params: Promise<unknown
       return NextResponse.json({ error: "Aucune donnée à modifier" }, { status: 400 })
     }
 
-    const profile = await prisma.roleProfile.update({
+    const profile = await getPrisma().roleProfile.update({
       where: { id },
       data,
     })
@@ -38,7 +38,7 @@ export async function DELETE(request: Request, context: { params: Promise<unknow
   try {
     const { id } = (await context.params) as { id: string }
 
-    const profile = await prisma.roleProfile.findUnique({ where: { id } })
+    const profile = await getPrisma().roleProfile.findUnique({ where: { id } })
     if (!profile) {
       return NextResponse.json({ error: "Profil introuvable" }, { status: 404 })
     }
@@ -46,12 +46,12 @@ export async function DELETE(request: Request, context: { params: Promise<unknow
       return NextResponse.json({ error: "Impossible de supprimer un rôle système" }, { status: 403 })
     }
 
-    const userCount = await prisma.user.count({ where: { role: profile.key } })
+    const userCount = await getPrisma().user.count({ where: { role: profile.key } })
     if (userCount > 0) {
       return NextResponse.json({ error: `Ce rôle est assigné à ${userCount} utilisateur(s). Changez leur rôle d'abord.` }, { status: 409 })
     }
 
-    await prisma.roleProfile.delete({ where: { id } })
+    await getPrisma().roleProfile.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Impossible de supprimer le profil" }, { status: 400 })

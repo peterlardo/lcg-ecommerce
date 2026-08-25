@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 
 export async function PUT(request: Request) {
   const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
@@ -14,13 +14,13 @@ export async function PUT(request: Request) {
     }
 
     const updates = prices.map((p) =>
-      prisma.productVariant.update({
+      getPrisma().productVariant.update({
         where: { id: p.variantId },
         data: { price: Number(p.price) },
       })
     )
 
-    await prisma.$transaction(updates)
+    await getPrisma().$transaction(updates)
 
     return NextResponse.json({ success: true, updated: prices.length })
   } catch (error) {

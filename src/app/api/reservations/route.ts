@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 import { getReservations, addReservation, type ReservationItem } from "@/data/store"
 import { sendReservationEmail } from "@/lib/mailer"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 
 export async function GET() {
   const forbidden = await requireManagementAccess()
@@ -12,7 +12,7 @@ export async function GET() {
   const posIds = posFilter?.posIds ?? null
 
   if (posIds !== null) {
-    const rows = await prisma.reservation.findMany({
+    const rows = await getPrisma().reservation.findMany({
       where: posIds.length > 0 ? { pointOfSaleId: { in: posIds } } : { pointOfSaleId: { in: [] } },
       orderBy: { createdAt: "desc" },
     })

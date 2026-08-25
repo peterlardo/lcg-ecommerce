@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 import { generateOrderNumber } from "@/lib/utils"
 import { allocateStockFIFOTx } from "@/lib/lot-utils"
@@ -47,7 +47,7 @@ export async function GET() {
   const posFilter = await getUserPointOfSaleIds()
   const posIds = posFilter?.posIds ?? null
 
-  const sales = await prisma.order.findMany({
+  const sales = await getPrisma().order.findMany({
     where: {
       notes: { startsWith: "Vente comptoir" },
       ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}),
@@ -97,11 +97,11 @@ export async function POST(request: Request) {
     }
 
     if (body.pointOfSaleId) {
-      const point = await prisma.pointOfSale.findUnique({ where: { id: body.pointOfSaleId } })
+      const point = await getPrisma().pointOfSale.findUnique({ where: { id: body.pointOfSaleId } })
       if (!point || !point.isActive) return NextResponse.json({ error: "Point de vente invalide ou inactif" }, { status: 400 })
     }
 
-    const variants = await prisma.productVariant.findMany({
+    const variants = await getPrisma().productVariant.findMany({
       where: { id: { in: items.map((item) => item.variantId) } },
       include: { product: true },
     })
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
     const orderNumber = generateOrderNumber()
 
-    const order = await prisma.$transaction(async (tx) => {
+    const order = await getPrisma().$transaction(async (tx) => {
       for (const item of items) {
         const variant = variantMap.get(item.variantId)
         if (!variant) throw new Error("Produit introuvable")

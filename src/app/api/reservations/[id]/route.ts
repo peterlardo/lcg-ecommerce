@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { getReservationById, updateReservationStatus } from "@/data/store"
 import { sendReservationConfirmedEmail } from "@/lib/mailer"
 import { generateOrderNumber } from "@/lib/utils"
@@ -14,7 +14,7 @@ interface ReservationItem {
 }
 
 async function confirmReservation(id: string) {
-  const reservation = await prisma.reservation.findUnique({ where: { id } })
+  const reservation = await getPrisma().reservation.findUnique({ where: { id } })
   if (!reservation) throw new Error("Réservation introuvable")
   if (reservation.status !== "PENDING") throw new Error("Cette réservation ne peut plus être confirmée")
 
@@ -29,7 +29,7 @@ async function confirmReservation(id: string) {
   // Find matching variants by name + format
   const variantLookups = await Promise.all(
     items.map(async (item) => {
-      const variant = await prisma.productVariant.findFirst({
+      const variant = await getPrisma().productVariant.findFirst({
         where: {
           format: item.format,
           product: { name: item.name },
@@ -49,7 +49,7 @@ async function confirmReservation(id: string) {
   }
 
   // Create order + delivery + decrement stock + allocate lots in a transaction
-  const order = await prisma.$transaction(async (tx) => {
+  const order = await getPrisma().$transaction(async (tx) => {
     const created = await tx.order.create({
       data: {
         orderNumber,
@@ -133,17 +133,17 @@ async function confirmReservation(id: string) {
 }
 
 async function cancelReservation(id: string) {
-  const reservation = await prisma.reservation.findUnique({ where: { id } })
+  const reservation = await getPrisma().reservation.findUnique({ where: { id } })
   if (!reservation) throw new Error("Réservation introuvable")
 
   if (reservation.orderId) {
-    const order = await prisma.order.findUnique({
+    const order = await getPrisma().order.findUnique({
       where: { id: reservation.orderId },
       include: { items: true },
     })
 
     if (order && order.status !== "CANCELLED") {
-      await prisma.$transaction(async (tx) => {
+      await getPrisma().$transaction(async (tx) => {
         // Les pré-commandes confirmées sont toujours débitées du stock central
         // (confirmReservation), jamais du stock POS — restauration au central uniquement
         for (const item of order.items) {
@@ -210,10 +210,10 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/reservations/[
     }
 
     if (pointOfSaleId !== undefined) {
-      await prisma.reservation.update({ where: { id }, data: { pointOfSaleId: pointOfSaleId || null } })
+      await getPrisma().reservation.update({ where: { id }, data: { pointOfSaleId: pointOfSaleId || null } })
     }
 
-    const previous = await prisma.reservation.findUnique({ where: { id }, select: { status: true } })
+    const previous = await getPrisma().reservation.findUnique({ where: { id }, select: { status: true } })
 
     if (status === "CONFIRMED" && previous?.status === "PENDING") {
       await confirmReservation(id)

@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Professionnels — LCG | Tarifs et solutions B2B",
   description:
     "Solutions glaçons pour bars, restaurants, hôtels et traiteurs à Brazzaville. Tarifs dégressifs, livraison programmée et service événementiel.",
+  alternates: { canonical: "/professionnels" },
 }
 
 const features = [

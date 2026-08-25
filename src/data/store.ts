@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { products as staticProducts, categories } from "./products"
 import type { Product, ProductVariant } from "./products"
 import { allocateStockFIFO } from "@/lib/lot-utils"
@@ -90,17 +90,17 @@ let bootstrapDone = false
 async function bootstrapProducts() {
   if (bootstrapDone) return
   bootstrapDone = true
-  const count = await prisma.product.count()
+  const count = await getPrisma().product.count()
   if (count > 0) return
   for (const cat of categories) {
-    await prisma.category.upsert({
+    await getPrisma().category.upsert({
       where: { slug: cat.slug },
       update: { name: cat.name, description: cat.description },
       create: { id: cat.id, name: cat.name, slug: cat.slug, description: cat.description },
     })
   }
   for (const p of staticProducts) {
-    await prisma.product.upsert({
+    await getPrisma().product.upsert({
       where: { id: p.id },
       update: {},
       create: {
@@ -128,7 +128,7 @@ async function bootstrapProducts() {
 
 export async function getProducts(): Promise<Product[]> {
   await bootstrapProducts()
-  const db = await prisma.product.findMany({
+  const db = await getPrisma().product.findMany({
     include: { variants: true, category: true },
     orderBy: { createdAt: "desc" },
   })
@@ -137,7 +137,7 @@ export async function getProducts(): Promise<Product[]> {
 
 export async function getProductById(id: string): Promise<Product | undefined> {
   await bootstrapProducts()
-  const p = await prisma.product.findUnique({
+  const p = await getPrisma().product.findUnique({
     where: { id },
     include: { variants: true, category: true },
   })
@@ -147,7 +147,7 @@ export async function getProductById(id: string): Promise<Product | undefined> {
 export async function createProduct(
   data: Omit<Product, "id" | "variants"> & { variants: Omit<ProductVariant, "id">[] }
 ): Promise<Product> {
-  const p = await prisma.product.create({
+  const p = await getPrisma().product.create({
     data: {
       name: data.name,
       subtitle: data.subtitle,
@@ -175,7 +175,7 @@ export async function updateProduct(
   id: string,
   data: Partial<Omit<Product, "id" | "variants">> & { variants?: Omit<ProductVariant, "id">[] }
 ): Promise<boolean> {
-  const exists = await prisma.product.findUnique({ where: { id } })
+  const exists = await getPrisma().product.findUnique({ where: { id } })
   if (!exists) return false
   const updateData: any = {}
   if (data.name !== undefined) updateData.name = data.name
@@ -186,10 +186,10 @@ export async function updateProduct(
   if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured
   if (data.badge !== undefined) updateData.badge = data.badge
   if (data.variants) {
-    const existingVariants = await prisma.productVariant.findMany({ where: { productId: id } })
+    const existingVariants = await getPrisma().productVariant.findMany({ where: { productId: id } })
     const existingStockMap = new Map(existingVariants.map((v) => [v.format, v.stock]))
-    await prisma.productVariant.deleteMany({ where: { productId: id } })
-    await prisma.productVariant.createMany({
+    await getPrisma().productVariant.deleteMany({ where: { productId: id } })
+    await getPrisma().productVariant.createMany({
       data: data.variants.map((v) => ({
         productId: id,
         format: v.format,
@@ -199,13 +199,13 @@ export async function updateProduct(
       })),
     })
   }
-  await prisma.product.update({ where: { id }, data: updateData })
+  await getPrisma().product.update({ where: { id }, data: updateData })
   return true
 }
 
 export async function deleteProduct(id: string): Promise<boolean> {
   try {
-    await prisma.product.delete({ where: { id } })
+    await getPrisma().product.delete({ where: { id } })
     return true
   } catch {
     return false
@@ -235,7 +235,7 @@ function mapProduct(p: any): Product {
 }
 
 export async function getMessages(): Promise<ContactMessage[]> {
-  const rows = await prisma.message.findMany({ orderBy: { createdAt: "desc" } })
+  const rows = await getPrisma().message.findMany({ orderBy: { createdAt: "desc" } })
   return rows.map((m) => ({
     id: m.id,
     nom: m.nom,
@@ -249,7 +249,7 @@ export async function getMessages(): Promise<ContactMessage[]> {
 }
 
 export async function getMessageById(id: string): Promise<ContactMessage | undefined> {
-  const m = await prisma.message.findUnique({ where: { id } })
+  const m = await getPrisma().message.findUnique({ where: { id } })
   if (!m) return undefined
   return {
     id: m.id,
@@ -266,7 +266,7 @@ export async function getMessageById(id: string): Promise<ContactMessage | undef
 export async function addMessage(
   msg: Omit<ContactMessage, "id" | "lu" | "createdAt">
 ): Promise<ContactMessage> {
-  const m = await prisma.message.create({
+  const m = await getPrisma().message.create({
     data: {
       nom: msg.nom,
       telephone: msg.telephone,
@@ -289,7 +289,7 @@ export async function addMessage(
 
 export async function markMessageAsRead(id: string): Promise<boolean> {
   try {
-    await prisma.message.update({ where: { id }, data: { lu: true } })
+    await getPrisma().message.update({ where: { id }, data: { lu: true } })
     return true
   } catch {
     return false
@@ -298,7 +298,7 @@ export async function markMessageAsRead(id: string): Promise<boolean> {
 
 export async function deleteMessage(id: string): Promise<boolean> {
   try {
-    await prisma.message.delete({ where: { id } })
+    await getPrisma().message.delete({ where: { id } })
     return true
   } catch {
     return false
@@ -306,12 +306,12 @@ export async function deleteMessage(id: string): Promise<boolean> {
 }
 
 export async function getReservations(): Promise<Reservation[]> {
-  const rows = await prisma.reservation.findMany({ orderBy: { createdAt: "desc" } })
+  const rows = await getPrisma().reservation.findMany({ orderBy: { createdAt: "desc" } })
   return rows.map(mapReservation)
 }
 
 export async function getReservationById(id: string): Promise<Reservation | undefined> {
-  const r = await prisma.reservation.findUnique({ where: { id } })
+  const r = await getPrisma().reservation.findUnique({ where: { id } })
   if (!r) return undefined
   return mapReservation(r)
 }
@@ -348,7 +348,7 @@ export async function updateReservationStatus(
   status: "PENDING" | "CONFIRMED" | "CANCELLED"
 ): Promise<boolean> {
   try {
-    await prisma.reservation.update({ where: { id }, data: { status } })
+    await getPrisma().reservation.update({ where: { id }, data: { status } })
     return true
   } catch {
     return false
@@ -358,7 +358,7 @@ export async function updateReservationStatus(
 export async function addReservation(
   res: Omit<Reservation, "id" | "status" | "createdAt">
 ): Promise<Reservation> {
-  const r = await prisma.reservation.create({
+  const r = await getPrisma().reservation.create({
     data: {
       userId: (res as any).userId || null,
       client: res.client,
@@ -382,7 +382,7 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
 
   const subtotal = input.items.reduce((s, i) => s + i.price * i.quantity, 0)
 
-  const order = await prisma.$transaction(async (tx) => {
+  const order = await getPrisma().$transaction(async (tx) => {
     const variants = await tx.productVariant.findMany({
       where: { id: { in: input.items.map((i) => i.variantId) } },
       include: { product: true },

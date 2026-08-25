@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   const session = await auth()
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   try {
     const { isTyping } = await request.json() as { isTyping: boolean }
 
-    await prisma.chatPresence.upsert({
+    await getPrisma().chatPresence.upsert({
       where: { userId: session.user.id },
       update: { lastSeen: new Date(), isTyping: isTyping ?? true },
       create: { userId: session.user.id, lastSeen: new Date(), isTyping: isTyping ?? true },

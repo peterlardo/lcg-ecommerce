@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { getProducts } from "@/data/store"
 import { allocateStockFIFOTx, generateLotNumberTx } from "@/lib/lot-utils"
@@ -22,10 +22,10 @@ export async function GET() {
     await getProducts()
 
     const [variants, movements] = await Promise.all([
-      prisma.productVariant.findMany({
+      getPrisma().productVariant.findMany({
         include: { product: { include: { category: true } } },
       }),
-      prisma.stockMovement.findMany({
+      getPrisma().stockMovement.findMany({
         include: { variant: { include: { product: true } } },
         orderBy: { createdAt: "desc" },
         take: 40,
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Variante et quantité requises" }, { status: 400 })
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await getPrisma().$transaction(async (tx) => {
       const variant = await tx.productVariant.findUnique({ where: { id: variantId } })
       if (!variant) throw new Error("Variante introuvable")
 

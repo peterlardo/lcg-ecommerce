@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const reference = session.metadata?.reference
     if (reference) {
       try {
-        await prisma.order.updateMany({
+        await getPrisma().order.updateMany({
           where: { orderNumber: reference },
           data: { paymentStatus: "PAID" },
         })

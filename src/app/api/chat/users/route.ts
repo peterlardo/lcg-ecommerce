@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth"
 
 export async function GET() {
@@ -10,27 +10,27 @@ export async function GET() {
 
   const userId = session.user.id
 
-  const users = await prisma.user.findMany({
+  const users = await getPrisma().user.findMany({
     where: { isActive: true, id: { not: userId } },
     select: { id: true, name: true, email: true, role: true, image: true },
     orderBy: { name: "asc" },
   })
 
-  const unreadCounts = await prisma.chatMessage.groupBy({
+  const unreadCounts = await getPrisma().chatMessage.groupBy({
     by: ["senderId"],
     where: { receiverId: userId, read: false },
     _count: { id: true },
   })
   const unreadMap = new Map(unreadCounts.map((r) => [r.senderId, r._count.id]))
 
-  const lastSent = await prisma.chatMessage.findMany({
+  const lastSent = await getPrisma().chatMessage.findMany({
     where: { senderId: userId },
     orderBy: { createdAt: "desc" },
     distinct: ["receiverId"],
     take: 100,
     select: { receiverId: true, content: true, createdAt: true },
   })
-  const lastReceived = await prisma.chatMessage.findMany({
+  const lastReceived = await getPrisma().chatMessage.findMany({
     where: { receiverId: userId },
     orderBy: { createdAt: "desc" },
     distinct: ["senderId"],

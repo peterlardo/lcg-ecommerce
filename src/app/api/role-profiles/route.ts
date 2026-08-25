@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
 export async function GET() {
@@ -7,13 +7,13 @@ export async function GET() {
   if (forbidden) return forbidden
 
   try {
-    const profiles = await prisma.roleProfile.findMany({
+    const profiles = await getPrisma().roleProfile.findMany({
       orderBy: { createdAt: "asc" },
     })
 
     const rolesWithCount = await Promise.all(
       profiles.map(async (p) => {
-        const count = await prisma.user.count({ where: { role: p.key } })
+        const count = await getPrisma().user.count({ where: { role: p.key } })
         return { ...p, userCount: count }
       })
     )
@@ -40,12 +40,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Clé et libellé sont requis" }, { status: 400 })
     }
 
-    const existing = await prisma.roleProfile.findUnique({ where: { key } })
+    const existing = await getPrisma().roleProfile.findUnique({ where: { key } })
     if (existing) {
       return NextResponse.json({ error: "Ce rôle existe déjà" }, { status: 409 })
     }
 
-    const profile = await prisma.roleProfile.create({
+    const profile = await getPrisma().roleProfile.create({
       data: { key, label, description, color },
     })
 

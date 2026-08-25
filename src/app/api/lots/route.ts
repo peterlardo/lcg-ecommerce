@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { generateLotNumber } from "@/lib/lot-utils"
 
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   if (variantId) where.variantId = variantId
   if (status) where.status = status
 
-  const lots = await prisma.productionLot.findMany({
+  const lots = await getPrisma().productionLot.findMany({
     where,
     include: {
       variant: { include: { product: { include: { category: true } } } },
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     take: 200,
   })
 
-  const summary = await prisma.productionLot.aggregate({
+  const summary = await getPrisma().productionLot.aggregate({
     where: { status: "ACTIVE" },
     _sum: { remainingQuantity: true },
     _count: true,
@@ -38,14 +38,14 @@ export async function GET(req: Request) {
   if (withAllocations) {
     const lotIds = lots.filter((l: any) => l.allocations?.length > 0).map((l: any) => l.id)
     if (lotIds.length > 0) {
-      const movements = await prisma.stockMovement.findMany({
+      const movements = await getPrisma().stockMovement.findMany({
         where: { lotId: { in: lotIds }, pointOfSaleId: { not: null } },
         select: { lotId: true, reference: true, pointOfSaleId: true },
       })
 
       const posIds = [...new Set(movements.map((m) => m.pointOfSaleId!).filter(Boolean))]
       const posList = posIds.length > 0
-        ? await prisma.pointOfSale.findMany({ where: { id: { in: posIds } }, select: { id: true, name: true, code: true } })
+        ? await getPrisma().pointOfSale.findMany({ where: { id: { in: posIds } }, select: { id: true, name: true, code: true } })
         : []
       const posMap = new Map(posList.map((p) => [p.id, { name: p.name, code: p.code }]))
 
@@ -67,7 +67,7 @@ export async function GET(req: Request) {
       }
 
       const orders = orderRefs.size > 0
-        ? await prisma.order.findMany({
+        ? await getPrisma().order.findMany({
             where: { orderNumber: { in: [...orderRefs] } },
             select: { orderNumber: true, pointOfSale: { select: { name: true, code: true } } },
           })
@@ -104,14 +104,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Donnees invalides" }, { status: 400 })
     }
 
-    const variant = await prisma.productVariant.findUnique({ where: { id: variantId } })
+    const variant = await getPrisma().productVariant.findUnique({ where: { id: variantId } })
     if (!variant) {
       return NextResponse.json({ error: "Variante introuvable" }, { status: 404 })
     }
 
     const lotNumber = await generateLotNumber()
 
-    const lot = await prisma.$transaction(async (tx) => {
+    const lot = await getPrisma().$transaction(async (tx) => {
       const newLot = await tx.productionLot.create({
         data: {
           lotNumber,

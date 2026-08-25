@@ -2,12 +2,12 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
-import { prisma } from "./prisma"
+import { getPrisma } from "./prisma"
 
 type Role = string
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(getPrisma()),
   trustHost: true,
   session: { strategy: "jwt" },
   pages: {
@@ -23,7 +23,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
-        const user = await prisma.user.findUnique({
+        const user = await getPrisma().user.findUnique({
           where: { email: credentials.email as string },
         })
 
@@ -56,7 +56,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id
       }
       if (token.id) {
-        token.permissions = await prisma.userPermission.findMany({ where: { userId: token.id as string }, select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true } })
+        token.permissions = await getPrisma().userPermission.findMany({ where: { userId: token.id as string }, select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true } })
       }
       return token
     },

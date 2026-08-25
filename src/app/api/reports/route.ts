@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 
 function startOfDay(date: Date) {
@@ -83,30 +83,30 @@ export async function GET(request: Request) {
     const orderPosFilter = posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}
 
     const [recentOrders, allOrders, variants, movements, reservations, deliveries, cashSessions, lots, weekOrders, weekReservations, weekDeliveries] = await Promise.all([
-      prisma.order.findMany({
+      getPrisma().order.findMany({
         where: { createdAt: { gte: sevenDaysAgo }, ...orderPosFilter },
         include: { items: { include: { variant: { include: { product: true } } } } },
         orderBy: { createdAt: "asc" },
       }),
-      prisma.order.findMany({
+      getPrisma().order.findMany({
         where: { createdAt: { gte: periodFrom }, ...orderPosFilter },
         include: { items: { include: { variant: { include: { product: true } } } } },
         orderBy: { createdAt: "asc" },
       }),
-      prisma.productVariant.findMany({ include: { product: { include: { category: true } } } }),
-      prisma.stockMovement.findMany({
+      getPrisma().productVariant.findMany({ include: { product: { include: { category: true } } } }),
+      getPrisma().stockMovement.findMany({
         where: { createdAt: { gte: periodFrom } },
         include: { variant: { include: { product: true } }, pointOfSale: true },
         orderBy: { createdAt: "desc" },
       }),
-      prisma.reservation.findMany({ where: posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}, orderBy: { createdAt: "desc" }, take: 100 }),
-      prisma.delivery.findMany({ include: { order: true }, orderBy: { createdAt: "desc" }, take: 100 }),
-      prisma.cashSession.findMany({
+      getPrisma().reservation.findMany({ where: posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}, orderBy: { createdAt: "desc" }, take: 100 }),
+      getPrisma().delivery.findMany({ include: { order: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+      getPrisma().cashSession.findMany({
         where: { openedAt: { gte: periodFrom }, ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}) },
         include: { pointOfSale: { select: { name: true, code: true } } },
         orderBy: { openedAt: "desc" },
       }),
-      prisma.productionLot.findMany({
+      getPrisma().productionLot.findMany({
         include: {
           variant: { include: { product: { include: { category: true } } } },
           _count: { select: { allocations: true } },
@@ -114,16 +114,16 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
         take: 200,
       }),
-      prisma.order.findMany({
+      getPrisma().order.findMany({
         where: { createdAt: { gte: weekStart, lte: weekEnd }, ...orderPosFilter },
         include: { items: { include: { variant: { include: { product: true } } } } },
         orderBy: { createdAt: "asc" },
       }),
-      prisma.reservation.findMany({
+      getPrisma().reservation.findMany({
         where: { createdAt: { gte: weekStart, lte: weekEnd }, ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}) },
         orderBy: { createdAt: "asc" },
       }),
-      prisma.delivery.findMany({
+      getPrisma().delivery.findMany({
         where: { createdAt: { gte: livraisonWeekStart, lte: livraisonWeekEnd } },
         include: { order: true },
         orderBy: { createdAt: "asc" },

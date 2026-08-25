@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
 const VALID_STATUS = ["PENDING", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "FAILED"]
@@ -33,14 +33,14 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
 
     if (body.notes !== undefined) data.notes = String(body.notes || "")
 
-    const delivery = await prisma.delivery.update({ where: { id }, data })
+    const delivery = await getPrisma().delivery.update({ where: { id }, data })
 
     if (data.status === "IN_TRANSIT") {
-      await prisma.order.update({ where: { id: delivery.orderId }, data: { status: "OUT_FOR_DELIVERY" } })
+      await getPrisma().order.update({ where: { id: delivery.orderId }, data: { status: "OUT_FOR_DELIVERY" } })
     }
     if (data.status === "DELIVERED") {
-      const order = await prisma.order.findUnique({ where: { id: delivery.orderId }, select: { source: true } })
-      await prisma.order.update({
+      const order = await getPrisma().order.findUnique({ where: { id: delivery.orderId }, select: { source: true } })
+      await getPrisma().order.update({
         where: { id: delivery.orderId },
         data: { status: "DELIVERED", ...(order?.source === "WEB" ? { ticketGenerated: true } : {}) },
       })

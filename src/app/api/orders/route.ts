@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 import { createOrder, type OrderInput } from "@/data/store"
 import { sendOrderEmail } from "@/lib/mailer"
@@ -16,7 +16,7 @@ export async function GET() {
     const posFilter = await getUserPointOfSaleIds()
     const posIds = posFilter?.posIds ?? null
 
-    const orders = await prisma.order.findMany({
+    const orders = await getPrisma().order.findMany({
       where: posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : undefined,
       include: {
         items: {

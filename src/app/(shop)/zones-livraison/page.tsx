@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Zones de livraison — LCG | Brazzaville",
   description:
     "Consultez les zones de livraison LCG à Brazzaville. Délais, tarifs et couverture par arrondissement pour la livraison de glaçons en eau minérale.",
+  alternates: { canonical: "/zones-livraison" },
 }
 
 const zones = [

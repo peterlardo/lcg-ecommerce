@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -7,7 +7,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (forbidden) return forbidden
 
   const { id } = await params
-  const lot = await prisma.productionLot.findUnique({
+  const lot = await getPrisma().productionLot.findUnique({
     where: { id },
     include: {
       variant: { include: { product: { include: { category: true } } } },
@@ -21,14 +21,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Lot introuvable" }, { status: 404 })
   }
 
-  const movements = await prisma.stockMovement.findMany({
+  const movements = await getPrisma().stockMovement.findMany({
     where: { lotId: id, pointOfSaleId: { not: null } },
     select: { reference: true, pointOfSaleId: true },
   })
 
   const posIds = [...new Set(movements.map((m) => m.pointOfSaleId!).filter(Boolean))]
   const posList = posIds.length > 0
-    ? await prisma.pointOfSale.findMany({ where: { id: { in: posIds } }, select: { id: true, name: true, code: true } })
+    ? await getPrisma().pointOfSale.findMany({ where: { id: { in: posIds } }, select: { id: true, name: true, code: true } })
     : []
   const posMap = new Map(posList.map((p) => [p.id, { name: p.name, code: p.code }]))
 
@@ -44,7 +44,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .filter((a) => a.type === "SALE" && a.reference)
     .map((a) => a.reference!)
   const orders = orderRefs.length > 0
-    ? await prisma.order.findMany({
+    ? await getPrisma().order.findMany({
         where: { orderNumber: { in: [...new Set(orderRefs)] } },
         select: { orderNumber: true, pointOfSale: { select: { name: true, code: true } } },
       })
@@ -73,12 +73,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json()
     const { status, expiryDate, notes } = body
 
-    const lot = await prisma.productionLot.findUnique({ where: { id } })
+    const lot = await getPrisma().productionLot.findUnique({ where: { id } })
     if (!lot) {
       return NextResponse.json({ error: "Lot introuvable" }, { status: 404 })
     }
 
-    const updated = await prisma.productionLot.update({
+    const updated = await getPrisma().productionLot.update({
       where: { id },
       data: {
         ...(status ? { status } : {}),
@@ -100,7 +100,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   try {
     const { id } = await params
-    const lot = await prisma.productionLot.findUnique({ where: { id }, include: { allocations: true } })
+    const lot = await getPrisma().productionLot.findUnique({ where: { id }, include: { allocations: true } })
     if (!lot) {
       return NextResponse.json({ error: "Lot introuvable" }, { status: 404 })
     }
@@ -109,7 +109,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Impossible de supprimer un lot deja utilise" }, { status: 400 })
     }
 
-    await prisma.$transaction(async (tx) => {
+    await getPrisma().$transaction(async (tx) => {
       if (lot.remainingQuantity > 0) {
         await tx.productVariant.update({
           where: { id: lot.variantId },

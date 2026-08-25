@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth"
 
 export async function GET(request: Request) {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
   const userId = session.user.id
 
-  const messages = await prisma.chatMessage.findMany({
+  const messages = await getPrisma().chatMessage.findMany({
     where: {
       OR: [
         { senderId: userId, receiverId: peerId },
@@ -30,12 +30,12 @@ export async function GET(request: Request) {
     take: 200,
   })
 
-  await prisma.chatMessage.updateMany({
+  await getPrisma().chatMessage.updateMany({
     where: { senderId: peerId, receiverId: userId, read: false },
     data: { read: true },
   })
 
-  const peerPresence = await prisma.chatPresence.findUnique({
+  const peerPresence = await getPrisma().chatPresence.findUnique({
     where: { userId: peerId },
     select: { lastSeen: true, isTyping: true },
   })
@@ -87,12 +87,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Impossible de s'envoyer un message" }, { status: 400 })
   }
 
-  const receiver = await prisma.user.findUnique({ where: { id: receiverId }, select: { id: true } })
+  const receiver = await getPrisma().user.findUnique({ where: { id: receiverId }, select: { id: true } })
   if (!receiver) {
     return NextResponse.json({ error: "Destinataire introuvable" }, { status: 404 })
   }
 
-  const message = await prisma.chatMessage.create({
+  const message = await getPrisma().chatMessage.create({
     data: {
       senderId: session.user.id,
       receiverId,
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     },
   })
 
-  await prisma.chatPresence.upsert({
+  await getPrisma().chatPresence.upsert({
     where: { userId: session.user.id },
     update: { isTyping: false, lastSeen: new Date() },
     create: { userId: session.user.id, isTyping: false },

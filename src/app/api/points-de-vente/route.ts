@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { getOrCreateComptoir } from "@/lib/comptoir"
 
 async function getNextCode() {
-  const existing = await prisma.pointOfSale.findMany({ select: { code: true } })
+  const existing = await getPrisma().pointOfSale.findMany({ select: { code: true } })
   const max = existing.reduce((current, item) => {
     const match = item.code.match(/^PDV-(\d+)$/)
     return Math.max(current, match ? Number(match[1]) : 0)
@@ -15,7 +15,7 @@ export async function GET() {
   const forbidden = await requireManagementAccess()
   if (forbidden) return forbidden
   await getOrCreateComptoir()
-  const points = await prisma.pointOfSale.findMany({
+  const points = await getPrisma().pointOfSale.findMany({
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     include: {
       managerUser: { select: { id: true, name: true, email: true, role: true } },
@@ -23,14 +23,14 @@ export async function GET() {
       cashSessions: { where: { status: "OPEN" }, orderBy: { openedAt: "desc" }, take: 1 },
     },
   })
-  const users = await prisma.user.findMany({
+  const users = await getPrisma().user.findMany({
     where: { role: { in: ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"] }, isActive: true },
     select: { id: true, name: true, email: true, role: true },
     orderBy: { name: "asc" },
   })
-  const variants = await prisma.productVariant.findMany({ include: { product: { select: { name: true } } }, orderBy: { product: { name: "asc" } } })
+  const variants = await getPrisma().productVariant.findMany({ include: { product: { select: { name: true } } }, orderBy: { product: { name: "asc" } } })
   const stats = await Promise.all(points.map(async (point) => {
-    const result = await prisma.order.aggregate({ where: { pointOfSaleId: point.id, status: { not: "CANCELLED" } }, _sum: { total: true } })
+    const result = await getPrisma().order.aggregate({ where: { pointOfSaleId: point.id, status: { not: "CANCELLED" } }, _sum: { total: true } })
     return { pointOfSaleId: point.id, revenue: result._sum.total ?? 0 }
   }))
   return NextResponse.json({ points, users, variants, stats, nextCode: await getNextCode() })
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     const address = String(body.address || "").trim()
     const city = String(body.city || "").trim()
     if (!name || !code || !address || !city) return NextResponse.json({ error: "Nom, code, adresse et ville sont requis" }, { status: 400 })
-    const point = await prisma.pointOfSale.create({ data: { name, code, address, city, phone: body.phone ? String(body.phone).trim() : null, managerName: body.managerName ? String(body.managerName).trim() : null, managerUserId: body.managerUserId || null } })
+    const point = await getPrisma().pointOfSale.create({ data: { name, code, address, city, phone: body.phone ? String(body.phone).trim() : null, managerName: body.managerName ? String(body.managerName).trim() : null, managerUserId: body.managerUserId || null } })
     return NextResponse.json(point, { status: 201 })
   } catch (error) {
     if (error instanceof Error && error.message.includes("Unique constraint")) return NextResponse.json({ error: "Ce code existe déjà" }, { status: 409 })

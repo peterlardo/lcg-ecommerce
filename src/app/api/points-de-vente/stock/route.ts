@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { allocateStockFIFOTx } from "@/lib/lot-utils"
 
@@ -14,9 +14,9 @@ export async function POST(request: Request) {
     const destinationId = body.destinationPointOfSaleId ? String(body.destinationPointOfSaleId) : String(body.pointOfSaleId || "")
     if (!variantId || !destinationId || !quantity) return NextResponse.json({ error: "Produit, point de vente et quantité sont requis" }, { status: 400 })
     const [variant, destination, sourcePoint] = await Promise.all([
-      prisma.productVariant.findUnique({ where: { id: variantId }, include: { product: { select: { name: true } } } }),
-      prisma.pointOfSale.findUnique({ where: { id: destinationId } }),
-      sourceId ? prisma.pointOfSale.findUnique({ where: { id: sourceId } }) : Promise.resolve(null),
+      getPrisma().productVariant.findUnique({ where: { id: variantId }, include: { product: { select: { name: true } } } }),
+      getPrisma().pointOfSale.findUnique({ where: { id: destinationId } }),
+      sourceId ? getPrisma().pointOfSale.findUnique({ where: { id: sourceId } }) : Promise.resolve(null),
     ])
     if (!variant) return NextResponse.json({ error: "Produit ou format introuvable" }, { status: 400 })
     if (!destination || !destination.isActive) return NextResponse.json({ error: "Le point de vente de destination est invalide ou inactif" }, { status: 400 })
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
     const transferRef = `TRANSFERT-${Date.now()}`
 
-    await prisma.$transaction(async (tx) => {
+    await getPrisma().$transaction(async (tx) => {
       if (sourceId) {
         const source = await tx.pointOfSaleStock.findUnique({ where: { pointOfSaleId_variantId: { pointOfSaleId: sourceId, variantId } } })
         if (!source || source.quantity < quantity) throw new Error("Stock source insuffisant")

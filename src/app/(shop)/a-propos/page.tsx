@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "Qui sommes-nous — LCG | La Congolaise des Glaçons",
   description:
     "Découvrez LCG, producteur de glaçons haut de gamme à base d'eau minérale à Brazzaville. Notre histoire, nos valeurs et notre engagement qualité.",
+  alternates: { canonical: "/a-propos" },
 }
 
 const values = [

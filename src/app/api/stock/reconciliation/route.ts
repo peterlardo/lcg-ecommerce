@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
 export async function GET() {
   const forbidden = await requireManagementAccess()
   if (forbidden) return forbidden
 
-  const variants = await prisma.productVariant.findMany({
+  const variants = await getPrisma().productVariant.findMany({
     include: {
       product: { select: { name: true } },
       pointOfSaleStocks: { include: { pointOfSale: { select: { id: true, name: true, code: true } } } },

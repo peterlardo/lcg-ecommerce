@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
 const ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "CUSTOMER"] as const
@@ -8,7 +8,7 @@ const ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "CUSTOMER"] as const
 export async function GET() {
   const forbidden = await requireManagementAccess(["ADMIN"])
   if (forbidden) return forbidden
-  const users = await prisma.user.findMany({ include: { permissions: true, managedPointOfSales: { select: { id: true, name: true, code: true } } }, orderBy: { createdAt: "desc" } })
+  const users = await getPrisma().user.findMany({ include: { permissions: true, managedPointOfSales: { select: { id: true, name: true, code: true } } }, orderBy: { createdAt: "desc" } })
   return NextResponse.json(users.map(({ password, ...user }) => user))
 }
 
@@ -20,10 +20,10 @@ export async function POST(request: Request) {
     const email = String(body.email || "").trim().toLowerCase()
     const password = String(body.password || "")
     const requestedRole = String(body.role || "").trim().toUpperCase()
-    const validProfile = await prisma.roleProfile.findUnique({ where: { key: requestedRole } })
+    const validProfile = await getPrisma().roleProfile.findUnique({ where: { key: requestedRole } })
     const role = validProfile ? requestedRole : "CUSTOMER"
     if (!email || password.length < 6) return NextResponse.json({ error: "Email et mot de passe de 6 caractères minimum requis" }, { status: 400 })
-    const user = await prisma.user.create({
+    const user = await getPrisma().user.create({
       data: {
         name: body.name?.trim() || null,
         email,
@@ -35,10 +35,10 @@ export async function POST(request: Request) {
       },
     })
     if (Array.isArray(body.permissions) && body.permissions.length) {
-      await prisma.userPermission.createMany({ data: body.permissions.map((permission: Record<string, unknown>) => ({ userId: user.id, module: String(permission.module), canView: Boolean(permission.canView), canCreate: Boolean(permission.canCreate), canEdit: Boolean(permission.canEdit), canDelete: Boolean(permission.canDelete) })) })
+      await getPrisma().userPermission.createMany({ data: body.permissions.map((permission: Record<string, unknown>) => ({ userId: user.id, module: String(permission.module), canView: Boolean(permission.canView), canCreate: Boolean(permission.canCreate), canEdit: Boolean(permission.canEdit), canDelete: Boolean(permission.canDelete) })) })
     }
     if (Array.isArray(body.posIds) && body.posIds.length) {
-      await prisma.pointOfSale.updateMany({ where: { id: { in: body.posIds } }, data: { managerUserId: user.id } })
+      await getPrisma().pointOfSale.updateMany({ where: { id: { in: body.posIds } }, data: { managerUserId: user.id } })
     }
     return NextResponse.json({ id: user.id, email: user.email }, { status: 201 })
   } catch (error) {

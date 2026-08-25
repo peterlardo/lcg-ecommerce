@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Le mot de passe doit contenir au moins 6 caractères" }, { status: 400 })
     }
 
-    const resetToken = await prisma.passwordResetToken.findUnique({ where: { token } })
+    const resetToken = await getPrisma().passwordResetToken.findUnique({ where: { token } })
 
     if (!resetToken || resetToken.expiresAt < new Date()) {
       return NextResponse.json({ error: "Lien invalide ou expiré. Veuillez demander un nouveau lien." }, { status: 400 })
@@ -22,13 +22,13 @@ export async function POST(req: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    await prisma.user.update({
+    await getPrisma().user.update({
       where: { id: resetToken.userId },
       data: { password: hashedPassword },
     })
 
     // Delete the used token and any other tokens for this user
-    await prisma.passwordResetToken.deleteMany({ where: { userId: resetToken.userId } })
+    await getPrisma().passwordResetToken.deleteMany({ where: { userId: resetToken.userId } })
 
     return NextResponse.json({ message: "Mot de passe réinitialisé avec succès. Vous pouvez vous connecter." })
   } catch (error) {

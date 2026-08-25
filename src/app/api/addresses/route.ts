@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { addressSchema } from "@/lib/validations"
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
   }
 
-  const addresses = await prisma.address.findMany({
+  const addresses = await getPrisma().address.findMany({
     where: { userId: session.user.id as string },
     orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
   })
@@ -37,13 +37,13 @@ export async function POST(request: Request) {
     const userId = session.user.id as string
 
     if (parsed.data.isDefault) {
-      await prisma.address.updateMany({
+      await getPrisma().address.updateMany({
         where: { userId },
         data: { isDefault: false },
       })
     }
 
-    const address = await prisma.address.create({
+    const address = await getPrisma().address.create({
       data: {
         userId,
         label: parsed.data.label || null,

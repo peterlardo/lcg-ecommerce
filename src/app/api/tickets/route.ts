@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
   const posFilter = await getUserPointOfSaleIds()
   const posIds = posFilter?.posIds ?? null
 
-  const tickets = await prisma.order.findMany({
+  const tickets = await getPrisma().order.findMany({
     where: {
       OR: [
         { notes: { startsWith: "Vente comptoir" } },

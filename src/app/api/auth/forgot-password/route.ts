@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { sendPasswordResetEmail } from "@/lib/mailer"
 
 export async function POST(req: NextRequest) {
@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email requis" }, { status: 400 })
     }
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } })
+    const user = await getPrisma().user.findUnique({ where: { email: email.toLowerCase().trim() } })
 
     // Always return success to prevent email enumeration
     if (!user) {
@@ -19,13 +19,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Delete any existing tokens for this user
-    await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } })
+    await getPrisma().passwordResetToken.deleteMany({ where: { userId: user.id } })
 
     // Generate token
     const token = crypto.randomBytes(32).toString("hex")
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
 
-    await prisma.passwordResetToken.create({
+    await getPrisma().passwordResetToken.create({
       data: { token, userId: user.id, expiresAt },
     })
 

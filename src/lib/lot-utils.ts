@@ -1,10 +1,10 @@
-import { prisma } from "@/lib/prisma"
-import type { PrismaClient } from "@/generated/prisma/client"
+import { getPrisma } from "@/lib/prisma";
+import type { PrismaClient } from "@prisma/client"
 
 type TxClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0]
 
 export async function allocateStockFIFO(variantId: string, quantity: number, type: string, reference?: string) {
-  return allocateStockFIFOTx(prisma, variantId, quantity, type, reference)
+  return allocateStockFIFOTx(getPrisma(), variantId, quantity, type, reference)
 }
 
 export async function allocateStockFIFOTx(tx: TxClient, variantId: string, quantity: number, type: string, reference?: string) {
@@ -49,7 +49,7 @@ export async function allocateStockFIFOTx(tx: TxClient, variantId: string, quant
 }
 
 export async function allocateStockFEFO(variantId: string, quantity: number, type: string, reference?: string) {
-  return allocateStockFEFOTx(prisma, variantId, quantity, type, reference)
+  return allocateStockFEFOTx(getPrisma(), variantId, quantity, type, reference)
 }
 
 export async function allocateStockFEFOTx(tx: TxClient, variantId: string, quantity: number, type: string, reference?: string) {
@@ -103,7 +103,7 @@ export async function allocateStockFEFOTx(tx: TxClient, variantId: string, quant
 export async function generateLotNumber(): Promise<string> {
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "")
-  const count = await prisma.productionLot.count({
+  const count = await getPrisma().productionLot.count({
     where: { createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } },
   })
   const seq = String(count + 1).padStart(3, "0")

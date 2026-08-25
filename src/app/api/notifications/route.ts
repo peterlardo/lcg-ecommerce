@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
 export async function GET() {
@@ -8,7 +8,7 @@ export async function GET() {
 
   const since = new Date(Date.now() - 5 * 60 * 1000)
 
-  const orders = await prisma.order.findMany({
+  const orders = await getPrisma().order.findMany({
     where: { createdAt: { gte: since } },
     select: {
       id: true,

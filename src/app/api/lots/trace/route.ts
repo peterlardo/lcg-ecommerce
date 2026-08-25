@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
 export async function GET(req: Request) {
@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "lotNumber ou lotId requis" }, { status: 400 })
   }
 
-  const lot = await prisma.productionLot.findFirst({
+  const lot = await getPrisma().productionLot.findFirst({
     where: lotId ? { id: lotId } : { lotNumber: lotNumber! },
     include: {
       variant: { include: { product: { include: { category: true } } } },
@@ -26,12 +26,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Lot introuvable" }, { status: 404 })
   }
 
-  const allocations = await prisma.lotAllocation.findMany({
+  const allocations = await getPrisma().lotAllocation.findMany({
     where: { lotId: lot.id },
     orderBy: { createdAt: "desc" },
   })
 
-  const movements = await prisma.stockMovement.findMany({
+  const movements = await getPrisma().stockMovement.findMany({
     where: { lotId: lot.id },
     orderBy: { createdAt: "desc" },
   })
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
   const uniqueRefs = [...new Set(refs)]
 
   const orders = uniqueRefs.length > 0
-    ? await prisma.order.findMany({
+    ? await getPrisma().order.findMany({
         where: { orderNumber: { in: uniqueRefs } },
         select: { orderNumber: true, pointOfSaleId: true, pointOfSale: { select: { name: true, code: true } } },
       })
@@ -96,7 +96,7 @@ export async function GET(req: Request) {
     .filter(Boolean)
 
   if (posIds.length > 0) {
-    const allMovements = await prisma.stockMovement.findMany({
+    const allMovements = await getPrisma().stockMovement.findMany({
       where: {
         lotId: lot.id,
         type: { in: ["TRANSFER_IN", "TRANSFER_OUT"] },
@@ -113,7 +113,7 @@ export async function GET(req: Request) {
 
     const remainingPosIds = [...new Set([...refToPosId.values()].filter((id) => !posCache.has(id)))]
     if (remainingPosIds.length > 0) {
-      const posList = await prisma.pointOfSale.findMany({
+      const posList = await getPrisma().pointOfSale.findMany({
         where: { id: { in: remainingPosIds } },
         select: { id: true, name: true, code: true },
       })

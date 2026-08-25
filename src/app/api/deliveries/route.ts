@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 
 function mapDelivery(delivery: any) {
@@ -39,7 +39,7 @@ export async function GET() {
       : {}
 
     const [deliveries, agents] = await Promise.all([
-      prisma.delivery.findMany({
+      getPrisma().delivery.findMany({
         where: agentFilter,
         include: {
           deliveryAgent: true,
@@ -51,7 +51,7 @@ export async function GET() {
         },
         orderBy: { createdAt: "desc" },
       }),
-      prisma.user.findMany({
+      getPrisma().user.findMany({
         where: { role: "DELIVERY_AGENT", isActive: true },
         select: { id: true, name: true, email: true },
         orderBy: { name: "asc" },

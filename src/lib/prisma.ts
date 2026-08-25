@@ -1,30 +1,20 @@
-import { PrismaClient } from "@/generated/prisma/client"
+import { cache } from "react"
+import { PrismaClient } from "@prisma/client"
+import { PrismaNeon } from "@prisma/adapter-neon"
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+// HTTP driver: no persistent sockets, immune to dead-connection hangs on Workers.
+// Pooled endpoint (-pooler) required for interactive transactions over HTTP.
+function pooledUrl(): string {
+  const url = new URL(process.env.DATABASE_URL!)
+  url.hostname = url.hostname.replace(/^(ep-[^.]+)\./, "$1-pooler.")
+  return url.toString()
 }
 
-function createPrismaClient(): PrismaClient {
-  try {
-    const { Pool } = require("pg")
-    const { PrismaPg } = require("@prisma/adapter-pg")
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: process.env.NODE_ENV === "production" ? 2 : 5,
-      connectionTimeoutMillis: 15000,
-      idleTimeoutMillis: 15000,
-      keepAlive: true,
-    })
-    const adapter = new PrismaPg(pool)
-    return new PrismaClient({ adapter, transactionOptions: { timeout: 20000 } } as any)
-  } catch {
-    return new PrismaClient({ transactionOptions: { timeout: 20000 } } as any)
-  }
+function createClient(): PrismaClient {
+  const adapter = new PrismaNeon({ connectionString: pooledUrl() })
+  return new PrismaClient({ adapter, transactionOptions: { maxWait: 5000, timeout: 15000 } })
 }
 
-const prisma = globalForPrisma.prisma ?? createPrismaClient()
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
-
-export { prisma }
-
+// Per-request client — REQUIRED on Cloudflare Workers: sharing one client across
+// requests triggers "Cannot perform I/O on behalf of a different request".
+export const getPrisma = cache(() => createClient())

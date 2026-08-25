@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { allocateStockFIFOTx, generateLotNumberTx } from "@/lib/lot-utils"
 import { getOrCreateComptoir } from "@/lib/comptoir"
@@ -25,16 +25,16 @@ export async function GET(request: Request) {
     const todayStart = startOfDay(now)
 
     const [stocks, variants, salesOrders, movements] = await Promise.all([
-      prisma.pointOfSaleStock.findMany({
+      getPrisma().pointOfSaleStock.findMany({
         where: { pointOfSaleId: comptoir.id },
         include: { variant: { include: { product: true } } },
         orderBy: [{ variant: { product: { name: "asc" } } }, { variant: { format: "asc" } }],
       }),
-      prisma.productVariant.findMany({
+      getPrisma().productVariant.findMany({
         include: { product: true },
         orderBy: [{ product: { name: "asc" } }, { format: "asc" }],
       }),
-      prisma.order.findMany({
+      getPrisma().order.findMany({
         where: {
           pointOfSaleId: comptoir.id,
           notes: { startsWith: "Vente comptoir" },
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
         },
         select: { total: true, createdAt: true, items: true },
       }),
-      prisma.stockMovement.findMany({
+      getPrisma().stockMovement.findMany({
         where: { pointOfSaleId: comptoir.id },
         orderBy: { createdAt: "desc" },
         take: 25,
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
     const comptoir = await getOrCreateComptoir()
     const reference = `COMPTOIR-${Date.now()}`
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await getPrisma().$transaction(async (tx) => {
       const variant = await tx.productVariant.findUnique({ where: { id: variantId } })
       if (!variant) throw new Error("Variante introuvable")
 
