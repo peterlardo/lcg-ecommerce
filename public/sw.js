@@ -1,14 +1,15 @@
-const CACHE_VERSION = "lcg-pwa-v1";
+const CACHE_VERSION = "lcg-pwa-v2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const OFFLINE_URL = "/offline";
+const LOGIN_URL = "/auth/personnel";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(SHELL_CACHE)
       .then((cache) =>
-        cache.addAll(["/", "/offline", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"])
+        cache.addAll([LOGIN_URL, "/offline", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"])
       )
       .then(() => self.skipWaiting())
   );
