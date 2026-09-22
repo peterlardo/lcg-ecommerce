@@ -67,6 +67,7 @@ export async function GET() {
     },
     include: {
       pointOfSale: { select: { id: true, name: true, code: true } },
+      user: { select: { id: true, name: true } },
       items: { include: { variant: { include: { product: true } } } },
     },
     orderBy: { createdAt: "desc" },
@@ -84,6 +85,7 @@ export async function GET() {
       total: sale.total,
       notes: sale.notes,
       createdAt: sale.createdAt.toISOString(),
+      seller: sale.user ? { id: sale.user.id, name: sale.user.name } : null,
       pointOfSale: sale.pointOfSale,
       items: sale.items.map((item) => ({
         id: item.id,
@@ -196,6 +198,7 @@ export async function POST(request: Request) {
         id: order.id,
         orderNumber: order.orderNumber,
         customerName: order.customerName,
+        seller: session?.user?.name ?? null,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         status: order.status,

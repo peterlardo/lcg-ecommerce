@@ -5,7 +5,7 @@ import { ChevronDown, Filter, Printer, ReceiptText, Search } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml } from "@/lib/ticket-template"
 
-interface Ticket { id: string; ticketNumber: string; customerName: string; customerPhone: string; paymentMethod: string | null; paymentStatus: string; total: number; createdAt: string; notes: string | null; pointOfSale: { name: string; code: string } | null; items: { name: string; format: string; quantity: number; price: number; total: number }[] }
+interface Ticket { id: string; ticketNumber: string; customerName: string; customerPhone: string; sellerName: string | null; paymentMethod: string | null; paymentStatus: string; total: number; createdAt: string; notes: string | null; pointOfSale: { name: string; code: string } | null; items: { name: string; format: string; quantity: number; price: number; total: number }[] }
 const paymentLabels: Record<string, string> = { CARD: "Carte", MOBILE_MONEY: "Mobile Money", CASH_ON_DELIVERY: "Espèces" }
 
 interface PointOfSaleData {
@@ -26,6 +26,7 @@ function TicketPreview({ ticket }: { ticket: Ticket }) {
       orderNumber: ticket.ticketNumber,
       customerName: ticket.customerName,
       customerPhone: ticket.customerPhone,
+      sellerName: ticket.sellerName,
       paymentMethod: ticket.paymentMethod,
       paymentStatus: ticket.paymentStatus,
       total: ticket.total,
@@ -55,6 +56,10 @@ function TicketPreview({ ticket }: { ticket: Ticket }) {
           <div className="rounded-lg bg-white border border-gray-200 p-2.5 sm:p-3">
             <p className="text-xs font-medium text-gray-500">Client</p>
             <p className="mt-1 font-semibold text-gray-900">{ticket.customerName}</p>
+          </div>
+          <div className="rounded-lg bg-white border border-gray-200 p-2.5 sm:p-3">
+            <p className="text-xs font-medium text-gray-500">Vendeur</p>
+            <p className="mt-1 font-semibold text-gray-900">{ticket.sellerName || "—"}</p>
           </div>
           <div className="rounded-lg bg-white border border-gray-200 p-2.5 sm:p-3">
             <p className="text-xs font-medium text-gray-500">Point de vente</p>
@@ -122,6 +127,7 @@ export default function TicketsPage() {
         orderNumber: ticket.ticketNumber,
         customerName: ticket.customerName,
         customerPhone: ticket.customerPhone,
+        sellerName: ticket.sellerName,
         paymentMethod: ticket.paymentMethod,
         paymentStatus: ticket.paymentStatus,
         total: ticket.total,
@@ -145,7 +151,7 @@ export default function TicketsPage() {
 
   const filtered = useMemo(() => tickets.filter((ticket) => {
     const term = search.toLowerCase()
-    const matchesSearch = `${ticket.ticketNumber} ${ticket.customerName} ${ticket.pointOfSale?.name || ""}`.toLowerCase().includes(term)
+    const matchesSearch = `${ticket.ticketNumber} ${ticket.customerName} ${ticket.sellerName || ""} ${ticket.pointOfSale?.name || ""}`.toLowerCase().includes(term)
     const matchesDate = !date || ticket.createdAt.slice(0, 10) === date
     const matchesPos = !posFilter || ticket.pointOfSale?.name === posFilter
     return matchesSearch && matchesDate && matchesPos
@@ -195,6 +201,7 @@ export default function TicketsPage() {
                 <th className="px-3 sm:px-5 py-3 whitespace-nowrap">Ticket</th>
                 <th className="px-3 sm:px-5 py-3 whitespace-nowrap hidden md:table-cell">Point de vente</th>
                 <th className="px-3 sm:px-5 py-3 whitespace-nowrap">Client</th>
+                <th className="px-3 sm:px-5 py-3 whitespace-nowrap hidden sm:table-cell">Vendeur</th>
                 <th className="px-3 sm:px-5 py-3 whitespace-nowrap hidden sm:table-cell">Paiement</th>
                 <th className="px-3 sm:px-5 py-3 whitespace-nowrap">Total</th>
                 <th className="px-3 sm:px-5 py-3"></th>
@@ -213,6 +220,7 @@ export default function TicketsPage() {
                     </td>
                     <td className="px-3 sm:px-5 py-3 sm:py-4 text-muted-foreground hidden md:table-cell">{ticket.pointOfSale ? `${ticket.pointOfSale.name} (${ticket.pointOfSale.code})` : "Non affecté"}</td>
                     <td className="px-3 sm:px-5 py-3 sm:py-4 text-foreground">{ticket.customerName}</td>
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 text-muted-foreground hidden sm:table-cell">{ticket.sellerName || "—"}</td>
                     <td className="px-3 sm:px-5 py-3 sm:py-4 text-muted-foreground hidden sm:table-cell">{paymentLabels[ticket.paymentMethod || ""] || ticket.paymentMethod || "-"}</td>
                     <td className="px-3 sm:px-5 py-3 sm:py-4 font-semibold text-foreground">{formatPrice(ticket.total)}</td>
                     <td className="px-3 sm:px-5 py-3 sm:py-4 text-right">

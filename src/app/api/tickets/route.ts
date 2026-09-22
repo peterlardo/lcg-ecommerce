@@ -17,7 +17,7 @@ export async function GET() {
       ],
       ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}),
     },
-    include: { pointOfSale: { select: { name: true, code: true } }, items: { include: { variant: { include: { product: true } } } } },
+include: { pointOfSale: { select: { name: true, code: true } }, user: { select: { name: true } }, items: { include: { variant: { include: { product: true } } } } },
     orderBy: { createdAt: "desc" },
   })
   return NextResponse.json(tickets.map((ticket) => ({
@@ -25,6 +25,7 @@ export async function GET() {
     ticketNumber: ticket.orderNumber,
     customerName: ticket.customerName || "Client comptoir",
     customerPhone: ticket.customerPhone || "",
+    sellerName: ticket.user?.name ?? null,
     paymentMethod: ticket.paymentMethod,
     paymentStatus: ticket.paymentStatus,
     total: ticket.total,

@@ -12,6 +12,7 @@ export interface TicketData {
   orderNumber: string
   customerName: string
   customerPhone?: string
+  sellerName?: string | null
   paymentMethod: string | null
   paymentStatus?: string | null
   total: number
@@ -116,6 +117,7 @@ export function buildTicketHtml(ticket: TicketData): string {
 <div class="sep"></div>
 
 <div class="line">${padRight("Point:", 12)}${escapeHtml(pos)}</div>
+${ticket.sellerName ? `<div class="line">${padRight("Vendeur:", 12)}${escapeHtml(ticket.sellerName)}</div>` : ""}
 <div class="line">${padRight("Date:", 12)}${formatDate(ticket.createdAt)}</div>
 <div class="line">${padRight("Heure:", 12)}${formatTime(ticket.createdAt)}</div>
 <div class="line">${padRight("Client:", 12)}${escapeHtml(ticket.customerName || "Client comptoir")}</div>

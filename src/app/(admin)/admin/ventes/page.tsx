@@ -45,6 +45,7 @@ interface SaleReceipt {
   orderNumber: string
   customerName?: string
   customerPhone?: string
+  seller?: string | null
   paymentMethod?: string
   total: number
   createdAt: string
@@ -65,6 +66,7 @@ interface SaleHistoryItem {
   orderNumber: string
   customerName: string
   customerPhone: string
+  seller: { id: string; name: string | null } | null
   paymentMethod: string
   paymentStatus: string
   status: string
@@ -158,6 +160,7 @@ export default function VentesPage() {
       buildTicketHtml({
         orderNumber: ticket.orderNumber,
         customerName: ticket.customerName || "Client comptoir",
+        sellerName: ticket.seller || null,
         paymentMethod: ticket.paymentMethod || "CASH_ON_DELIVERY",
         paymentStatus: "PAID",
         total: ticket.total,
@@ -178,6 +181,7 @@ export default function VentesPage() {
       buildTicketHtml({
         orderNumber: sale.orderNumber,
         customerName: sale.customerName || "Client comptoir",
+        sellerName: sale.seller?.name || null,
         paymentMethod: sale.paymentMethod || "CASH_ON_DELIVERY",
         paymentStatus: sale.paymentStatus || "PAID",
         total: sale.total,
@@ -703,7 +707,7 @@ export default function VentesPage() {
                 <div className="rounded-lg border border-gray-200 bg-white p-3">
                   <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Aperçu du ticket</p>
                   <iframe
-                    ref={(el) => { if (el) { try { el.contentDocument?.open(); el.contentDocument?.write(buildTicketHtml({ orderNumber: receipt.orderNumber, customerName: receipt.customerName || "Client comptoir", paymentMethod: receipt.paymentMethod || "CASH_ON_DELIVERY", paymentStatus: "PAID", total: receipt.total, createdAt: receipt.createdAt, pointOfSale: null, items: receipt.items })); el.contentDocument?.close(); } catch {} } }}
+                    ref={(el) => { if (el) { try { el.contentDocument?.open(); el.contentDocument?.write(buildTicketHtml({ orderNumber: receipt.orderNumber, customerName: receipt.customerName || "Client comptoir", sellerName: receipt.seller || null, paymentMethod: receipt.paymentMethod || "CASH_ON_DELIVERY", paymentStatus: "PAID", total: receipt.total, createdAt: receipt.createdAt, pointOfSale: null, items: receipt.items })); el.contentDocument?.close(); } catch {} } }}
                     title="Aperçu ticket"
                     className="w-full rounded border-0"
                     style={{ height: "420px" }}
@@ -1035,6 +1039,7 @@ export default function VentesPage() {
                     </div>
                     <p className="text-sm text-gray-500">
                       {sale.customerName}
+                      {sale.seller?.name && <span className="ml-2 text-gray-400">· {sale.seller.name}</span>}
                       {sale.pointOfSale && <span className="ml-2 text-gray-400">· {sale.pointOfSale.name}</span>}
                     </p>
                   </div>
@@ -1083,6 +1088,7 @@ export default function VentesPage() {
                     <div className="space-y-2 text-xs sm:text-sm bg-white p-2.5 sm:p-3 rounded-lg border border-gray-100 h-fit">
                       <p><span className="text-gray-500">Client :</span> <span className="font-medium">{sale.customerName}</span></p>
                       {sale.customerPhone && <p><span className="text-gray-500">Téléphone :</span> <span className="font-medium">{sale.customerPhone}</span></p>}
+                      {sale.seller?.name && <p><span className="text-gray-500">Vendeur :</span> <span className="font-medium">{sale.seller.name}</span></p>}
                       <p><span className="text-gray-500">Paiement :</span> <span className="font-medium">{paymentLabels[sale.paymentMethod] || sale.paymentMethod}</span></p>
                       <p><span className="text-gray-500">Statut :</span> <span className="font-medium text-green-600">Payé</span></p>
                       {sale.pointOfSale && <p><span className="text-gray-500">Point de vente :</span> <span className="font-medium">{sale.pointOfSale.name} ({sale.pointOfSale.code})</span></p>}
