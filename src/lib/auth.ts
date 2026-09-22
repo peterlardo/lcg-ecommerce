@@ -49,12 +49,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-async jwt({ token, user }) {
+callbacks: {
+    async jwt({ token, user }) {
       if (user) {
         token.role = user.role as Role
         token.id = user.id
         token.permissions = await getPrisma().userPermission.findMany({ where: { userId: user.id as string }, select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true } })
+        token.authorAt = Date.now()
+        return token
+      }
+      if (token.id) {
+        try {
+          const fresh = await getPrisma().user.findUnique({ where: { id: token.id as string }, select: { updatedAt: true, role: true, isActive: true } })
+          const freshAt = fresh ? fresh.updatedAt.getTime() : null
+          if (fresh && (!token.authorAt || freshAt !== token.authorAt)) {
+            token.role = fresh.role as Role
+            token.permissions = await getPrisma().userPermission.findMany({ where: { userId: token.id as string }, select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true } })
+            token.authorAt = freshAt
+          }
+          if (fresh && !fresh.isActive) token.role = "DISABLED" as Role
+        } catch {
+          // Garde le token existant si la base est temporairement indisponible
+        }
       }
       return token
     },

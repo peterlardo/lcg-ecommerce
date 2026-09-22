@@ -40,30 +40,57 @@ export default function UtilisateursPage() {
   const editFileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/utilisateurs")
-    if (response.ok) setUsers(await response.json())
-    setLoading(false)
+    try {
+      const response = await fetch("/api/utilisateurs")
+      if (response.ok) setUsers(await response.json())
+      else setError("Impossible de charger les utilisateurs")
+    } catch {
+      setError("Impossible de charger les utilisateurs")
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
     const controller = new AbortController()
-    const init = async () => {
-      const [usersRes, posRes, rolesRes] = await Promise.all([
-        fetch("/api/utilisateurs", { signal: controller.signal }),
-        fetch("/api/points-de-vente", { signal: controller.signal }),
-        fetch("/api/role-profiles", { signal: controller.signal }),
-      ])
-      if (controller.signal.aborted) return
-      if (usersRes.ok) setUsers(await usersRes.json())
-      if (posRes.ok) {
-        const data = await posRes.json()
-        const list = Array.isArray(data) ? data : data.points ?? []
-        setPointsOfSale(list)
+
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/utilisateurs", { signal: controller.signal })
+        if (controller.signal.aborted) return
+        if (res.ok) setUsers(await res.json())
+      } catch {
+        if (!controller.signal.aborted) setError("Impossible de charger les utilisateurs")
       }
-      if (rolesRes.ok) setRoleProfiles(await rolesRes.json())
-      setLoading(false)
     }
-    void init()
+
+    const fetchPoints = async () => {
+      try {
+        const res = await fetch("/api/points-de-vente/list", { signal: controller.signal })
+        if (controller.signal.aborted) return
+        if (res.ok) {
+          const data = await res.json()
+          setPointsOfSale(Array.isArray(data) ? data : data.points ?? [])
+        }
+      } catch {
+        // Non bloquant : la gestion des utilisateurs reste utilisable sans la liste des PDV
+      }
+    }
+
+    const fetchRoles = async () => {
+      try {
+        const res = await fetch("/api/role-profiles", { signal: controller.signal })
+        if (controller.signal.aborted) return
+        if (res.ok) setRoleProfiles(await res.json())
+      } catch {
+        // Non bloquant : le rôle saisi via l'API reste valide
+      }
+    }
+
+    void Promise.allSettled([fetchUsers(), fetchPoints(), fetchRoles()]).then(() => {
+      if (!controller.signal.aborted) setLoading(false)
+    })
+
     return () => controller.abort()
   }, [])
 
@@ -109,7 +136,7 @@ export default function UtilisateursPage() {
 
   const saveUser = async () => {
     if (!selected) return
-    const payload: Record<string, unknown> = { name: editName, phone: editPhone, role: editRole, isActive: editActive, permissions, posIds: editPosIds }
+    const payload: Record<string, unknown> = { name: editName, email: editEmail, phone: editPhone, role: editRole, isActive: editActive, permissions, posIds: editPosIds }
     if (editPassword.trim()) payload.password = editPassword.trim()
     const response = await fetch(`/api/utilisateurs/${selected}`, {
       method: "PATCH",
