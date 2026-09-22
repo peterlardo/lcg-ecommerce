@@ -17,6 +17,7 @@ interface Lot {
   createdAt: string
   variant: { product: { name: string }; format: string }
   createdBy?: { name: string } | null
+  destination?: { id: string; name: string; code: string } | null
   allocations?: LotAllocation[]
 }
 
@@ -378,8 +379,9 @@ export default function ProductionPage() {
                   <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Numero</th>
                   <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Produit</th>
                   <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Format</th>
-                  <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Produit</th>
+                  <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Qté</th>
                   <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Restant</th>
+                  <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Point de vente</th>
                   <th className="px-2 py-1.5 text-center text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Statut</th>
                   <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Production</th>
                   <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Expiration</th>
@@ -397,6 +399,13 @@ export default function ProductionPage() {
                       <td className="px-2 py-2 text-gray-600 sm:px-4 sm:py-2.5">{lot.variant.format}</td>
                       <td className="px-2 py-2 text-right font-semibold sm:px-4 sm:py-2.5">{lot.initialQuantity}</td>
                       <td className={`px-2 py-2 text-right font-bold sm:px-4 sm:py-2.5 ${lot.remainingQuantity === 0 ? "text-gray-400" : "text-gray-900"}`}>{lot.remainingQuantity}</td>
+                      <td className="px-2 py-2 text-left sm:px-4 sm:py-2.5">
+                        {lot.destination ? (
+                          <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 sm:px-2 sm:text-[11px]">{lot.destination.name} ({lot.destination.code})</span>
+                        ) : (
+                          <span className="text-gray-400 text-[10px] sm:text-xs">—</span>
+                        )}
+                      </td>
                       <td className="px-2 py-2 text-center sm:px-4 sm:py-2.5">
                         <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:px-2 sm:text-xs ${st.color}`}>
                           <Icon className="h-3 w-3" /> {st.label}
@@ -413,7 +422,7 @@ export default function ProductionPage() {
                   )
                 })}
                 {filteredLots.length === 0 && (
-                  <tr><td colSpan={9} className="px-2 py-6 text-center text-xs text-gray-500 sm:px-4 sm:py-8 sm:text-sm">Aucun lot trouve.</td></tr>
+                  <tr><td colSpan={10} className="px-2 py-6 text-center text-xs text-gray-500 sm:px-4 sm:py-8 sm:text-sm">Aucun lot trouve.</td></tr>
                 )}
               </tbody>
             </table>
@@ -462,6 +471,7 @@ export default function ProductionPage() {
 
             <div className="mb-3 grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2 sm:gap-3 sm:text-sm">
               <div><span className="text-gray-500">Production :</span> <span className="font-medium">{fmtDate(selectedLot.productionDate)}</span></div>
+              {selectedLot.destination && <div><span className="text-gray-500">Point de vente :</span> <span className="font-medium">{selectedLot.destination.name} ({selectedLot.destination.code})</span></div>}
               {selectedLot.expiryDate && <div><span className="text-gray-500">Expiration :</span> <span className="font-medium">{fmtDate(selectedLot.expiryDate)}</span></div>}
               {selectedLot.createdBy && <div><span className="text-gray-500">Cree par :</span> <span className="font-medium">{selectedLot.createdBy.name}</span></div>}
               {selectedLot.notes && <div><span className="text-gray-500">Note :</span> <span className="font-medium">{selectedLot.notes}</span></div>}

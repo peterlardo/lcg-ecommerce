@@ -97,6 +97,26 @@ export async function GET(req: Request) {
     }
   }
 
+  const destMovements = await getPrisma().stockMovement.findMany({
+    where: { lotId: { in: lots.map((l) => l.id) }, type: "PRODUCTION", pointOfSaleId: { not: null } },
+    select: { lotId: true, pointOfSaleId: true },
+  })
+  const destPosIds = [...new Set(destMovements.map((m) => m.pointOfSaleId!).filter(Boolean))]
+  const destPosList = destPosIds.length > 0
+    ? await getPrisma().pointOfSale.findMany({ where: { id: { in: destPosIds } }, select: { id: true, name: true, code: true } })
+    : []
+  const destPosMap = new Map(destPosList.map((p) => [p.id, p]))
+  const lotDestMap = new Map<string, { id: string; name: string; code: string }>()
+  for (const m of destMovements) {
+    const pos = destPosMap.get(m.pointOfSaleId!)
+    if (pos && !lotDestMap.has(m.lotId!)) lotDestMap.set(m.lotId!, pos)
+  }
+
+  enrichedLots = (enrichedLots as LotWithAllocations[]).map((lot) => ({
+    ...lot,
+    destination: lotDestMap.get(lot.id) ?? null,
+  }))
+
   return NextResponse.json({ lots: enrichedLots, summary })
 }
 
