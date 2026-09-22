@@ -1,8 +1,9 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Sora, Manrope } from "next/font/google"
 import "./globals.css"
 import { Providers } from "./providers"
 import { siteConfig } from "@/lib/site"
+import { PwaRegister } from "@/components/pwa-register"
 
 const sora = Sora({
   subsets: ["latin"],
@@ -25,6 +26,22 @@ export const metadata: Metadata = {
     template: "%s | LCG — La Congolaise des Glaçons",
   },
   description: siteConfig.description,
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon-64.png", type: "image/png", sizes: "64x64" },
+      { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "LCG",
+  },
+  applicationName: "LCG",
+  formatDetection: { telephone: false },
   keywords: [
     "glaçons Brazzaville",
     "glace pilée Congo",
@@ -68,6 +85,10 @@ export const metadata: Metadata = {
   },
 }
 
+export const viewport: Viewport = {
+  themeColor: "#063d62",
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -77,9 +98,12 @@ export default function RootLayout({
     <html lang="fr">
       <head>
         <link rel="icon" type="image/png" href="/favicon-64.png" />
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className={`${sora.variable} ${manrope.variable} min-h-screen flex flex-col bg-background text-foreground antialiased`}>
         <Providers>{children}</Providers>
+        <PwaRegister />
       </body>
     </html>
   )
