@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
 import { useToast } from "@/contexts/toast-context"
 import { formatPrice } from "@/lib/utils"
@@ -172,14 +173,17 @@ export default function CartPage() {
               key={item.id}
               className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 shadow-card-soft"
             >
-              <img
-                src={item.image}
-                alt={item.name}
-                width={80}
-                height={80}
-                loading="lazy"
-                className="h-20 w-20 rounded-xl object-cover"
-              />
+              {item.image ? (
+                <Image
+                  src={item.image}
+                  alt={item.name}
+                  width={80}
+                  height={80}
+                  className="h-20 w-20 rounded-xl object-cover"
+                />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-muted text-2xl">🧊</div>
+              )}
               <div className="min-w-0 flex-1">
                 <h2 className="truncate font-display text-sm font-bold">
                   {item.name}

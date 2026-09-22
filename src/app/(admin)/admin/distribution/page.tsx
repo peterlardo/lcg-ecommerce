@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, Check, Clock, PackageCheck, RefreshCw, Truck } from "lucide-react"
+import { PackageCheck, RefreshCw, Truck } from "lucide-react"
 import { formatPrice, getStatusColor, getStatusLabel } from "@/lib/utils"
 
 interface OrderItem {
@@ -48,8 +48,7 @@ export default function DistributionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
-  const load = async () => {
-    setError("")
+const load = async () => {
     try {
       const [ordersRes, deliveriesRes] = await Promise.all([fetch("/api/orders"), fetch("/api/deliveries")])
       if (!ordersRes.ok || !deliveriesRes.ok) throw new Error("Impossible de charger la distribution")
@@ -63,8 +62,26 @@ export default function DistributionPage() {
     }
   }
 
-  useEffect(() => {
-    void load()
+useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const [ordersRes, deliveriesRes] = await Promise.all([
+          fetch("/api/orders", { signal: controller.signal }),
+          fetch("/api/deliveries", { signal: controller.signal }),
+        ])
+        if (!ordersRes.ok || !deliveriesRes.ok) throw new Error("Impossible de charger la distribution")
+        setOrders(await ordersRes.json())
+        const deliveryPayload = (await deliveriesRes.json()) as DeliveryPayload
+        setDeliveries(deliveryPayload.deliveries ?? [])
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Erreur de chargement")
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
   }, [])
 
   const distributionOrders = useMemo(

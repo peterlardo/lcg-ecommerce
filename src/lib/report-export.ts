@@ -2,6 +2,16 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
 import { LOGO_BASE64 } from "./logo-base64"
+import type { ReportPayload } from "./report-types"
+
+type VentesData = Pick<ReportPayload, "summary" | "topProducts" | "paymentBreakdown30" | "daily7">
+type StocksData = Pick<ReportPayload, "summary" | "stockByCategory" | "allStockVariants" | "stockAlerts">
+type ApproData = Pick<ReportPayload, "supplyByType" | "supplyMovements">
+type CommandesData = Pick<ReportPayload, "summary" | "ordersByStatus" | "ordersByDay">
+type ReservationsData = Pick<ReportPayload, "reservationsByStatus" | "reservations" | "reservationsByDay">
+type ProductionData = Pick<ReportPayload, "productionSummary" | "productionByDay" | "productionMovements">
+type CaisseData = Pick<ReportPayload, "cashSessionsSummary" | "cashSessionsByDay">
+type LotsData = Pick<ReportPayload, "lotSummary" | "lots">
 
 const PAYMENT: Record<string, string> = { CASH_ON_DELIVERY: "Especes", MOBILE_MONEY: "Mobile Money", CARD: "Carte" }
 const STATUS_LBL: Record<string, string> = { PENDING: "En attente", CONFIRMED: "Confirmee", PROCESSING: "En cours", READY: "Prete", OUT_FOR_DELIVERY: "En livraison", DELIVERED: "Livre", CANCELLED: "Annulee" }
@@ -32,6 +42,10 @@ function todayShort() {
 }
 
 // ─── PDF UTILITIES ────────────────────────────────────────────
+
+interface AutoTableDoc extends jsPDF {
+  lastAutoTable: { finalY: number }
+}
 
 function createDoc(): jsPDF {
   const doc = new jsPDF("p", "mm", "a4")
@@ -209,20 +223,9 @@ function finalizePDF(doc: jsPDF, reportTitle: string, filename: string) {
   doc.save(filename)
 }
 
-function download(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
 // ─── VENTES ────────────────────────────────────────────────────
 
-export function exportVentesPDF(data: any) {
+export function exportVentesPDF(data: VentesData) {
   const doc = createDoc()
   addCoverPage(doc, "Rapport Ventes", REPORT_VERSION)
   doc.addPage()
@@ -236,10 +239,10 @@ export function exportVentesPDF(data: any) {
   doc.setFontSize(10)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(60, 60, 60)
-  doc.text("CA 7j: " + fmt(data.summary?.revenue7 ?? 0), 14, y); y += 6
-  doc.text("CA 30j: " + fmt(data.summary?.revenue30 ?? 0), 14, y); y += 6
-  doc.text("Commandes 30j: " + (data.summary?.orders30 ?? 0), 14, y); y += 6
-  doc.text("Panier moyen: " + fmt(data.summary?.avgOrder ?? 0), 14, y); y += 12
+  doc.text("CA 7j: " + fmt(data.summary.revenue7), 14, y); y += 6
+  doc.text("CA 30j: " + fmt(data.summary.revenue30), 14, y); y += 6
+  doc.text("Commandes 30j: " + data.summary.orders30, 14, y); y += 6
+  doc.text("Panier moyen: " + fmt(data.summary.avgOrder), 14, y); y += 12
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -248,11 +251,11 @@ export function exportVentesPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Produit", "Qte", "Revenu"]],
-    body: (data.topProducts ?? []).map((p: any) => [p.name, String(p.quantity), fmt(p.revenue)]),
+    body: data.topProducts.map((p) => [p.name, String(p.quantity), fmt(p.revenue)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
   })
-  y = (doc as any).lastAutoTable.finalY + 10
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -261,7 +264,7 @@ export function exportVentesPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Methode", "Transactions", "Total"]],
-    body: (data.paymentBreakdown30 ?? []).map((p: any) => [PAYMENT[p.method] ?? p.method, String(p.count), fmt(p.total)]),
+    body: data.paymentBreakdown30.map((p) => [PAYMENT[p.method] ?? p.method, String(p.count), fmt(p.total)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
   })
@@ -269,22 +272,22 @@ export function exportVentesPDF(data: any) {
   finalizePDF(doc, "Rapport Ventes", "rapport-ventes-" + todayShort() + ".pdf")
 }
 
-export function exportVentesExcel(data: any) {
+export function exportVentesExcel(data: VentesData) {
   const wb = XLSX.utils.book_new()
-  const summary = [["Indicateur", "Valeur"], ["CA 7j", data.summary?.revenue7 ?? 0], ["CA 30j", data.summary?.revenue30 ?? 0], ["Commandes 30j", data.summary?.orders30 ?? 0], ["Panier moyen", data.summary?.avgOrder ?? 0]]
+  const summary = [["Indicateur", "Valeur"], ["CA 7j", data.summary.revenue7], ["CA 30j", data.summary.revenue30], ["Commandes 30j", data.summary.orders30], ["Panier moyen", data.summary.avgOrder]]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Resume")
-  const top = [["Produit", "Qte", "Revenu"], ...(data.topProducts ?? []).map((p: any) => [p.name, p.quantity, p.revenue])]
+  const top: (string | number)[][] = [["Produit", "Qte", "Revenu"], ...data.topProducts.map((p) => [p.name, p.quantity, p.revenue])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(top), "Top Produits")
-  const pay = [["Methode", "Transactions", "Total"], ...(data.paymentBreakdown30 ?? []).map((p: any) => [PAYMENT[p.method] ?? p.method, p.count, p.total])]
+  const pay: (string | number)[][] = [["Methode", "Transactions", "Total"], ...data.paymentBreakdown30.map((p) => [PAYMENT[p.method] ?? p.method, p.count, p.total])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pay), "Paiements")
-  const daily = [["Jour", "Revenu", "Commandes"], ...(data.daily7 ?? []).map((d: any) => [d.name, d.revenu, d.commandes])]
+  const daily: (string | number)[][] = [["Jour", "Revenu", "Commandes"], ...data.daily7.map((d) => [d.name, d.revenu, d.commandes])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), "CA 7j")
   XLSX.writeFile(wb, "rapport-ventes-" + todayShort() + ".xlsx")
 }
 
 // ─── STOCKS ────────────────────────────────────────────────────
 
-export function exportStocksPDF(data: any) {
+export function exportStocksPDF(data: StocksData) {
   const doc = createDoc()
   addCoverPage(doc, "Rapport Stocks", REPORT_VERSION)
   doc.addPage()
@@ -298,10 +301,10 @@ export function exportStocksPDF(data: any) {
   doc.setFontSize(10)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(60, 60, 60)
-  doc.text("Unites stock: " + (data.summary?.stockUnits ?? 0), 14, y); y += 6
-  doc.text("Variantes: " + (data.summary?.totalVariants ?? 0), 14, y); y += 6
-  doc.text("Stock faible: " + (data.summary?.lowStock ?? 0), 14, y); y += 6
-  doc.text("Rupture: " + (data.summary?.outOfStock ?? 0), 14, y); y += 12
+  doc.text("Unites stock: " + data.summary.stockUnits, 14, y); y += 6
+  doc.text("Variantes: " + data.summary.totalVariants, 14, y); y += 6
+  doc.text("Stock faible: " + data.summary.lowStock, 14, y); y += 6
+  doc.text("Rupture: " + data.summary.outOfStock, 14, y); y += 12
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -310,11 +313,11 @@ export function exportStocksPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Categorie", "Stock total", "Variantes"]],
-    body: (data.stockByCategory ?? []).map((c: any) => [c.name, String(c.totalStock), String(c.variants)]),
+    body: data.stockByCategory.map((c) => [c.name, String(c.totalStock), String(c.variants)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
   })
-  y = (doc as any).lastAutoTable.finalY + 10
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -323,7 +326,7 @@ export function exportStocksPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Produit", "Format", "Categorie", "Stock"]],
-    body: (data.allStockVariants ?? []).map((v: any) => [v.productName, v.format, v.categoryName, String(v.stock)]),
+    body: data.allStockVariants.map((v) => [v.productName, v.format, v.categoryName, String(v.stock)]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
   })
@@ -331,27 +334,27 @@ export function exportStocksPDF(data: any) {
   finalizePDF(doc, "Rapport Stocks", "rapport-stocks-" + todayShort() + ".pdf")
 }
 
-export function exportStocksExcel(data: any) {
+export function exportStocksExcel(data: StocksData) {
   const wb = XLSX.utils.book_new()
-  const cats = [["Categorie", "Stock total", "Variantes"], ...(data.stockByCategory ?? []).map((c: any) => [c.name, c.totalStock, c.variants])]
+  const cats: (string | number)[][] = [["Categorie", "Stock total", "Variantes"], ...data.stockByCategory.map((c) => [c.name, c.totalStock, c.variants])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cats), "Par categorie")
-  const vars = [["Produit", "Format", "Categorie", "Stock"], ...(data.allStockVariants ?? []).map((v: any) => [v.productName, v.format, v.categoryName, v.stock])]
+  const vars: (string | number)[][] = [["Produit", "Format", "Categorie", "Stock"], ...data.allStockVariants.map((v) => [v.productName, v.format, v.categoryName, v.stock])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vars), "Variantes")
-  const alerts = [["Produit", "Format", "Stock"], ...(data.stockAlerts ?? []).map((a: any) => [a.productName, a.format, a.stock])]
+  const alerts: (string | number)[][] = [["Produit", "Format", "Stock"], ...data.stockAlerts.map((a) => [a.productName, a.format, a.stock])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(alerts), "Alertes")
   XLSX.writeFile(wb, "rapport-stocks-" + todayShort() + ".xlsx")
 }
 
 // ─── APPROVISIONNEMENTS ───────────────────────────────────────
 
-export function exportApproPDF(data: any) {
+export function exportApproPDF(data: ApproData) {
   const doc = createDoc()
   addCoverPage(doc, "Rapport Approvisionnements", REPORT_VERSION)
   doc.addPage()
   addPageHeader(doc, "Rapport Approvisionnements")
   let y = 30
 
-  const types = (data.supplyByType ?? []).filter((t: any) => t.quantity > 0)
+  const types = data.supplyByType.filter((t) => t.quantity > 0)
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(31, 79, 163)
@@ -359,11 +362,11 @@ export function exportApproPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Type", "Quantite", "Mouvements"]],
-    body: types.map((t: any) => [SUPPLY_LBL[t.type] ?? t.type, String(t.quantity), String(t.count)]),
+    body: types.map((t) => [SUPPLY_LBL[t.type] ?? t.type, String(t.quantity), String(t.count)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
   })
-  y = (doc as any).lastAutoTable.finalY + 10
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -372,7 +375,7 @@ export function exportApproPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Date", "Produit", "Format", "Type", "Qte", "Raison"]],
-    body: (data.supplyMovements ?? []).map((m: any) => [
+    body: data.supplyMovements.map((m) => [
       new Date(m.createdAt).toLocaleDateString("fr-FR"),
       m.productName, m.format, SUPPLY_LBL[m.type] ?? m.type, "+" + m.quantity, m.reason || "-",
     ]),
@@ -383,18 +386,18 @@ export function exportApproPDF(data: any) {
   finalizePDF(doc, "Rapport Approvisionnements", "rapport-approvisionnements-" + todayShort() + ".pdf")
 }
 
-export function exportApproExcel(data: any) {
+export function exportApproExcel(data: ApproData) {
   const wb = XLSX.utils.book_new()
-  const types = [["Type", "Quantite", "Mouvements"], ...(data.supplyByType ?? []).filter((t: any) => t.quantity > 0).map((t: any) => [SUPPLY_LBL[t.type] ?? t.type, t.quantity, t.count])]
+  const types: (string | number)[][] = [["Type", "Quantite", "Mouvements"], ...data.supplyByType.filter((t) => t.quantity > 0).map((t) => [SUPPLY_LBL[t.type] ?? t.type, t.quantity, t.count])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(types), "Resume")
-  const mvts = [["Date", "Produit", "Format", "Type", "Qte", "Raison"], ...(data.supplyMovements ?? []).map((m: any) => [new Date(m.createdAt).toLocaleDateString("fr-FR"), m.productName, m.format, SUPPLY_LBL[m.type] ?? m.type, m.quantity, m.reason || ""])]
+  const mvts: (string | number)[][] = [["Date", "Produit", "Format", "Type", "Qte", "Raison"], ...data.supplyMovements.map((m) => [new Date(m.createdAt).toLocaleDateString("fr-FR"), m.productName, m.format, SUPPLY_LBL[m.type] ?? m.type, m.quantity, m.reason || ""])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mvts), "Mouvements")
   XLSX.writeFile(wb, "rapport-approvisionnements-" + todayShort() + ".xlsx")
 }
 
 // ─── COMMANDES ────────────────────────────────────────────────
 
-export function exportCommandesPDF(data: any) {
+export function exportCommandesPDF(data: CommandesData) {
   const doc = createDoc()
   addCoverPage(doc, "Rapport Commandes", REPORT_VERSION)
   doc.addPage()
@@ -408,10 +411,10 @@ export function exportCommandesPDF(data: any) {
   doc.setFontSize(10)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(60, 60, 60)
-  doc.text("Commandes 30j: " + (data.summary?.orders30 ?? 0), 14, y); y += 6
-  doc.text("CA commandes: " + fmt(data.summary?.revenue30 ?? 0), 14, y); y += 6
-  doc.text("Aujourd'hui: " + (data.summary?.todayOrders ?? 0), 14, y); y += 6
-  doc.text("En livraison: " + (data.summary?.deliveriesInProgress ?? 0), 14, y); y += 12
+  doc.text("Commandes 30j: " + data.summary.orders30, 14, y); y += 6
+  doc.text("CA commandes: " + fmt(data.summary.revenue30), 14, y); y += 6
+  doc.text("Aujourd'hui: " + data.summary.todayOrders, 14, y); y += 6
+  doc.text("En livraison: " + data.summary.deliveriesInProgress, 14, y); y += 12
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -420,11 +423,11 @@ export function exportCommandesPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Statut", "Commandes", "Total"]],
-    body: (data.ordersByStatus ?? []).map((s: any) => [STATUS_LBL[s.status] ?? s.status, String(s.count), fmt(s.total)]),
+    body: data.ordersByStatus.map((s) => [STATUS_LBL[s.status] ?? s.status, String(s.count), fmt(s.total)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
   })
-  y = (doc as any).lastAutoTable.finalY + 10
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -433,7 +436,7 @@ export function exportCommandesPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Jour", "Commandes", "Revenu"]],
-    body: (data.ordersByDay ?? []).map((d: any) => [d.name, String(d.commandes), fmt(d.revenu)]),
+    body: data.ordersByDay.map((d) => [d.name, String(d.commandes), fmt(d.revenu)]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
   })
@@ -441,25 +444,25 @@ export function exportCommandesPDF(data: any) {
   finalizePDF(doc, "Rapport Commandes", "rapport-commandes-" + todayShort() + ".pdf")
 }
 
-export function exportCommandesExcel(data: any) {
+export function exportCommandesExcel(data: CommandesData) {
   const wb = XLSX.utils.book_new()
-  const summary = [["Statut", "Commandes", "Total"], ...(data.ordersByStatus ?? []).map((s: any) => [STATUS_LBL[s.status] ?? s.status, s.count, s.total])]
+  const summary: (string | number)[][] = [["Statut", "Commandes", "Total"], ...data.ordersByStatus.map((s) => [STATUS_LBL[s.status] ?? s.status, s.count, s.total])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Par statut")
-  const daily = [["Jour", "Commandes", "Revenu"], ...(data.ordersByDay ?? []).map((d: any) => [d.name, d.commandes, d.revenu])]
+  const daily: (string | number)[][] = [["Jour", "Commandes", "Revenu"], ...data.ordersByDay.map((d) => [d.name, d.commandes, d.revenu])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), "Par jour")
   XLSX.writeFile(wb, "rapport-commandes-" + todayShort() + ".xlsx")
 }
 
 // ─── RESERVATIONS ─────────────────────────────────────────────
 
-export function exportReservationsPDF(data: any) {
+export function exportReservationsPDF(data: ReservationsData) {
   const doc = createDoc()
   addCoverPage(doc, "Rapport Reservations", REPORT_VERSION)
   doc.addPage()
   addPageHeader(doc, "Rapport Reservations")
   let y = 30
 
-  const rs = data.reservationsByStatus ?? {}
+  const rs = data.reservationsByStatus
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(31, 79, 163)
@@ -467,10 +470,10 @@ export function exportReservationsPDF(data: any) {
   doc.setFontSize(10)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(60, 60, 60)
-  doc.text("Total: " + (rs.total ?? 0), 14, y); y += 6
-  doc.text("En attente: " + (rs.pending ?? 0), 14, y); y += 6
-  doc.text("Confirmees: " + (rs.confirmed ?? 0), 14, y); y += 6
-  doc.text("Annulees: " + (rs.cancelled ?? 0), 14, y); y += 12
+  doc.text("Total: " + rs.total, 14, y); y += 6
+  doc.text("En attente: " + rs.pending, 14, y); y += 6
+  doc.text("Confirmees: " + rs.confirmed, 14, y); y += 6
+  doc.text("Annulees: " + rs.cancelled, 14, y); y += 12
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -479,7 +482,7 @@ export function exportReservationsPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Client", "Type", "Date", "Heure", "Statut"]],
-    body: (data.reservations ?? []).map((r: any) => [r.client, r.type, r.date, r.heure, STATUS_LBL[r.status] ?? r.status]),
+    body: data.reservations.map((r) => [r.client, r.type, r.date, r.heure, STATUS_LBL[r.status] ?? r.status]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
   })
@@ -487,25 +490,25 @@ export function exportReservationsPDF(data: any) {
   finalizePDF(doc, "Rapport Reservations", "rapport-reservations-" + todayShort() + ".pdf")
 }
 
-export function exportReservationsExcel(data: any) {
+export function exportReservationsExcel(data: ReservationsData) {
   const wb = XLSX.utils.book_new()
-  const res = [["Client", "Type", "Date", "Heure", "Statut"], ...(data.reservations ?? []).map((r: any) => [r.client, r.type, r.date, r.heure, STATUS_LBL[r.status] ?? r.status])]
+  const res: (string | number)[][] = [["Client", "Type", "Date", "Heure", "Statut"], ...data.reservations.map((r) => [r.client, r.type, r.date, r.heure, STATUS_LBL[r.status] ?? r.status])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(res), "Reservations")
-  const daily = [["Jour", "Reservations"], ...(data.reservationsByDay ?? []).map((d: any) => [d.name, d.reservations])]
+  const daily: (string | number)[][] = [["Jour", "Reservations"], ...data.reservationsByDay.map((d) => [d.name, d.reservations])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), "Par jour")
   XLSX.writeFile(wb, "rapport-reservations-" + todayShort() + ".xlsx")
 }
 
 // ─── PRODUCTION ───────────────────────────────────────────────
 
-export function exportProductionPDF(data: any) {
+export function exportProductionPDF(data: ProductionData) {
   const doc = createDoc()
   addCoverPage(doc, "Rapport Production", REPORT_VERSION)
   doc.addPage()
   addPageHeader(doc, "Rapport Production")
   let y = 30
 
-  const ps = data.productionSummary ?? {}
+  const ps = data.productionSummary
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(31, 79, 163)
@@ -513,10 +516,10 @@ export function exportProductionPDF(data: any) {
   doc.setFontSize(10)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(60, 60, 60)
-  doc.text("Total produit (30j): " + (ps.totalProduced ?? 0), 14, y); y += 6
-  doc.text("Ordres: " + (ps.productionCount ?? 0), 14, y); y += 6
-  doc.text("Entrees stock: " + (ps.totalIn ?? 0), 14, y); y += 6
-  doc.text("Pertes: " + (ps.totalLoss ?? 0), 14, y); y += 12
+  doc.text("Total produit (30j): " + ps.totalProduced, 14, y); y += 6
+  doc.text("Ordres: " + ps.productionCount, 14, y); y += 6
+  doc.text("Entrees stock: " + ps.totalIn, 14, y); y += 6
+  doc.text("Pertes: " + ps.totalLoss, 14, y); y += 12
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -525,11 +528,11 @@ export function exportProductionPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Jour", "Quantite produite"]],
-    body: (data.productionByDay ?? []).filter((d: any) => d.quantity > 0).map((d: any) => [d.name, String(d.quantity)]),
+    body: data.productionByDay.filter((d) => d.quantity > 0).map((d) => [d.name, String(d.quantity)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
   })
-  y = (doc as any).lastAutoTable.finalY + 10
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -538,7 +541,7 @@ export function exportProductionPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Date", "Produit", "Format", "Qte", "Raison"]],
-    body: (data.productionMovements ?? []).map((m: any) => [
+    body: data.productionMovements.map((m) => [
       new Date(m.createdAt).toLocaleDateString("fr-FR"), m.productName, m.format, "+" + m.quantity, m.reason || "-",
     ]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
@@ -548,28 +551,28 @@ export function exportProductionPDF(data: any) {
   finalizePDF(doc, "Rapport Production", "rapport-production-" + todayShort() + ".pdf")
 }
 
-export function exportProductionExcel(data: any) {
+export function exportProductionExcel(data: ProductionData) {
   const wb = XLSX.utils.book_new()
-  const ps = data.productionSummary ?? {}
-  const summary = [["Indicateur", "Valeur"], ["Total produit", ps.totalProduced ?? 0], ["Ordres", ps.productionCount ?? 0], ["Entrees stock", ps.totalIn ?? 0], ["Pertes", ps.totalLoss ?? 0]]
+  const ps = data.productionSummary
+  const summary: (string | number)[][] = [["Indicateur", "Valeur"], ["Total produit", ps.totalProduced], ["Ordres", ps.productionCount], ["Entrees stock", ps.totalIn], ["Pertes", ps.totalLoss]]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Resume")
-  const daily = [["Jour", "Quantite"], ...(data.productionByDay ?? []).map((d: any) => [d.name, d.quantity])]
+  const daily: (string | number)[][] = [["Jour", "Quantite"], ...data.productionByDay.map((d) => [d.name, d.quantity])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), "Par jour")
-  const mvts = [["Date", "Produit", "Format", "Qte", "Raison"], ...(data.productionMovements ?? []).map((m: any) => [new Date(m.createdAt).toLocaleDateString("fr-FR"), m.productName, m.format, m.quantity, m.reason || ""])]
+  const mvts: (string | number)[][] = [["Date", "Produit", "Format", "Qte", "Raison"], ...data.productionMovements.map((m) => [new Date(m.createdAt).toLocaleDateString("fr-FR"), m.productName, m.format, m.quantity, m.reason || ""])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mvts), "Mouvements")
   XLSX.writeFile(wb, "rapport-production-" + todayShort() + ".xlsx")
 }
 
 // ─── CAISSE ───────────────────────────────────────────────────
 
-export function exportCaissePDF(data: any) {
+export function exportCaissePDF(data: CaisseData) {
   const doc = createDoc()
   addCoverPage(doc, "Rapport Caisse", REPORT_VERSION)
   doc.addPage()
   addPageHeader(doc, "Rapport Caisse")
   let y = 30
 
-  const cs = data.cashSessionsSummary ?? {}
+  const cs = data.cashSessionsSummary
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(31, 79, 163)
@@ -577,11 +580,11 @@ export function exportCaissePDF(data: any) {
   doc.setFontSize(10)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(60, 60, 60)
-  doc.text("Sessions: " + (cs.totalSessions ?? 0), 14, y); y += 6
-  doc.text("Ouvertes: " + (cs.openSessions ?? 0), 14, y); y += 6
-  doc.text("Fermees: " + (cs.closedSessions ?? 0), 14, y); y += 6
-  doc.text("Solde total ouverture: " + fmt(cs.totalOpening ?? 0), 14, y); y += 6
-  doc.text("Solde total cloture: " + fmt(cs.totalClosing ?? 0), 14, y); y += 12
+  doc.text("Sessions: " + cs.totalSessions, 14, y); y += 6
+  doc.text("Ouvertes: " + cs.openSessions, 14, y); y += 6
+  doc.text("Fermees: " + cs.closedSessions, 14, y); y += 6
+  doc.text("Solde total ouverture: " + fmt(cs.totalOpening), 14, y); y += 6
+  doc.text("Solde total cloture: " + fmt(cs.totalClosing), 14, y); y += 12
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -590,7 +593,7 @@ export function exportCaissePDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Date", "Sessions", "Ouverture", "Cloture", "Ecart"]],
-    body: (data.cashSessionsByDay ?? []).map((d: any) => [
+    body: data.cashSessionsByDay.map((d) => [
       d.name, String(d.sessions), fmt(d.openingTotal),
       d.closingTotal !== null ? fmt(d.closingTotal) : "-",
       d.gap !== null ? (d.gap > 0 ? "+" : "") + fmt(d.gap) : "-",
@@ -602,23 +605,23 @@ export function exportCaissePDF(data: any) {
   finalizePDF(doc, "Rapport Caisse", "rapport-caisse-" + todayShort() + ".pdf")
 }
 
-export function exportCaisseExcel(data: any) {
+export function exportCaisseExcel(data: CaisseData) {
   const wb = XLSX.utils.book_new()
-  const daily = [["Date", "Sessions", "Ouverture", "Cloture", "Ecart"], ...(data.cashSessionsByDay ?? []).map((d: any) => [d.name, d.sessions, d.openingTotal, d.closingTotal, d.gap])]
+  const daily: (string | number | null)[][] = [["Date", "Sessions", "Ouverture", "Cloture", "Ecart"], ...data.cashSessionsByDay.map((d) => [d.name, d.sessions, d.openingTotal, d.closingTotal, d.gap])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), "Recapitulatif")
   XLSX.writeFile(wb, "rapport-caisse-" + todayShort() + ".xlsx")
 }
 
 // ─── LOTS ─────────────────────────────────────────────────────
 
-export function exportLotsPDF(data: any) {
+export function exportLotsPDF(data: LotsData) {
   const doc = createDoc()
   addCoverPage(doc, "Rapport Lots", REPORT_VERSION)
   doc.addPage()
   addPageHeader(doc, "Rapport Lots")
   let y = 30
 
-  const ls = data.lotSummary ?? {}
+  const ls = data.lotSummary
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
   doc.setTextColor(31, 79, 163)
@@ -626,10 +629,10 @@ export function exportLotsPDF(data: any) {
   doc.setFontSize(10)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(60, 60, 60)
-  doc.text("Total lots: " + (ls.totalLots ?? 0), 14, y); y += 6
-  doc.text("Lots actifs: " + (ls.activeLots ?? 0), 14, y); y += 6
-  doc.text("Total produit: " + (ls.totalProduced ?? 0), 14, y); y += 6
-  doc.text("Stock restant: " + (ls.totalRemaining ?? 0), 14, y); y += 12
+  doc.text("Total lots: " + ls.totalLots, 14, y); y += 6
+  doc.text("Lots actifs: " + ls.activeLots, 14, y); y += 6
+  doc.text("Total produit: " + ls.totalProduced, 14, y); y += 6
+  doc.text("Stock restant: " + ls.totalRemaining, 14, y); y += 12
 
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -638,7 +641,7 @@ export function exportLotsPDF(data: any) {
   autoTable(doc, {
     startY: y,
     head: [["Numero", "Produit", "Format", "Produit (qte)", "Restant", "Statut", "Production", "Expiration"]],
-    body: (data.lots ?? []).map((l: any) => [
+    body: data.lots.map((l) => [
       l.lotNumber, l.productName, l.format, String(l.initialQuantity), String(l.remainingQuantity),
       LOT_STATUS_LBL[l.status] ?? l.status,
       new Date(l.productionDate).toLocaleDateString("fr-FR"),
@@ -651,12 +654,12 @@ export function exportLotsPDF(data: any) {
   finalizePDF(doc, "Rapport Lots", "rapport-lots-" + todayShort() + ".pdf")
 }
 
-export function exportLotsExcel(data: any) {
+export function exportLotsExcel(data: LotsData) {
   const wb = XLSX.utils.book_new()
-  const ls = data.lotSummary ?? {}
-  const summary = [["Indicateur", "Valeur"], ["Total lots", ls.totalLots ?? 0], ["Lots actifs", ls.activeLots ?? 0], ["Total produit", ls.totalProduced ?? 0], ["Stock restant", ls.totalRemaining ?? 0]]
+  const ls = data.lotSummary
+  const summary: (string | number)[][] = [["Indicateur", "Valeur"], ["Total lots", ls.totalLots], ["Lots actifs", ls.activeLots], ["Total produit", ls.totalProduced], ["Stock restant", ls.totalRemaining]]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Resume")
-  const lots = [["Numero", "Produit", "Format", "Produit (qte)", "Restant", "Statut", "Allocations", "Production", "Expiration"], ...(data.lots ?? []).map((l: any) => [l.lotNumber, l.productName, l.format, l.initialQuantity, l.remainingQuantity, LOT_STATUS_LBL[l.status] ?? l.status, l.allocationCount, new Date(l.productionDate).toLocaleDateString("fr-FR"), l.expiryDate ? new Date(l.expiryDate).toLocaleDateString("fr-FR") : ""])]
+  const lots: (string | number)[][] = [["Numero", "Produit", "Format", "Produit (qte)", "Restant", "Statut", "Allocations", "Production", "Expiration"], ...data.lots.map((l) => [l.lotNumber, l.productName, l.format, l.initialQuantity, l.remainingQuantity, LOT_STATUS_LBL[l.status] ?? l.status, l.allocationCount, new Date(l.productionDate).toLocaleDateString("fr-FR"), l.expiryDate ? new Date(l.expiryDate).toLocaleDateString("fr-FR") : ""])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(lots), "Lots")
   XLSX.writeFile(wb, "rapport-lots-" + todayShort() + ".xlsx")
 }

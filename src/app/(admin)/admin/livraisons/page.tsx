@@ -75,8 +75,24 @@ export default function LivraisonsPage() {
   }, [])
 
   useEffect(() => {
-    load()
-  }, [load])
+    const controller = new AbortController()
+    const init = async () => {
+      setError("")
+      try {
+        const res = await fetch("/api/deliveries", { signal: controller.signal })
+        if (!res.ok) throw new Error("Impossible de charger les livraisons")
+        const data = await res.json()
+        setDeliveries(data.deliveries ?? [])
+        setAgents(data.agents ?? [])
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Erreur de chargement")
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [])
 
   const patchDelivery = async (deliveryId: string, body: Record<string, unknown>) => {
     const res = await fetch(`/api/deliveries/${deliveryId}`, {
@@ -130,10 +146,6 @@ export default function LivraisonsPage() {
     safeDeliveredPage * PAGE_SIZE
   )
 
-  useEffect(() => {
-    setDeliveredPage(1)
-  }, [deliveredSearch, deliveredDateFrom, deliveredDateTo])
-
   const hasActiveFilters = deliveredSearch || deliveredDateFrom || deliveredDateTo
 
   return (
@@ -153,7 +165,7 @@ export default function LivraisonsPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Livraisons</p><p className="mt-1 text-lg sm:text-xl font-bold text-gray-900">{deliveries.length}</p></div>
         <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-orange-700">En cours</p><p className="mt-1 text-lg sm:text-xl font-bold text-orange-800">{activeCount}</p></div>
-        <div className="rounded-xl border border-green-200 bg-green-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-green-700">Livrées aujourd'hui</p><p className="mt-1 text-lg sm:text-xl font-bold text-green-800">{deliveredToday}</p></div>
+        <div className="rounded-xl border border-green-200 bg-green-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-green-700">Livrées aujourd&apos;hui</p><p className="mt-1 text-lg sm:text-xl font-bold text-green-800">{deliveredToday}</p></div>
       </div>
 
       {loading ? (
@@ -203,7 +215,7 @@ export default function LivraisonsPage() {
                           <input
                             type="text"
                             value={deliveredSearch}
-                            onChange={(e) => setDeliveredSearch(e.target.value)}
+                            onChange={(e) => { setDeliveredSearch(e.target.value); setDeliveredPage(1) }}
                             placeholder="Rechercher (n°, client, adresse, livreur)..."
                             className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                           />
@@ -213,7 +225,7 @@ export default function LivraisonsPage() {
                           <input
                             type="date"
                             value={deliveredDateFrom}
-                            onChange={(e) => setDeliveredDateFrom(e.target.value)}
+                            onChange={(e) => { setDeliveredDateFrom(e.target.value); setDeliveredPage(1) }}
                             className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                           />
                         </label>
@@ -222,7 +234,7 @@ export default function LivraisonsPage() {
                           <input
                             type="date"
                             value={deliveredDateTo}
-                            onChange={(e) => setDeliveredDateTo(e.target.value)}
+                            onChange={(e) => { setDeliveredDateTo(e.target.value); setDeliveredPage(1) }}
                             className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                           />
                         </label>
@@ -230,7 +242,7 @@ export default function LivraisonsPage() {
                       {hasActiveFilters && (
                         <button
                           type="button"
-                          onClick={() => { setDeliveredSearch(""); setDeliveredDateFrom(""); setDeliveredDateTo("") }}
+                          onClick={() => { setDeliveredSearch(""); setDeliveredDateFrom(""); setDeliveredDateTo(""); setDeliveredPage(1) }}
                           className="mt-3 text-xs font-medium text-red-600 hover:text-red-700"
                         >
                           Réinitialiser les filtres

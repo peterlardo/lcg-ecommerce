@@ -19,7 +19,7 @@ function SuccessContent() {
         `Référence ${order} — Notre équipe vous contactera rapidement pour confirmer la livraison et le paiement.`
       )
     }
-  }, [order])
+  }, [order, showToast])
 
   return (
     <div className="mx-auto flex max-w-xl flex-col items-center px-4 py-24 text-center">

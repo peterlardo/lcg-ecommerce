@@ -88,9 +88,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     })
 
     return NextResponse.json({ lot: updated })
-  } catch (error: any) {
+  } catch (error) {
     console.error("PATCH lots error:", error)
-    return NextResponse.json({ error: error.message ?? "Erreur serveur" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })
   }
 }
 
@@ -111,6 +111,30 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     await getPrisma().$transaction(async (tx) => {
       if (lot.remainingQuantity > 0) {
+        const productionMovement = await tx.stockMovement.findFirst({
+          where: { lotId: id, pointOfSaleId: { not: null } },
+          select: { pointOfSaleId: true },
+        })
+
+        if (productionMovement?.pointOfSaleId) {
+          const stock = await tx.pointOfSaleStock.findUnique({
+            where: {
+              pointOfSaleId_variantId: {
+                pointOfSaleId: productionMovement.pointOfSaleId,
+                variantId: lot.variantId,
+              },
+            },
+          })
+          if (!stock || stock.quantity < lot.remainingQuantity) {
+            throw new Error("Stock du moyen de stockage insuffisant pour supprimer ce lot")
+          }
+
+          await tx.pointOfSaleStock.update({
+            where: { id: stock.id },
+            data: { quantity: { decrement: lot.remainingQuantity } },
+          })
+        }
+
         await tx.productVariant.update({
           where: { id: lot.variantId },
           data: { stock: { decrement: lot.remainingQuantity } },
@@ -122,8 +146,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     })
 
     return NextResponse.json({ ok: true })
-  } catch (error: any) {
+  } catch (error) {
     console.error("DELETE lots error:", error)
-    return NextResponse.json({ error: error.message ?? "Erreur serveur" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })
   }
 }

@@ -30,14 +30,14 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { client, telephone, email, type, date, heure, inviteCount, address, items, notes, pointOfSaleId } = body
+    const { client, telephone, email, type, date, heure, inviteCount, address, items, notes } = body
 
     if (!client || !telephone || !type || !date) {
       return NextResponse.json({ error: "Client, téléphone, type et date sont requis" }, { status: 400 })
     }
 
     const itemList: ReservationItem[] = Array.isArray(items)
-      ? items.map((i: any) => ({
+      ? items.map((i) => ({
           name: String(i.name ?? ""),
           format: String(i.format ?? ""),
           quantity: Number(i.quantity) || 1,
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       items: itemList,
       notes: notes || "",
       source,
-    } as any)
+    })
 
     const ref = `RSV-${newRes.id.slice(-6).toUpperCase()}`
     await sendReservationEmail({

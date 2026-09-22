@@ -5,8 +5,15 @@ import { ChevronDown, Filter, Printer, ReceiptText, Search } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml } from "@/lib/ticket-template"
 
-interface Ticket { id: string; ticketNumber: string; customerName: string; paymentMethod: string | null; paymentStatus: string; total: number; createdAt: string; notes: string | null; pointOfSale: { name: string; code: string } | null; items: { name: string; format: string; quantity: number; price: number; total: number }[] }
+interface Ticket { id: string; ticketNumber: string; customerName: string; customerPhone: string; paymentMethod: string | null; paymentStatus: string; total: number; createdAt: string; notes: string | null; pointOfSale: { name: string; code: string } | null; items: { name: string; format: string; quantity: number; price: number; total: number }[] }
 const paymentLabels: Record<string, string> = { CARD: "Carte", MOBILE_MONEY: "Mobile Money", CASH_ON_DELIVERY: "Espèces" }
+
+interface PointOfSaleData {
+  id: string
+  name: string
+  code: string
+  isActive: boolean
+}
 
 const PER_PAGE = 5
 
@@ -18,6 +25,7 @@ function TicketPreview({ ticket }: { ticket: Ticket }) {
     const html = buildTicketHtml({
       orderNumber: ticket.ticketNumber,
       customerName: ticket.customerName,
+      customerPhone: ticket.customerPhone,
       paymentMethod: ticket.paymentMethod,
       paymentStatus: ticket.paymentStatus,
       total: ticket.total,
@@ -113,6 +121,7 @@ export default function TicketsPage() {
       buildTicketHtml({
         orderNumber: ticket.ticketNumber,
         customerName: ticket.customerName,
+        customerPhone: ticket.customerPhone,
         paymentMethod: ticket.paymentMethod,
         paymentStatus: ticket.paymentStatus,
         total: ticket.total,
@@ -130,7 +139,7 @@ export default function TicketsPage() {
     fetch("/api/tickets").then((r) => (r.ok ? r.json() : [])).then(setTickets).finally(() => setLoading(false))
     fetch("/api/points-de-vente").then((r) => (r.ok ? r.json() : { points: [] })).then((data) => {
       const list = Array.isArray(data) ? data : data.points ?? []
-      setPointsOfSale(list.filter((p: any) => p.isActive))
+      setPointsOfSale(list.filter((p: PointOfSaleData) => p.isActive))
     })
   }, [])
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { getProducts, createProduct } from "@/data/store"
+import { ensureOperationalStockLocations } from "@/lib/stock-service"
 
 export async function GET() {
   const products = await getProducts()
@@ -29,13 +30,14 @@ export async function POST(request: Request) {
       categoryName: categoryName || null,
       isFeatured: isFeatured || false,
       badge: badge || null,
-      variants: variants.map((v: any) => ({
+      variants: variants.map((v) => ({
         format: v.format,
         price: Number(v.price),
         stock: 0,
         unit: v.unit || null,
       })),
     })
+    await ensureOperationalStockLocations()
 
     return NextResponse.json(product, { status: 201 })
   } catch (error) {

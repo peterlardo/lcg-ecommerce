@@ -4,7 +4,7 @@ import { requireManagementAccess } from "@/lib/api-auth"
 
 const MODULES = [
   "dashboard", "ventes", "tickets", "commandes", "stock", "caisse",
-  "journal-caisse", "production", "distribution", "livraisons",
+  "production", "distribution", "livraisons",
   "reservations", "points-de-vente", "produits", "rapports",
   "controle-distant", "utilisateurs",
 ]

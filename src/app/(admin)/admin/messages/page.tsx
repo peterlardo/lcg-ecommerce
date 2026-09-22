@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { MessageSquare, Search, Trash2, Eye, EyeOff, X, ChevronDown } from "lucide-react"
+import { MessageSquare, Search, Trash2, Eye, ChevronDown } from "lucide-react"
 import type { ContactMessage } from "@/data/store"
 
 export default function MessagesPage() {
@@ -11,19 +11,20 @@ export default function MessagesPage() {
   const [selected, setSelected] = useState<ContactMessage | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchMessages = async () => {
-    try {
-      const res = await fetch("/api/messages")
-      if (res.ok) setMessages(await res.json())
-    } catch (err) {
-      console.error("Erreur:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    fetchMessages()
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const res = await fetch("/api/messages", { signal: controller.signal })
+        if (res.ok) setMessages(await res.json())
+      } catch (err) {
+        if (!controller.signal.aborted) console.error("Erreur:", err)
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
   }, [])
 
   const handleMarkRead = async (id: string) => {

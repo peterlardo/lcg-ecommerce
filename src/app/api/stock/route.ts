@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
-import { getProducts } from "@/data/store"
+
 import { allocateStockFIFOTx, generateLotNumberTx } from "@/lib/lot-utils"
+import { fetchCachedLocations, ensureOperationalStockLocations, OPERATIONAL_STOCK_CODES } from "@/lib/stock-service"
 
 const NEGATIVE_TYPES = new Set(["OUT", "SALE", "LOSS", "TRANSFER_OUT", "ADJUSTMENT_OUT"])
 const POSITIVE_TYPES = new Set(["IN", "PRODUCTION", "TRANSFER_IN", "RETURN", "ADJUSTMENT_IN", "CANCEL_RESTOCK"])
@@ -19,34 +20,103 @@ export async function GET() {
   if (forbidden) return forbidden
 
   try {
-    await getProducts()
+    const locations = await fetchCachedLocations()
 
-    const [variants, movements] = await Promise.all([
+    if (locations.length < 2) {
+      await ensureOperationalStockLocations()
+    }
+
+    const [variants, movements, posStocks] = await Promise.all([
       getPrisma().productVariant.findMany({
-        include: { product: { include: { category: true } } },
+        select: {
+          id: true,
+          productId: true,
+          format: true,
+          price: true,
+          stock: true,
+          unit: true,
+          product: {
+            select: { name: true, image: true, category: { select: { name: true, slug: true } } },
+          },
+        },
       }),
       getPrisma().stockMovement.findMany({
-        include: { variant: { include: { product: true } } },
+        select: {
+          id: true,
+          variantId: true,
+          type: true,
+          quantity: true,
+          reason: true,
+          reference: true,
+          createdAt: true,
+          variant: { select: { format: true, product: { select: { name: true } } } },
+        },
         orderBy: { createdAt: "desc" },
         take: 40,
+      }),
+      getPrisma().pointOfSaleStock.findMany({
+        where: { pointOfSale: { code: { in: OPERATIONAL_STOCK_CODES } } },
+        select: {
+          id: true,
+          variantId: true,
+          quantity: true,
+          pointOfSaleId: true,
+          variant: { select: { format: true, price: true, unit: true, product: { select: { name: true } } } },
+          pointOfSale: { select: { id: true, name: true, code: true } },
+        },
       }),
     ])
 
     const mappedVariants = variants
-      .map((variant) => ({
-        variantId: variant.id,
-        productId: variant.productId,
-        productName: variant.product.name,
-        productImage: variant.product.image,
-        categoryName: variant.product.category?.name ?? "Sans catégorie",
-        categorySlug: variant.product.category?.slug ?? "",
-        format: variant.format,
-        price: variant.price,
-        stock: variant.stock,
-        unit: variant.unit,
-        lowThreshold: 20,
-      }))
+      .map((variant) => {
+        const storageStocks = posStocks
+          .filter((ps) => ps.variantId === variant.id)
+          .map((ps) => ({
+            pointOfSaleId: ps.pointOfSaleId,
+            pointOfSaleName: ps.pointOfSale.name,
+            pointOfSaleCode: ps.pointOfSale.code,
+            quantity: ps.quantity,
+          }))
+
+        return {
+          variantId: variant.id,
+          productId: variant.productId,
+          productName: variant.product.name,
+          productImage: variant.product.image,
+          categoryName: variant.product.category?.name ?? "Sans catégorie",
+          categorySlug: variant.product.category?.slug ?? "",
+          format: variant.format,
+          price: variant.price,
+          stock: variant.stock,
+          unit: variant.unit,
+          lowThreshold: 20,
+          storageStocks,
+        }
+      })
       .sort((a, b) => `${a.productName} ${a.format}`.localeCompare(`${b.productName} ${b.format}`, "fr"))
+
+    const locationData = locations.map((loc) => {
+      const locStocks = posStocks
+        .filter((ps) => ps.pointOfSaleId === loc.id)
+        .map((ps) => ({
+          variantId: ps.variantId,
+          productName: ps.variant.product.name ?? "Variante",
+          format: ps.variant.format,
+          quantity: ps.quantity,
+          price: ps.variant.price,
+          unit: ps.variant.unit,
+        }))
+
+      return {
+        id: loc.id,
+        name: loc.name,
+        code: loc.code,
+        type: loc.type,
+        totalUnits: locStocks.reduce((sum, s) => sum + s.quantity, 0),
+        stockValue: locStocks.reduce((sum, s) => sum + s.quantity * s.price, 0),
+        stocks: locStocks,
+      }
+    })
 
     return NextResponse.json({
       summary: {
@@ -55,6 +125,7 @@ export async function GET() {
         lowStock: mappedVariants.filter((item) => item.stock > 0 && item.stock < item.lowThreshold).length,
         outOfStock: mappedVariants.filter((item) => item.stock <= 0).length,
       },
+      locations: locationData,
       variants: mappedVariants,
       movements: movements.map((movement) => ({
         id: movement.id,
@@ -85,6 +156,7 @@ export async function POST(request: Request) {
     const quantity = Math.max(1, Number(body.quantity) || 0)
     const reason = body.reason ? String(body.reason) : null
     const reference = body.reference ? String(body.reference) : null
+    const pointOfSaleId = body.pointOfSaleId ? String(body.pointOfSaleId) : null
 
     if (!variantId || quantity <= 0) {
       return NextResponse.json({ error: "Variante et quantité requises" }, { status: 400 })
@@ -103,20 +175,34 @@ export async function POST(request: Request) {
         data: { stock: nextStock },
       })
       const movement = await tx.stockMovement.create({
-        data: { variantId, type, quantity, reason, reference },
+        data: { variantId, type, quantity, reason, reference, pointOfSaleId },
       })
 
       if (POSITIVE_TYPES.has(type)) {
-        await tx.productionLot.create({
-          data: {
-            lotNumber: await generateLotNumberTx(tx),
-            variantId,
-            initialQuantity: quantity,
-            remainingQuantity: quantity,
-            productionDate: new Date(),
-          },
-        })
+        if (pointOfSaleId) {
+          await tx.pointOfSaleStock.upsert({
+            where: { pointOfSaleId_variantId: { pointOfSaleId, variantId } },
+            update: { quantity: { increment: quantity } },
+            create: { pointOfSaleId, variantId, quantity },
+          })
+        } else {
+          await tx.productionLot.create({
+            data: {
+              lotNumber: await generateLotNumberTx(tx),
+              variantId,
+              initialQuantity: quantity,
+              remainingQuantity: quantity,
+              productionDate: new Date(),
+            },
+          })
+        }
       } else if (NEGATIVE_TYPES.has(type)) {
+        if (pointOfSaleId) {
+          await tx.pointOfSaleStock.update({
+            where: { pointOfSaleId_variantId: { pointOfSaleId, variantId } },
+            data: { quantity: { decrement: quantity } },
+          })
+        }
         await allocateStockFIFOTx(tx, variantId, quantity, type, reference ?? `ADJ-${movement.id}`)
       }
 

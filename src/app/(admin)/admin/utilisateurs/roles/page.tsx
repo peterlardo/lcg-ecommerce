@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { ShieldCheck, Users, Save, ChevronDown, ChevronUp, ArrowLeft, Plus, Trash2, X } from "lucide-react"
+import { Users, Save, ChevronDown, ChevronUp, ArrowLeft, Plus, Trash2, X } from "lucide-react"
 import Link from "next/link"
 
 interface RoleProfile {
@@ -18,7 +18,7 @@ interface RoleData {
 
 const moduleLabels: Record<string, string> = {
   dashboard: "Tableau de bord", ventes: "Ventes", tickets: "Tickets", commandes: "Commandes", stock: "Stock", caisse: "Caisse",
-  "journal-caisse": "Journal de caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons",
+  production: "Production", distribution: "Distribution", livraisons: "Livraisons",
   reservations: "Réservations", "points-de-vente": "Points de vente", produits: "Produits", rapports: "Rapports",
   "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs",
 }
@@ -54,7 +54,29 @@ export default function RolesPage() {
     } catch {}
   }, [])
 
-  useEffect(() => { void loadProfiles(); void loadRoles() }, [loadProfiles, loadRoles])
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const [profilesRes, rolesRes] = await Promise.all([
+          fetch("/api/role-profiles", { signal: controller.signal }),
+          fetch("/api/roles", { signal: controller.signal }),
+        ])
+        if (profilesRes.ok) setProfiles(await profilesRes.json())
+        if (rolesRes.ok) {
+          const data = await rolesRes.json()
+          const map: Record<string, RoleData> = {}
+          for (const r of data.roles) map[r.role] = r
+          setRoleData(map)
+        }
+      } catch {}
+      finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [])
 
   const updatePermission = (role: string, module: string, field: keyof RolePermission, value: boolean) => {
     setRoleData((prev) => {

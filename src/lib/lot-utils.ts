@@ -1,5 +1,5 @@
 import { getPrisma } from "@/lib/prisma";
-import type { PrismaClient } from "@prisma/client"
+import type { PrismaClient, LotAllocation } from "@prisma/client"
 
 type TxClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0]
 
@@ -27,7 +27,7 @@ export async function allocateStockFIFOTx(tx: TxClient, variantId: string, quant
     throw new Error(`Stock insuffisant par lots: ${remaining} unites manquantes pour la variante ${variantId}`)
   }
 
-  const created: any[] = []
+  const created: LotAllocation[] = []
   for (const alloc of allocations) {
     await tx.productionLot.update({
       where: { id: alloc.lotId },
@@ -79,7 +79,7 @@ export async function allocateStockFEFOTx(tx: TxClient, variantId: string, quant
     throw new Error(`Stock insuffisant par lots: ${remaining} unites manquantes`)
   }
 
-  const created: any[] = []
+  const created: LotAllocation[] = []
   for (const alloc of allocations) {
     await tx.productionLot.update({
       where: { id: alloc.lotId },

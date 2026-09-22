@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react"
 import {
-  AlertCircle, BarChart3, Banknote, CalendarRange, Clock, Download, Factory,
+  BarChart3, Banknote, CalendarRange, Clock, Download, Factory,
   FileSpreadsheet, Package, RefreshCw, ScanBarcode, ShoppingCart, TrendingUp, Truck, WalletCards,
 } from "lucide-react"
 import {
   Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts"
+import type { TooltipValueType } from "recharts"
 import { formatPrice } from "@/lib/utils"
 import {
   exportVentesPDF, exportVentesExcel,
@@ -19,6 +20,7 @@ import {
   exportCaissePDF, exportCaisseExcel,
   exportLotsPDF, exportLotsExcel,
 } from "@/lib/report-export"
+import type { ReportPayload } from "@/lib/report-types"
 
 type Tab = "ventes" | "stocks" | "appro" | "commandes" | "reservations" | "production" | "lots" | "caisse"
 
@@ -44,7 +46,7 @@ const ax = { tick: { fontSize: 12 }, stroke: "#9ca3af" }
 const tt = { contentStyle: { borderRadius: "8px", border: "1px solid #e5e7eb" } }
 
 export default function RapportsPage() {
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<ReportPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [tab, setTab] = useState<Tab>("ventes")
@@ -57,14 +59,13 @@ export default function RapportsPage() {
   ]
 
   const load = async (p?: string) => {
-    setError("")
     const effectivePeriod = p ?? period
     try {
       const res = await fetch(`/api/reports?period=${effectivePeriod}`)
       if (!res.ok) throw new Error("Impossible de charger les rapports")
       setData(await res.json())
-    } catch (err: any) {
-      setError(err.message ?? "Erreur")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur")
     } finally {
       setLoading(false)
     }
@@ -76,7 +77,24 @@ export default function RapportsPage() {
     load(newPeriod)
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const res = await fetch("/api/reports?period=month", { signal: controller.signal })
+        if (!res.ok) throw new Error("Impossible de charger les rapports")
+        setData(await res.json())
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : "Erreur")
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [])
 
   const s = data?.summary
 
@@ -170,25 +188,25 @@ export default function RapportsPage() {
               <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><BarChart3 className="h-4 w-4" /> CA (7j)</h2>
-                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.daily7 ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" {...ax} /><YAxis {...ax} /><Tooltip formatter={(v: any) => [formatPrice(Number(v)), "Revenu"]} {...tt} /><Bar dataKey="revenu" fill="#1f4fa3" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.daily7 ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" {...ax} /><YAxis {...ax} /><Tooltip formatter={(v: TooltipValueType | undefined) => [formatPrice(Number(v)), "Revenu"]} {...tt} /><Bar dataKey="revenu" fill="#1f4fa3" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
                 </section>
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><TrendingUp className="h-4 w-4" /> Ventes ({data?.periodLabel ?? "30j"})</h2>
-                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.salesByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#9ca3af" /><YAxis {...ax} /><Tooltip formatter={(v: any) => [formatPrice(Number(v)), "Ventes"]} {...tt} /><Bar dataKey="ventes" fill="#0f766e" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.salesByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#9ca3af" /><YAxis {...ax} /><Tooltip formatter={(v: TooltipValueType | undefined) => [formatPrice(Number(v)), "Ventes"]} {...tt} /><Bar dataKey="ventes" fill="#0f766e" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
                 </section>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><Package className="h-4 w-4" /> Top produits</h2>
-                  <div className="space-y-2">{(data?.topProducts ?? []).slice(0, 8).map((p: any) => <div key={p.name} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm"><span className="font-medium text-gray-800">{p.name}</span><div className="text-right"><span className="font-semibold">{p.quantity}</span><p className="text-xs text-gray-500">{formatPrice(p.revenue)}</p></div></div>)}</div>
+                  <div className="space-y-2">{(data?.topProducts ?? []).slice(0, 8).map((p) => <div key={p.name} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm"><span className="font-medium text-gray-800">{p.name}</span><div className="text-right"><span className="font-semibold">{p.quantity}</span><p className="text-xs text-gray-500">{formatPrice(p.revenue)}</p></div></div>)}</div>
                 </section>
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><WalletCards className="h-4 w-4" /> Paiements ({data?.periodLabel ?? "30j"})</h2>
-                  <div className="space-y-2">{(data?.paymentBreakdown30 ?? []).map((p: any) => <div key={p.method} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm"><div><p className="font-medium">{PAYMENT[p.method] ?? p.method}</p><p className="text-xs text-gray-500">{p.count} tx(s)</p></div><span className="font-semibold">{formatPrice(p.total)}</span></div>)}</div>
+                  <div className="space-y-2">{(data?.paymentBreakdown30 ?? []).map((p) => <div key={p.method} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm"><div><p className="font-medium">{PAYMENT[p.method] ?? p.method}</p><p className="text-xs text-gray-500">{p.count} tx(s)</p></div><span className="font-semibold">{formatPrice(p.total)}</span></div>)}</div>
                 </section>
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><WalletCards className="h-4 w-4" /> Repartition</h2>
-                  <div className="h-56"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data?.paymentBreakdown30 ?? []} dataKey="total" nameKey="method" innerRadius={40} outerRadius={65} paddingAngle={3}>{(data?.paymentBreakdown30 ?? []).map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip formatter={(v: any) => formatPrice(Number(v))} /></PieChart></ResponsiveContainer></div>
+                  <div className="h-56"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data?.paymentBreakdown30 ?? []} dataKey="total" nameKey="method" innerRadius={40} outerRadius={65} paddingAngle={3}>{(data?.paymentBreakdown30 ?? []).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip formatter={(v: TooltipValueType | undefined) => formatPrice(Number(v))} /></PieChart></ResponsiveContainer></div>
                 </section>
               </div>
             </div>
@@ -209,12 +227,12 @@ export default function RapportsPage() {
                 </section>
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Alertes stock</h2>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">{(data?.stockAlerts ?? []).map((a: any) => <div key={a.variantId} className={`flex items-center justify-between rounded-lg p-2 sm:p-3 text-xs sm:text-sm ${a.stock <= 0 ? "bg-red-50" : "bg-yellow-50"}`}><div><p className="font-medium">{a.productName}</p><p className="text-xs text-gray-500">{a.format}</p></div><span className={`font-bold ${a.stock <= 0 ? "text-red-600" : "text-yellow-700"}`}>{a.stock}</span></div>)}</div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">{(data?.stockAlerts ?? []).map((a) => <div key={a.variantId} className={`flex items-center justify-between rounded-lg p-2 sm:p-3 text-xs sm:text-sm ${a.stock <= 0 ? "bg-red-50" : "bg-yellow-50"}`}><div><p className="font-medium">{a.productName}</p><p className="text-xs text-gray-500">{a.format}</p></div><span className={`font-bold ${a.stock <= 0 ? "text-red-600" : "text-yellow-700"}`}>{a.stock}</span></div>)}</div>
                 </section>
               </div>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Toutes les variantes</h2>
-                <div className="overflow-x-auto max-h-80"><table className="w-full text-xs sm:text-sm"><thead className="sticky top-0 bg-gray-50/80"><tr><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Produit</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Format</th><th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Categorie</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Stock</th></tr></thead><tbody className="divide-y divide-gray-100">{(data?.allStockVariants ?? []).map((v: any, i: number) => <tr key={i} className={v.stock <= 0 ? "bg-red-50/40" : v.stock <= 10 ? "bg-yellow-50/40" : ""}><td className="px-2 py-2 sm:px-4 sm:py-2">{v.productName}</td><td className="px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{v.format}</td><td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{v.categoryName}</td><td className={`px-2 py-2 sm:px-4 sm:py-2 text-right font-bold ${v.stock <= 0 ? "text-red-600" : v.stock <= 10 ? "text-yellow-700" : ""}`}>{v.stock}</td></tr>)}</tbody></table></div>
+                <div className="overflow-x-auto max-h-80"><table className="w-full text-xs sm:text-sm"><thead className="sticky top-0 bg-gray-50/80"><tr><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Produit</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Format</th><th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Categorie</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Stock</th></tr></thead><tbody className="divide-y divide-gray-100">{(data?.allStockVariants ?? []).map((v, i) => <tr key={i} className={v.stock <= 0 ? "bg-red-50/40" : v.stock <= 10 ? "bg-yellow-50/40" : ""}><td className="px-2 py-2 sm:px-4 sm:py-2">{v.productName}</td><td className="px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{v.format}</td><td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{v.categoryName}</td><td className={`px-2 py-2 sm:px-4 sm:py-2 text-right font-bold ${v.stock <= 0 ? "text-red-600" : v.stock <= 10 ? "text-yellow-700" : ""}`}>{v.stock}</td></tr>)}</tbody></table></div>
               </section>
             </div>
           )}
@@ -222,7 +240,7 @@ export default function RapportsPage() {
           {tab === "appro" && (
             <div className="space-y-4 sm:space-y-6">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {(data?.supplyByType ?? []).filter((t: any) => t.quantity > 0).map((t: any) => <div key={t.type} className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">{SUPPLY_LBL[t.type] ?? t.type}</p><p className="mt-1 text-lg font-bold text-gray-900">{t.quantity} u.</p><p className="text-xs text-gray-500">{t.count} mvmt(s)</p></div>)}
+                {(data?.supplyByType ?? []).filter((t) => t.quantity > 0).map((t) => <div key={t.type} className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">{SUPPLY_LBL[t.type] ?? t.type}</p><p className="mt-1 text-lg font-bold text-gray-900">{t.quantity} u.</p><p className="text-xs text-gray-500">{t.count} mvmt(s)</p></div>)}
               </div>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Approvisionnements ({data?.periodLabel ?? "Mois"})</h2>
@@ -230,7 +248,7 @@ export default function RapportsPage() {
               </section>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Mouvements</h2>
-                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.supplyMovements ?? []).map((m: any) => <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div><p className="font-medium">{m.productName} ({m.format})</p><p className="text-xs text-gray-500">{m.reason || m.reference || "-"}</p></div><div className="flex items-center gap-2 sm:gap-3"><span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">{SUPPLY_LBL[m.type] ?? m.type}</span><span className="font-bold">+{m.quantity}</span><span className="text-xs text-gray-500"><Clock className="inline h-3 w-3" /> {new Date(m.createdAt).toLocaleDateString("fr-FR")}</span></div></div>)}</div>
+                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.supplyMovements ?? []).map((m) => <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div><p className="font-medium">{m.productName} ({m.format})</p><p className="text-xs text-gray-500">{m.reason || m.reference || "-"}</p></div><div className="flex items-center gap-2 sm:gap-3"><span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">{SUPPLY_LBL[m.type] ?? m.type}</span><span className="font-bold">+{m.quantity}</span><span className="text-xs text-gray-500"><Clock className="inline h-3 w-3" /> {new Date(m.createdAt).toLocaleDateString("fr-FR")}</span></div></div>)}</div>
               </section>
             </div>
           )}
@@ -250,7 +268,7 @@ export default function RapportsPage() {
                 </section>
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Par statut</h2>
-                  <div className="space-y-3">{(data?.ordersByStatus ?? []).map((item: any) => <div key={item.status} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BG[item.status] ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LBL[item.status] ?? item.status}</span><div className="text-right"><p className="font-semibold">{item.count} cmd(s)</p><p className="text-xs text-gray-500">{formatPrice(item.total)}</p></div></div>)}</div>
+                  <div className="space-y-3">{(data?.ordersByStatus ?? []).map((item) => <div key={item.status} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BG[item.status] ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LBL[item.status] ?? item.status}</span><div className="text-right"><p className="font-semibold">{item.count} cmd(s)</p><p className="text-xs text-gray-500">{formatPrice(item.total)}</p></div></div>)}</div>
                 </section>
               </div>
             </div>
@@ -270,7 +288,7 @@ export default function RapportsPage() {
               </section>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Dernières pré-commandes</h2>
-                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.reservations ?? []).map((r: any) => <div key={r.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div><p className="font-medium">{r.client}</p><p className="text-xs text-gray-500">{r.type} - {r.date} a {r.heure}</p></div><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BG[r.status] ?? "bg-gray-100"}`}>{STATUS_LBL[r.status] ?? r.status}</span></div>)}</div>
+                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.reservations ?? []).map((r) => <div key={r.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div><p className="font-medium">{r.client}</p><p className="text-xs text-gray-500">{r.type} - {r.date} a {r.heure}</p></div><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BG[r.status] ?? "bg-gray-100"}`}>{STATUS_LBL[r.status] ?? r.status}</span></div>)}</div>
               </section>
             </div>
           )}
@@ -289,7 +307,7 @@ export default function RapportsPage() {
               </section>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Dernieres productions</h2>
-                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.productionMovements ?? []).map((m: any) => <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div><p className="font-medium">{m.productName} ({m.format})</p><p className="text-xs text-gray-500">{m.reason || "-"}</p></div><div className="flex items-center gap-2 sm:gap-3"><span className="font-bold">+{m.quantity}</span><span className="text-xs text-gray-500">{new Date(m.createdAt).toLocaleDateString("fr-FR")}</span></div></div>)}</div>
+                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.productionMovements ?? []).map((m) => <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div><p className="font-medium">{m.productName} ({m.format})</p><p className="text-xs text-gray-500">{m.reason || "-"}</p></div><div className="flex items-center gap-2 sm:gap-3"><span className="font-bold">+{m.quantity}</span><span className="text-xs text-gray-500">{new Date(m.createdAt).toLocaleDateString("fr-FR")}</span></div></div>)}</div>
               </section>
             </div>
           )}
@@ -313,7 +331,7 @@ export default function RapportsPage() {
                   <th className="hidden md:table-cell px-2 py-2 sm:px-4 sm:py-2 text-center text-xs font-semibold uppercase text-gray-500">Allocations</th>
                   <th className="hidden md:table-cell px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Production</th>
                   <th className="hidden md:table-cell px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Expiration</th>
-                </tr></thead><tbody className="divide-y divide-gray-100">{(data?.lots ?? []).map((l: any) => <tr key={l.id}>
+                </tr></thead><tbody className="divide-y divide-gray-100">{(data?.lots ?? []).map((l) => <tr key={l.id}>
                   <td className="px-2 py-2 sm:px-4 sm:py-2 font-mono text-xs font-semibold text-primary-700">{l.lotNumber}</td>
                   <td className="px-2 py-2 sm:px-4 sm:py-2">{l.productName}</td>
                   <td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right">{l.initialQuantity}</td>
@@ -341,7 +359,7 @@ export default function RapportsPage() {
               </section>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Recapitulatif</h2>
-                <div className="overflow-x-auto max-h-80"><table className="w-full text-xs sm:text-sm"><thead className="sticky top-0 bg-gray-50/80"><tr><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Date</th><th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Sessions</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Ouverture</th><th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Cloture</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Ecart</th></tr></thead><tbody className="divide-y divide-gray-100">{(data?.cashSessionsByDay ?? []).map((d: any) => <tr key={d.date}><td className="px-2 py-2 sm:px-4 sm:py-2">{d.name}</td><td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right">{d.sessions}</td><td className="px-2 py-2 sm:px-4 sm:py-2 text-right">{formatPrice(d.openingTotal)}</td><td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right">{d.closingTotal !== null ? formatPrice(d.closingTotal) : "-"}</td><td className={`px-2 py-2 sm:px-4 sm:py-2 text-right font-bold ${d.gap === null || d.gap === 0 ? "" : d.gap > 0 ? "text-blue-600" : "text-red-600"}`}>{d.gap !== null ? (d.gap > 0 ? "+" : "") + formatPrice(d.gap) : "-"}</td></tr>)}</tbody></table></div>
+                <div className="overflow-x-auto max-h-80"><table className="w-full text-xs sm:text-sm"><thead className="sticky top-0 bg-gray-50/80"><tr><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Date</th><th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Sessions</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Ouverture</th><th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Cloture</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Ecart</th></tr></thead><tbody className="divide-y divide-gray-100">{(data?.cashSessionsByDay ?? []).map((d) => <tr key={d.date}><td className="px-2 py-2 sm:px-4 sm:py-2">{d.name}</td><td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right">{d.sessions}</td><td className="px-2 py-2 sm:px-4 sm:py-2 text-right">{formatPrice(d.openingTotal)}</td><td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right">{d.closingTotal !== null ? formatPrice(d.closingTotal) : "-"}</td><td className={`px-2 py-2 sm:px-4 sm:py-2 text-right font-bold ${d.gap === null || d.gap === 0 ? "" : d.gap > 0 ? "text-blue-600" : "text-red-600"}`}>{d.gap !== null ? (d.gap > 0 ? "+" : "") + formatPrice(d.gap) : "-"}</td></tr>)}</tbody></table></div>
               </section>
             </div>
           )}

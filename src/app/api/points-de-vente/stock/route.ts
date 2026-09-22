@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
-import { allocateStockFIFOTx } from "@/lib/lot-utils"
+import {
+  createProductionForLocationTx,
+  ensurePointOfSaleStockRows,
+  transferPointOfSaleStockTx,
+} from "@/lib/stock-service"
 
 export async function POST(request: Request) {
   const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
@@ -23,25 +27,32 @@ export async function POST(request: Request) {
     if (sourceId && (!sourcePoint || !sourcePoint.isActive)) return NextResponse.json({ error: "Le point de vente source est invalide ou inactif" }, { status: 400 })
     if (sourceId === destinationId) return NextResponse.json({ error: "La source et la destination doivent être différentes" }, { status: 400 })
 
+    await ensurePointOfSaleStockRows(sourceId ? [sourceId, destinationId] : [destinationId])
+
     const transferRef = `TRANSFERT-${Date.now()}`
 
     await getPrisma().$transaction(async (tx) => {
       if (sourceId) {
-        const source = await tx.pointOfSaleStock.findUnique({ where: { pointOfSaleId_variantId: { pointOfSaleId: sourceId, variantId } } })
-        if (!source || source.quantity < quantity) throw new Error("Stock source insuffisant")
-        await tx.pointOfSaleStock.update({ where: { id: source.id }, data: { quantity: { decrement: quantity } } })
-        await tx.stockMovement.create({ data: { variantId, pointOfSaleId: sourceId, type: "TRANSFER_OUT", quantity, reason: body.reason || "Transfert de stock", reference: transferRef } })
-      } else {
-        if (variant.stock < quantity) {
-          throw new Error(`Stock central insuffisant pour ${variant.product.name} ${variant.format} (disponible: ${variant.stock}, demandé: ${quantity})`)
-        }
-        await tx.productVariant.update({ where: { id: variantId }, data: { stock: { decrement: quantity } } })
-        await tx.stockMovement.create({ data: { variantId, type: "TRANSFER_OUT", quantity, reason: body.reason || "Approvisionnement point de vente depuis stock central", reference: transferRef } })
-
-        await allocateStockFIFOTx(tx, variantId, quantity, "TRANSFER", transferRef)
+        await transferPointOfSaleStockTx(tx, {
+          sourcePointOfSaleId: sourceId,
+          destinationPointOfSaleId: destinationId,
+          variantId,
+          quantity,
+          reason: body.reason || "Transfert de stock",
+          reference: transferRef,
+        })
+        return
       }
-      await tx.pointOfSaleStock.upsert({ where: { pointOfSaleId_variantId: { pointOfSaleId: destinationId, variantId } }, create: { pointOfSaleId: destinationId, variantId, quantity }, update: { quantity: { increment: quantity } } })
-      await tx.stockMovement.create({ data: { variantId, pointOfSaleId: destinationId, type: sourceId ? "TRANSFER_IN" : "IN", quantity, reason: body.reason || (sourceId ? "Transfert de stock" : "Approvisionnement point de vente"), reference: transferRef } })
+
+      await createProductionForLocationTx(tx, {
+        variantId,
+        quantity,
+        pointOfSaleId: destinationId,
+        movementType: "IN",
+        reason: body.reason || "Approvisionnement point de vente",
+        reference: transferRef,
+        notes: body.reason || "Approvisionnement point de vente",
+      })
     })
     return NextResponse.json({ success: true })
   } catch (error) {

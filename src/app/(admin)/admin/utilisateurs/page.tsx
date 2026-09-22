@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { Camera, Check, Plus, Save, ShieldCheck, UserPlus, Users, X } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import Image from "next/image"
+import { Camera, Check, Plus, Save, ShieldCheck, UserPlus, X } from "lucide-react"
 import Link from "next/link"
 
-const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "journal-caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "rapports", "controle-distant", "utilisateurs"]
-const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", "journal-caisse": "Journal de caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs" }
+const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "rapports", "controle-distant", "utilisateurs"]
+const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs" }
 
 interface RoleProfile { id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean }
 interface Permission { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
@@ -38,27 +39,33 @@ export default function UtilisateursPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const editFileRef = useRef<HTMLInputElement>(null)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const response = await fetch("/api/utilisateurs")
     if (response.ok) setUsers(await response.json())
     setLoading(false)
-  }
+  }, [])
 
-  const loadPOS = async () => {
-    const res = await fetch("/api/points-de-vente")
-    if (res.ok) {
-      const data = await res.json()
-      const list = Array.isArray(data) ? data : data.points ?? []
-      setPointsOfSale(list.filter((p: PointOfSale) => true))
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      const [usersRes, posRes, rolesRes] = await Promise.all([
+        fetch("/api/utilisateurs", { signal: controller.signal }),
+        fetch("/api/points-de-vente", { signal: controller.signal }),
+        fetch("/api/role-profiles", { signal: controller.signal }),
+      ])
+      if (controller.signal.aborted) return
+      if (usersRes.ok) setUsers(await usersRes.json())
+      if (posRes.ok) {
+        const data = await posRes.json()
+        const list = Array.isArray(data) ? data : data.points ?? []
+        setPointsOfSale(list)
+      }
+      if (rolesRes.ok) setRoleProfiles(await rolesRes.json())
+      setLoading(false)
     }
-  }
-
-  const loadRoles = async () => {
-    const res = await fetch("/api/role-profiles")
-    if (res.ok) setRoleProfiles(await res.json())
-  }
-
-  useEffect(() => { void load(); void loadPOS(); void loadRoles() }, [])
+    void init()
+    return () => controller.abort()
+  }, [])
 
   const handlePhotoUpload = async (file: File, forCreate: boolean) => {
     const fd = new FormData()
@@ -159,7 +166,7 @@ export default function UtilisateursPage() {
             <div className="flex flex-col items-center gap-3">
               <div className="relative h-20 w-20 overflow-hidden rounded-full border-2 border-dashed border-border bg-muted flex items-center justify-center">
                 {form.image ? (
-                  <img src={form.image} alt="Photo" className="h-full w-full object-cover" />
+                  <Image src={form.image} alt="Photo" width={80} height={80} className="h-full w-full object-cover" />
                 ) : (
                   <Camera className="h-6 w-6 text-muted-foreground" />
                 )}
@@ -238,7 +245,7 @@ export default function UtilisateursPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     {user.image ? (
-                      <img src={user.image} alt={user.name || ""} className="h-9 w-9 rounded-full object-cover" />
+                      <Image src={user.image} alt={user.name || ""} width={36} height={36} className="h-9 w-9 rounded-full object-cover" />
                     ) : (
                       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{(user.name || user.email).charAt(0).toUpperCase()}</div>
                     )}
@@ -277,7 +284,7 @@ export default function UtilisateursPage() {
               <div className="flex items-center gap-4">
                 <div className="relative group">
                   {selectedUser.image ? (
-                    <img src={selectedUser.image} alt="" className="h-16 w-16 rounded-full object-cover ring-2 ring-border" />
+                    <Image src={selectedUser.image} alt="" width={64} height={64} className="h-16 w-16 rounded-full object-cover ring-2 ring-border" />
                   ) : (
                     <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary">{(selectedUser.name || selectedUser.email).charAt(0).toUpperCase()}</div>
                   )}

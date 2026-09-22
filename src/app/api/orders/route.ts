@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 import { createOrder, type OrderInput } from "@/data/store"
 import { sendOrderEmail } from "@/lib/mailer"
 import { generateOrderNumber } from "@/lib/utils"
@@ -8,24 +9,78 @@ import { pushNotification } from "@/lib/notifications"
 
 const PAYMENT_METHODS = ["CARD", "MOBILE_MONEY", "CASH_ON_DELIVERY"]
 
+interface OrderItemBody {
+  productId?: unknown
+  variantId?: unknown
+  name?: unknown
+  format?: unknown
+  quantity?: unknown
+  price?: unknown
+}
+
 export async function GET() {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"])
   if (forbidden) return forbidden
 
   try {
+    const session = await auth()
+    const isCommercial = session?.user?.role === "COMMERCIAL"
+
     const posFilter = await getUserPointOfSaleIds()
     const posIds = posFilter?.posIds ?? null
 
+    const where = isCommercial
+      ? { userId: session!.user!.id }
+      : posIds !== null
+        ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
+        : undefined
+
     const orders = await getPrisma().order.findMany({
-      where: posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : undefined,
-      include: {
+      where,
+      select: {
+        id: true,
+        orderNumber: true,
+        customerName: true,
+        customerEmail: true,
+        customerPhone: true,
+        status: true,
+        paymentMethod: true,
+        paymentStatus: true,
+        subtotal: true,
+        deliveryFee: true,
+        total: true,
+        notes: true,
+        source: true,
+        pointOfSaleId: true,
+        createdAt: true,
         items: {
-          include: { variant: { include: { product: true } } },
+          select: {
+            id: true,
+            productId: true,
+            variantId: true,
+            quantity: true,
+            price: true,
+            total: true,
+            variant: { select: { format: true, product: { select: { name: true } } } },
+          },
         },
-        delivery: { include: { deliveryAgent: true } },
+        delivery: {
+          select: {
+            id: true,
+            status: true,
+            address: true,
+            city: true,
+            district: true,
+            scheduledDate: true,
+            deliveredAt: true,
+            notes: true,
+            deliveryAgent: { select: { name: true } },
+          },
+        },
         pointOfSale: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
+      take: 200,
     })
     return NextResponse.json(
       orders.map((o) => ({
@@ -105,7 +160,7 @@ export async function POST(request: Request) {
       source: body.source === "OPERATOR" ? "OPERATOR" : "WEB",
       notes: body.notes ? String(body.notes) : undefined,
       deliveryFee: Number(body.deliveryFee) || 0,
-      items: items.map((item: any) => ({
+      items: items.map((item: OrderItemBody) => ({
         productId: String(item.productId || ""),
         variantId: String(item.variantId || ""),
         name: String(item.name || "Produit"),

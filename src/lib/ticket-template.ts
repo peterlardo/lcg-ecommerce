@@ -11,6 +11,7 @@ export interface TicketItem {
 export interface TicketData {
   orderNumber: string
   customerName: string
+  customerPhone?: string
   paymentMethod: string | null
   paymentStatus?: string | null
   total: number
@@ -53,25 +54,12 @@ function padLeft(str: string, len: number): string {
   return str.length >= len ? str.slice(0, len) : " ".repeat(len - str.length) + str
 }
 
-function center(str: string, len: number): string {
-  const pad = Math.max(0, len - str.length)
-  const left = Math.floor(pad / 2)
-  return " ".repeat(left) + str + " ".repeat(pad - left)
-}
-
 const WIDTH = 42
-
-function line(): string {
-  return "-".repeat(WIDTH)
-}
-
-function dotted(): string {
-  return ".".repeat(WIDTH)
-}
 
 export function buildTicketHtml(ticket: TicketData): string {
   const paymentLabel = PAYMENT_LABELS[ticket.paymentMethod || ""] || ticket.paymentMethod || "-"
   const pos = ticket.pointOfSale ? ticket.pointOfSale.name : "Comptoir"
+  const logoUrl = ticket.logo || "/logo-lcg.jpeg"
   const w = WIDTH
 
   const itemsLines = ticket.items
@@ -111,10 +99,12 @@ export function buildTicketHtml(ticket: TicketData): string {
   .small { font-size: 9px; }
   .sep { border-top: 1px dashed #000; margin: 4px 0; }
   .sep2 { border-top: 2px solid #000; margin: 4px 0; }
+  .logo { display: block; margin: 0 auto 4px auto; max-width: 50mm; max-height: 18mm; }
 </style>
 </head>
 <body>
 
+<div class="center"><img src="${escapeHtml(logoUrl)}" class="logo" alt="LCG" /></div>
 <div class="center bold large">${escapeHtml(COMPANY.name)}</div>
 <div class="center small">${escapeHtml(COMPANY.legal)}</div>
 <div class="center small">${escapeHtml(COMPANY.address)}</div>
@@ -129,6 +119,7 @@ export function buildTicketHtml(ticket: TicketData): string {
 <div class="line">${padRight("Date:", 12)}${formatDate(ticket.createdAt)}</div>
 <div class="line">${padRight("Heure:", 12)}${formatTime(ticket.createdAt)}</div>
 <div class="line">${padRight("Client:", 12)}${escapeHtml(ticket.customerName || "Client comptoir")}</div>
+${ticket.customerPhone ? `<div class="line">${padRight("Tél:", 12)}${escapeHtml(ticket.customerPhone)}</div>` : ""}
 <div class="line">${padRight("Paiement:", 12)}${escapeHtml(paymentLabel)}</div>
 
 <div class="sep"></div>

@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation"
 import { AdminShell } from "@/components/shared/admin-shell"
+import { AnnouncementBanner } from "@/components/shared/announcement-banner"
 import { auth } from "@/lib/auth"
 
-const ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
+const ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"]
 
 export default async function AdminLayout({
   children,
@@ -20,5 +21,10 @@ export default async function AdminLayout({
     redirect("/")
   }
 
-  return <AdminShell>{children}</AdminShell>
+  return (
+    <AdminShell>
+      <AnnouncementBanner />
+      {children}
+    </AdminShell>
+  )
 }

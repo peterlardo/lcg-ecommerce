@@ -1,8 +1,20 @@
 import { NextResponse } from "next/server"
+import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 
-function mapDelivery(delivery: any) {
+type DeliveryWithRelations = Prisma.DeliveryGetPayload<{
+  include: {
+    deliveryAgent: true
+    order: {
+      include: {
+        items: { include: { variant: { include: { product: true } } } }
+      }
+    }
+  }
+}>
+
+function mapDelivery(delivery: DeliveryWithRelations) {
   return {
     id: delivery.id,
     orderId: delivery.orderId,
@@ -18,7 +30,7 @@ function mapDelivery(delivery: any) {
     agent: delivery.deliveryAgent?.name ?? "",
     status: delivery.status,
     items: (delivery.order?.items ?? [])
-      .map((item: any) => `${item.variant?.product?.name ?? "Produit"} ${item.variant?.format ?? ""} x${item.quantity}`)
+      .map((item) => `${item.variant?.product?.name ?? "Produit"} ${item.variant?.format ?? ""} x${item.quantity}`)
       .join(", "),
     total: delivery.order?.total ?? 0,
     notes: delivery.notes ?? "",

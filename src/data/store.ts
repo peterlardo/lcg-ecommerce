@@ -1,7 +1,7 @@
 import { getPrisma } from "@/lib/prisma";
 import { products as staticProducts, categories } from "./products"
 import type { Product, ProductVariant } from "./products"
-import { allocateStockFIFO } from "@/lib/lot-utils"
+import type { Prisma, PaymentMethod, Reservation as PrismaReservation } from "@prisma/client"
 
 export interface ContactMessage {
   id: string
@@ -175,14 +175,14 @@ export async function updateProduct(
   id: string,
   data: Partial<Omit<Product, "id" | "variants">> & { variants?: Omit<ProductVariant, "id">[] }
 ): Promise<boolean> {
-  const exists = await getPrisma().product.findUnique({ where: { id } })
+const exists = await getPrisma().product.findUnique({ where: { id } })
   if (!exists) return false
-  const updateData: any = {}
+  const updateData: Prisma.ProductUpdateInput = {}
   if (data.name !== undefined) updateData.name = data.name
   if (data.subtitle !== undefined) updateData.subtitle = data.subtitle
   if (data.description !== undefined) updateData.description = data.description
   if (data.image !== undefined) updateData.image = data.image
-  if (data.categoryId !== undefined) updateData.categoryId = data.categoryId
+  if (data.categoryId !== undefined) updateData.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true }
   if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured
   if (data.badge !== undefined) updateData.badge = data.badge
   if (data.variants) {
@@ -212,7 +212,9 @@ export async function deleteProduct(id: string): Promise<boolean> {
   }
 }
 
-function mapProduct(p: any): Product {
+type ProductWithRelations = Prisma.ProductGetPayload<{ include: { variants: true; category: true } }>
+
+function mapProduct(p: ProductWithRelations): Product {
   return {
     id: p.id,
     name: p.name,
@@ -223,8 +225,8 @@ function mapProduct(p: any): Product {
     categorySlug: p.category?.slug ?? null,
     categoryName: p.category?.name ?? null,
     isFeatured: p.isFeatured,
-    badge: (p as any).badge ?? null,
-    variants: (p.variants ?? []).map((v: any) => ({
+    badge: p.badge ?? null,
+    variants: (p.variants ?? []).map((v) => ({
       id: v.id,
       format: v.format,
       price: v.price,
@@ -316,7 +318,7 @@ export async function getReservationById(id: string): Promise<Reservation | unde
   return mapReservation(r)
 }
 
-function mapReservation(r: any): Reservation {
+function mapReservation(r: PrismaReservation): Reservation {
   let items: ReservationItem[] = []
   try {
     items = JSON.parse(r.itemsJson || "[]")
@@ -360,7 +362,7 @@ export async function addReservation(
 ): Promise<Reservation> {
   const r = await getPrisma().reservation.create({
     data: {
-      userId: (res as any).userId || null,
+      userId: res.userId || null,
       client: res.client,
       telephone: res.telephone,
       email: res.email,
@@ -401,7 +403,7 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         customerPhone: input.customerPhone,
-        paymentMethod: input.paymentMethod as any,
+        paymentMethod: input.paymentMethod as PaymentMethod,
         source: input.source || "WEB",
         subtotal,
         deliveryFee: input.deliveryFee || 0,

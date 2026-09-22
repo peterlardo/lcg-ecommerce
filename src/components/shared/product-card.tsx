@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
 import { formatPrice } from "@/lib/utils"
 import { useState } from "react"
@@ -44,11 +45,11 @@ export function ProductCard({ product }: ProductCardProps) {
     >
       <div className="relative aspect-square overflow-hidden bg-ice-gradient">
         {product.image ? (
-          <img
+          <Image
             src={product.image}
             alt={product.name}
-            width="800"
-            height="800"
+            width={800}
+            height={800}
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />

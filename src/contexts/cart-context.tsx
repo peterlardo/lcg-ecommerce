@@ -25,19 +25,18 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([])
-
-  useEffect(() => {
-    const stored = localStorage.getItem("lcg-cart")
-    if (stored) {
-      try {
-        setItems(JSON.parse(stored))
-      } catch { }
+  const [items, setItems] = useState<CartItem[]>(() => {
+    if (typeof window === "undefined") return []
+    try {
+      const raw = window.localStorage.getItem("lcg-cart")
+      return raw ? (JSON.parse(raw) as CartItem[]) : []
+    } catch {
+      return []
     }
-  }, [])
+  })
 
   useEffect(() => {
-    localStorage.setItem("lcg-cart", JSON.stringify(items))
+    window.localStorage.setItem("lcg-cart", JSON.stringify(items))
   }, [items])
 
   const addItem = useCallback((item: Omit<CartItem, "quantity">) => {

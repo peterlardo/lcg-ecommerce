@@ -66,7 +66,19 @@ export default function ReservationsPage() {
   }
 
   useEffect(() => {
-    fetchReservations()
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const res = await fetch("/api/reservations", { signal: controller.signal })
+        if (res.ok) setReservations(await res.json())
+      } catch (err) {
+        if (!controller.signal.aborted) console.error("Erreur:", err)
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
   }, [])
 
   const handleStatusChange = async (id: string, status: "PENDING" | "CONFIRMED" | "CANCELLED") => {

@@ -1,7 +1,22 @@
 import type { Metadata } from "next"
+import { Sora, Manrope } from "next/font/google"
 import "./globals.css"
 import { Providers } from "./providers"
 import { siteConfig } from "@/lib/site"
+
+const sora = Sora({
+  subsets: ["latin"],
+  weight: ["400", "600", "700", "800"],
+  variable: "--font-display",
+  display: "swap",
+})
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-sans",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -62,14 +77,8 @@ export default function RootLayout({
     <html lang="fr">
       <head>
         <link rel="icon" type="image/png" href="/favicon-64.png" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"
-          rel="stylesheet"
-        />
       </head>
-      <body className="min-h-screen flex flex-col bg-background text-foreground antialiased">
+      <body className={`${sora.variable} ${manrope.variable} min-h-screen flex flex-col bg-background text-foreground antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -39,13 +39,9 @@ export function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const [searching, setSearching] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
 
-  useEffect(() => {
+useEffect(() => {
     const value = query.trim().toLowerCase()
-    if (value.length < 2) {
-      setResults([])
-      setSearching(false)
-      return
-    }
+    if (value.length < 2) return
 
     const timer = window.setTimeout(async () => {
       setSearching(true)
@@ -80,8 +76,13 @@ export function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
       }
     }, 250)
 
-    return () => window.clearTimeout(timer)
+return () => window.clearTimeout(timer)
   }, [query])
+
+  // Résultats dérivés : masquer les données obsolètes quand la requête est trop courte
+  const hasQuery = query.trim().length >= 2
+  const effectiveResults = hasQuery ? results : []
+  const effectiveSearching = hasQuery ? searching : false
 
   return (
     <header className="flex min-h-16 items-center justify-between border-b border-gray-200 bg-white px-4 sm:px-6">
@@ -105,10 +106,10 @@ export function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
               className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-16 text-sm text-gray-700 outline-none transition focus:border-primary-400 focus:bg-white focus:ring-2 focus:ring-primary-500/20"
             />
             <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] text-gray-400 lg:inline-block">⌘ K</kbd>
-            {searchOpen && query.trim().length >= 2 && <div className="absolute left-0 right-0 top-12 z-50 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-              {searching && <p className="px-4 py-3 text-sm text-gray-500">Recherche en cours...</p>}
-              {!searching && results.length === 0 && <p className="px-4 py-3 text-sm text-gray-500">Aucun résultat trouvé.</p>}
-              {!searching && results.map((result) => <Link key={`${result.type}-${result.href}`} href={result.href} onMouseDown={() => setSearchOpen(false)} className="block border-b border-gray-100 px-4 py-3 hover:bg-gray-50"><div className="flex items-center justify-between gap-3"><span className="text-sm font-medium text-gray-800">{result.title}</span><span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700">{result.type}</span></div><p className="mt-1 text-xs text-gray-500">{result.detail}</p></Link>)}
+            {searchOpen && hasQuery && <div className="absolute left-0 right-0 top-12 z-50 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+              {effectiveSearching && <p className="px-4 py-3 text-sm text-gray-500">Recherche en cours...</p>}
+              {!effectiveSearching && effectiveResults.length === 0 && <p className="px-4 py-3 text-sm text-gray-500">Aucun résultat trouvé.</p>}
+              {!effectiveSearching && effectiveResults.map((result) => <Link key={`${result.type}-${result.href}`} href={result.href} onMouseDown={() => setSearchOpen(false)} className="block border-b border-gray-100 px-4 py-3 hover:bg-gray-50"><div className="flex items-center justify-between gap-3"><span className="text-sm font-medium text-gray-800">{result.title}</span><span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700">{result.type}</span></div><p className="mt-1 text-xs text-gray-500">{result.detail}</p></Link>)}
             </div>}
           </div>
         </div>

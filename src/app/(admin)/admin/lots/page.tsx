@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, CheckCircle2, Clock, Download, FileText, FileSpreadsheet, PackagePlus, RefreshCw, Search, Trash2, XCircle } from "lucide-react"
+import { AlertCircle, CheckCircle2, Download, FileText, FileSpreadsheet, PackagePlus, RefreshCw, Search, Trash2, XCircle } from "lucide-react"
 import { exportLotsPDF, exportLotsExcel } from "@/lib/report-export"
 
 interface StockVariant {
@@ -72,13 +72,12 @@ export default function LotsPage() {
   const [expiryDate, setExpiryDate] = useState("")
   const [note, setNote] = useState("")
 
-  const [selectedLot, setSelectedLot] = useState<any>(null)
+  const [selectedLot, setSelectedLot] = useState<Lot | null>(null)
   const [editExpiry, setEditExpiry] = useState("")
   const [editNotes, setEditNotes] = useState("")
   const [detailLoading, setDetailLoading] = useState(false)
 
   const load = async () => {
-    setError("")
     try {
       const [lotsRes, stockRes] = await Promise.all([
         fetch("/api/lots" + (filterStatus ? `?status=${filterStatus}` : "")),
@@ -96,7 +95,30 @@ export default function LotsPage() {
     }
   }
 
-  useEffect(() => { void load() }, [filterStatus])
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const [lotsRes, stockRes] = await Promise.all([
+          fetch("/api/lots" + (filterStatus ? `?status=${filterStatus}` : ""), { signal: controller.signal }),
+          fetch("/api/stock", { signal: controller.signal }),
+        ])
+        if (!lotsRes.ok || !stockRes.ok) throw new Error("Erreur de chargement")
+        const data = await lotsRes.json()
+        if (controller.signal.aborted) return
+        setData(data)
+        const sv = await stockRes.json()
+        setStockVariants(sv.variants ?? [])
+        setVariantId((current) => current || sv.variants?.[0]?.variantId || "")
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Erreur de chargement")
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [filterStatus])
 
   const filtered = useMemo(() => {
     const lots = data?.lots ?? []
@@ -187,11 +209,23 @@ export default function LotsPage() {
 
   const exportPDF = () => {
     if (!data) return
-    exportLotsPDF({ lots: data.lots, lotSummary: { totalLots: data.lots.length, activeLots, totalProduced, totalRemaining } })
+    const lots = data.lots.map((l: Lot) => ({
+      id: l.id, lotNumber: l.lotNumber, initialQuantity: l.initialQuantity, remainingQuantity: l.remainingQuantity,
+      productionDate: l.productionDate, expiryDate: l.expiryDate, status: l.status, notes: l.notes,
+      createdAt: l.createdAt, productName: l.variant.product.name, format: l.variant.format,
+      categoryName: null, allocationCount: l.allocations?.length ?? 0,
+    }))
+    exportLotsPDF({ lots, lotSummary: { totalLots: data.lots.length, activeLots, totalProduced, totalRemaining } })
   }
   const exportExcel = () => {
     if (!data) return
-    exportLotsExcel({ lots: data.lots, lotSummary: { totalLots: data.lots.length, activeLots, totalProduced, totalRemaining } })
+    const lots = data.lots.map((l: Lot) => ({
+      id: l.id, lotNumber: l.lotNumber, initialQuantity: l.initialQuantity, remainingQuantity: l.remainingQuantity,
+      productionDate: l.productionDate, expiryDate: l.expiryDate, status: l.status, notes: l.notes,
+      createdAt: l.createdAt, productName: l.variant.product.name, format: l.variant.format,
+      categoryName: null, allocationCount: l.allocations?.length ?? 0,
+    }))
+    exportLotsExcel({ lots, lotSummary: { totalLots: data.lots.length, activeLots, totalProduced, totalRemaining } })
   }
 
   return (
@@ -412,7 +446,7 @@ export default function LotsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {selectedLot.allocations.map((a: LotAllocation) => (
+                        {(selectedLot.allocations ?? []).map((a: LotAllocation) => (
                           <tr key={a.id}>
                             <td className="px-2 py-1 sm:px-3 sm:py-1.5">
                               <span className={`inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-xs font-semibold ${a.type === "SALE" ? "bg-blue-100 text-blue-700" : a.type === "LOSS" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>

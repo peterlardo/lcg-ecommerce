@@ -41,7 +41,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Type de fichier non supporté" }, { status: 400 })
     }
 
-    const ext = file.name.split(".").pop() || "bin"
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100)
     const filename = `${Date.now()}-${safeName}`
 

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useCart } from "@/contexts/cart-context"
 import { ShoppingCart, Menu, X } from "lucide-react"
@@ -21,11 +22,11 @@ export function Header() {
     <header className="sticky top-0 z-50 bg-background/85 backdrop-blur-lg">
       <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-3">
-          <img
+          <Image
             src="/logo-lcg.jpeg"
             alt="Logo LCG — La Congolaise des Glaçons"
-            width="80"
-            height="80"
+            width={80}
+            height={80}
             className="h-20 w-20 -mb-6 rounded-full object-cover shadow-lg ring-4 ring-background"
           />
           <div className="leading-tight">

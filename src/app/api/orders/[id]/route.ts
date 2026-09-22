@@ -3,7 +3,11 @@ import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { sendStatusChangeEmail } from "@/lib/mailer"
 import { pushNotification } from "@/lib/notifications"
-import { allocateStockFIFOTx } from "@/lib/lot-utils"
+import {
+  consumePointOfSaleStockTx,
+  restoreLotAllocationsByReferenceTx,
+  restockPointOfSaleStockTx,
+} from "@/lib/stock-service"
 
 const VALID_STATUS = [
   "PENDING",
@@ -53,41 +57,25 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
         }
 
         for (const item of previous.items) {
-          // Les commandes issues d'une pré-commande ont déjà été débitées du stock
-          // central lors de la confirmation de la réservation (voir confirmReservation)
+          // Les commandes issues d'une pré-commande ont déjà été débitées lors de
+          // la confirmation de la réservation.
           if (previous.source === "RESERVATION") break
 
-          const posStock = await tx.pointOfSaleStock.findUnique({
-            where: { pointOfSaleId_variantId: { pointOfSaleId, variantId: item.variantId } },
+          const fifoResult = await consumePointOfSaleStockTx(tx, {
+            variantId: item.variantId,
+            pointOfSaleId,
+            quantity: item.quantity,
+            type: "SALE",
+            reason: `Vente commande ${previous.orderNumber}`,
+            reference: previous.orderNumber,
           })
 
-          const available = posStock?.quantity ?? 0
-          if (available < item.quantity) {
-            const variant = await tx.productVariant.findUnique({
-              where: { id: item.variantId },
-              select: { product: { select: { name: true } }, format: true },
+          if (fifoResult.allocations.length > 0) {
+            await tx.orderItem.update({
+              where: { id: item.id },
+              data: { lotId: fifoResult.allocations[0].lotId },
             })
-            const name = variant ? `${variant.product.name} ${variant.format}` : item.variantId
-            throw new Error(`Stock insuffisant au point de vente "${pos.name}" pour ${name} (disponible: ${available}, demandé: ${item.quantity})`)
           }
-
-          await tx.pointOfSaleStock.update({
-            where: { pointOfSaleId_variantId: { pointOfSaleId, variantId: item.variantId } },
-            data: { quantity: { decrement: item.quantity } },
-          })
-
-          await tx.stockMovement.create({
-            data: {
-              variantId: item.variantId,
-              pointOfSaleId,
-              type: "SALE",
-              quantity: item.quantity,
-              reason: `Vente commande ${previous.orderNumber}`,
-              reference: previous.orderNumber,
-            },
-          })
-
-          await allocateStockFIFOTx(tx, item.variantId, item.quantity, "SALE", previous.orderNumber)
         }
 
         await tx.order.update({
@@ -97,43 +85,24 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
       }
 
       if (status === "CANCELLED" && previous.status !== "CANCELLED") {
+        const lotAllocations = await tx.lotAllocation.findMany({
+          where: { reference: previous.orderNumber },
+        })
         const statusSetStock = ["CONFIRMED", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(previous.status)
+        const shouldRestock = statusSetStock || lotAllocations.length > 0
 
-        if (statusSetStock && previous.pointOfSaleId && previous.source !== "RESERVATION") {
+        if (shouldRestock && previous.pointOfSaleId) {
           for (const item of previous.items) {
-            const posStock = await tx.pointOfSaleStock.findUnique({
-              where: { pointOfSaleId_variantId: { pointOfSaleId: previous.pointOfSaleId, variantId: item.variantId } },
-            })
-
-            if (posStock) {
-              await tx.pointOfSaleStock.update({
-                where: { pointOfSaleId_variantId: { pointOfSaleId: previous.pointOfSaleId, variantId: item.variantId } },
-                data: { quantity: { increment: item.quantity } },
-              })
-            } else {
-              await tx.pointOfSaleStock.create({
-                data: {
-                  pointOfSaleId: previous.pointOfSaleId,
-                  variantId: item.variantId,
-                  quantity: item.quantity,
-                },
-              })
-            }
-
-            await tx.stockMovement.create({
-              data: {
-                variantId: item.variantId,
-                pointOfSaleId: previous.pointOfSaleId,
-                type: "CANCEL_RESTOCK",
-                quantity: item.quantity,
-                reason: "Retour stock après annulation commande",
-                reference: previous.orderNumber,
-              },
+            await restockPointOfSaleStockTx(tx, {
+              variantId: item.variantId,
+              pointOfSaleId: previous.pointOfSaleId,
+              quantity: item.quantity,
+              type: "CANCEL_RESTOCK",
+              reason: "Retour stock après annulation commande",
+              reference: previous.orderNumber,
             })
           }
-        }
-
-        if (statusSetStock && previous.source === "RESERVATION") {
+        } else if (shouldRestock) {
           for (const item of previous.items) {
             await tx.productVariant.update({
               where: { id: item.variantId },
@@ -145,27 +114,15 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">)
                 variantId: item.variantId,
                 type: "RETURN",
                 quantity: item.quantity,
-                reason: "Retour stock central après annulation commande",
+                reason: "Retour stock après annulation commande",
                 reference: previous.orderNumber,
               },
             })
           }
         }
 
-        const lotAllocations = await tx.lotAllocation.findMany({
-          where: { reference: previous.orderNumber },
-        })
         if (lotAllocations.length > 0) {
-          for (const alloc of lotAllocations) {
-            await tx.productionLot.update({
-              where: { id: alloc.lotId },
-              data: {
-                remainingQuantity: { increment: alloc.quantity },
-                status: "ACTIVE",
-              },
-            })
-          }
-          await tx.lotAllocation.deleteMany({ where: { reference: previous.orderNumber } })
+          await restoreLotAllocationsByReferenceTx(tx, previous.orderNumber)
         }
       }
 

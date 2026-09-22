@@ -53,7 +53,13 @@ cloudflare-env.d.ts
 
 # Debug logs
 dev-output.log
+dev-output2.log
+dev-server.log
+dev-server-err.log
 dev-error.log
+werr.txt
+wlog.txt
+.tmp/
 
 # Uploads
 /public/uploads/

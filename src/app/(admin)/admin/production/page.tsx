@@ -1,19 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, CalendarClock, CheckCircle2, Clock, Factory, FileText, PackagePlus, RefreshCw, Search, Trash2, TrendingUp, XCircle } from "lucide-react"
+import { AlertCircle, CheckCircle2, Factory, FileText, PackagePlus, RefreshCw, Search, Trash2, TrendingUp, XCircle } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { formatPrice } from "@/lib/utils"
-
-interface LotVariant {
-  id: string
-  productId: string
-  format: string
-  price: number
-  stock: number
-  unit: string | null
-  product: { name: string; category?: { name: string } | null }
-}
 
 interface Lot {
   id: string
@@ -63,6 +52,13 @@ interface StockVariant {
   unit: string | null
 }
 
+interface PointOfSaleOption {
+  id: string
+  name: string
+  code: string
+  isActive: boolean
+}
+
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof CheckCircle2 }> = {
   ACTIVE: { label: "Actif", color: "text-green-700 bg-green-100", icon: CheckCircle2 },
   EXHAUSTED: { label: "Epuise", color: "text-gray-600 bg-gray-100", icon: XCircle },
@@ -83,36 +79,43 @@ export default function ProductionPage() {
   const [lotsData, setLotsData] = useState<LotsPayload | null>(null)
   const [reports, setReports] = useState<ReportPayload | null>(null)
   const [stockVariants, setStockVariants] = useState<StockVariant[]>([])
+  const [points, setPoints] = useState<PointOfSaleOption[]>([])
+  const [destinationStocks, setDestinationStocks] = useState<{ variantId: string; quantity: number }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
   const [variantId, setVariantId] = useState("")
+  const [destinationPointOfSaleId, setDestinationPointOfSaleId] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [expiryDate, setExpiryDate] = useState("")
   const [note, setNote] = useState("")
 
   const [filterStatus, setFilterStatus] = useState<string>("")
   const [searchLot, setSearchLot] = useState("")
-  const [selectedLot, setSelectedLot] = useState<any>(null)
+  const [selectedLot, setSelectedLot] = useState<Lot | null>(null)
   const [tab, setTab] = useState<"lots" | "alerts">("lots")
 
   const load = async () => {
     setError("")
     try {
-      const [lotsRes, reportRes, stockRes] = await Promise.all([
+      const [lotsRes, reportRes, stockRes, pointsRes] = await Promise.all([
         fetch("/api/lots" + (filterStatus ? `?status=${filterStatus}` : "")),
         fetch("/api/reports"),
         fetch("/api/stock"),
+        fetch("/api/points-de-vente/list"),
       ])
-      if (!lotsRes.ok || !reportRes.ok || !stockRes.ok) throw new Error("Erreur de chargement")
+      if (!lotsRes.ok || !reportRes.ok || !stockRes.ok || !pointsRes.ok) throw new Error("Erreur de chargement")
       const lotsJson = await lotsRes.json()
       const reportJson = await reportRes.json()
       const stockJson = await stockRes.json()
+      const pointsJson = await pointsRes.json()
       setLotsData(lotsJson)
       setReports(reportJson)
       setStockVariants(stockJson.variants ?? [])
+      setPoints(pointsJson ?? [])
       if (!variantId && stockJson.variants?.[0]) setVariantId(stockJson.variants[0].variantId)
+      if (!destinationPointOfSaleId && pointsJson?.[0]) setDestinationPointOfSaleId(pointsJson[0].id)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur")
     } finally {
@@ -120,7 +123,59 @@ export default function ProductionPage() {
     }
   }
 
-  useEffect(() => { void load() }, [filterStatus])
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const [lotsRes, reportRes, stockRes, pointsRes] = await Promise.all([
+          fetch("/api/lots" + (filterStatus ? `?status=${filterStatus}` : ""), { signal: controller.signal }),
+          fetch("/api/reports", { signal: controller.signal }),
+          fetch("/api/stock", { signal: controller.signal }),
+          fetch("/api/points-de-vente/list", { signal: controller.signal }),
+        ])
+        if (!lotsRes.ok || !reportRes.ok || !stockRes.ok || !pointsRes.ok) throw new Error("Erreur de chargement")
+        const lotsJson = await lotsRes.json()
+        const reportJson = await reportRes.json()
+        const stockJson = await stockRes.json()
+        const pointsJson = await pointsRes.json()
+        setLotsData(lotsJson)
+        setReports(reportJson)
+        setStockVariants(stockJson.variants ?? [])
+        setPoints(pointsJson ?? [])
+        if (!variantId && stockJson.variants?.[0]) setVariantId(stockJson.variants[0].variantId)
+        if (!destinationPointOfSaleId && pointsJson?.[0]) setDestinationPointOfSaleId(pointsJson[0].id)
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return
+        setError(err instanceof Error ? err.message : "Erreur")
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+    // variantId/destinationPointOfSaleId ne servent qu'à initialiser les selects :
+    // les ajouter aux deps relancerait le fetch à chaque changement.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterStatus])
+
+  useEffect(() => {
+    if (!destinationPointOfSaleId) return
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const res = await fetch(`/api/points-de-vente/${destinationPointOfSaleId}/stocks`, { signal: controller.signal })
+        if (!res.ok) throw new Error("Erreur de chargement du stock destination")
+        const json = await res.json()
+        if (controller.signal.aborted) return
+        setDestinationStocks(json.stocks ?? [])
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return
+        if (!controller.signal.aborted) setDestinationStocks([])
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [destinationPointOfSaleId])
 
   const filteredLots = useMemo(() => {
     const lots = lotsData?.lots ?? []
@@ -137,6 +192,8 @@ export default function ProductionPage() {
   const totalRemaining = lotsData?.summary?._sum?.remainingQuantity ?? 0
   const activeLots = lotsData?.summary?._count ?? 0
   const selectedVariant = stockVariants.find((v) => v.variantId === variantId)
+  const selectedPoint = points.find((point) => point.id === destinationPointOfSaleId)
+  const selectedLocationStock = destinationStocks.find((s) => s.variantId === variantId)?.quantity ?? 0
 
   const submitProduction = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -148,6 +205,7 @@ export default function ProductionPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         variantId,
+        pointOfSaleId: destinationPointOfSaleId || undefined,
         quantity,
         expiryDate: expiryDate || null,
         notes: note || null,
@@ -161,7 +219,7 @@ export default function ProductionPage() {
     }
 
     const body = await res.json()
-    setSuccess(`Lot ${body.lot.lotNumber} cree avec succes`)
+    setSuccess(`Lot ${body.lot.lotNumber} cree avec succes${body.destination?.name ? ` pour ${body.destination.name}` : ""}`)
     setQuantity(1)
     setExpiryDate("")
     setNote("")
@@ -240,6 +298,12 @@ export default function ProductionPage() {
               </select>
             </label>
             <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+              Point de vente de destination
+              <select value={destinationPointOfSaleId} onChange={(e) => setDestinationPointOfSaleId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:py-2 sm:text-sm">
+                {points.filter((p) => p.isActive).map((point) => <option key={point.id} value={point.id}>{point.name} ({point.code})</option>)}
+              </select>
+            </label>
+            <label className="block text-xs font-medium text-gray-700 sm:text-sm">
               Quantité à produire
               <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:py-2 sm:text-sm" />
             </label>
@@ -253,10 +317,12 @@ export default function ProductionPage() {
             </label>
             {selectedVariant && (
               <div className="rounded-lg bg-gray-50 p-2.5 text-xs text-gray-600 sm:p-3 sm:text-sm">
-                Stock actuel : <span className="font-semibold text-gray-900">{selectedVariant.stock} {selectedVariant.unit ?? ""}</span>
+                Stock global : <span className="font-semibold text-gray-900">{selectedVariant.stock} {selectedVariant.unit ?? ""}</span>
+                <span className="mx-1.5 text-gray-300">|</span>
+                {selectedPoint?.name ?? "Destination"} : <span className="font-semibold text-gray-900">{selectedLocationStock} {selectedVariant.unit ?? ""}</span>
               </div>
             )}
-            <button disabled={loading || !variantId} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:py-2.5 sm:text-sm">
+            <button disabled={loading || !variantId || !destinationPointOfSaleId} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:py-2.5 sm:text-sm">
               <PackagePlus className="h-4 w-4" /> Creer le lot
             </button>
           </form>
@@ -448,7 +514,7 @@ export default function ProductionPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {selectedLot.allocations.map((a: any) => (
+                    {(selectedLot.allocations ?? []).map((a: LotAllocation) => (
                       <tr key={a.id}>
                         <td className="px-2 py-1 sm:px-3 sm:py-1.5">{ALLOC_TYPE[a.type] ?? a.type}</td>
                         <td className="px-2 py-1 text-right font-semibold sm:px-3 sm:py-1.5">{a.quantity}</td>

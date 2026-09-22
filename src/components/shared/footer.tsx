@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 
 export function Footer() {
   return (
@@ -6,11 +7,11 @@ export function Footer() {
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-3">
-            <img
+            <Image
               src="/logo-lcg.jpeg"
               alt="Logo LCG"
-              width="44"
-              height="44"
+              width={44}
+              height={44}
               loading="lazy"
               className="h-11 w-11 rounded-full object-cover"
             />

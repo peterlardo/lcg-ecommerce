@@ -50,13 +50,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+async jwt({ token, user }) {
       if (user) {
         token.role = user.role as Role
         token.id = user.id
-      }
-      if (token.id) {
-        token.permissions = await getPrisma().userPermission.findMany({ where: { userId: token.id as string }, select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true } })
+        token.permissions = await getPrisma().userPermission.findMany({ where: { userId: user.id as string }, select: { module: true, canView: true, canCreate: true, canEdit: true, canDelete: true } })
       }
       return token
     },

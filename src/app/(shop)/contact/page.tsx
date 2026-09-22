@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { MapPin, Phone, Mail, Clock } from "lucide-react"
-import type { Metadata } from "next"
 
 const contactCards = [
   { icon: MapPin, title: "Adresse", text: "97 Rue EWO, Ouenzé — Brazzaville, République du Congo" },

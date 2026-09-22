@@ -48,8 +48,23 @@ export default function ControleDistantPage() {
     }
   }
 
-  useEffect(() => {
-    void load()
+useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      setError("")
+      try {
+        const res = await fetch("/api/reports", { signal: controller.signal })
+        if (!res.ok) throw new Error("Impossible de charger le contrôle distant")
+        setData(await res.json())
+        setLastRefresh(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }))
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Erreur de chargement")
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
   }, [])
 
   const summary = data?.summary
@@ -90,8 +105,8 @@ export default function ControleDistantPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">CA aujourd'hui</p><p className="mt-1 text-lg font-bold text-gray-900 sm:text-xl">{formatPrice(summary?.todayRevenue ?? 0)}</p></div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Commandes aujourd'hui</p><p className="mt-1 text-lg font-bold text-gray-900 sm:text-xl">{summary?.todayOrders ?? 0}</p></div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">CA aujourd&apos;hui</p><p className="mt-1 text-lg font-bold text-gray-900 sm:text-xl">{formatPrice(summary?.todayRevenue ?? 0)}</p></div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Commandes aujourd&apos;hui</p><p className="mt-1 text-lg font-bold text-gray-900 sm:text-xl">{summary?.todayOrders ?? 0}</p></div>
         <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Stock total</p><p className="mt-1 text-lg font-bold text-gray-900 sm:text-xl">{summary?.stockUnits ?? 0}</p></div>
         <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Espèces attendues</p><p className="mt-1 text-lg font-bold text-gray-900 sm:text-xl">{formatPrice(summary?.cashExpected ?? 0)}</p></div>
       </div>

@@ -94,7 +94,24 @@ export function ChatWidget() {
   }, [])
 
   useEffect(() => {
-    void loadUsers()
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const res = await fetch("/api/chat/users", { signal: controller.signal })
+        if (res.ok) {
+          const data = (await res.json()) as ChatUser[]
+          if (!controller.signal.aborted) setUsers(data)
+          if (!myId) {
+            const sessionRes = await fetch("/api/auth/session", { signal: controller.signal })
+            if (sessionRes.ok) {
+              const session = (await sessionRes.json()) as { user?: { id?: string } }
+              if (!controller.signal.aborted) setMyId(session?.user?.id || "")
+            }
+          }
+        }
+      } catch {}
+    }
+    void init()
     pollRef.current = setInterval(() => {
       if (!isOpen) {
         void loadUsers()
@@ -103,8 +120,11 @@ export function ChatWidget() {
         void loadUsers()
       }
     }, 10000)
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
-  }, [isOpen, selectedUser, loadUsers, loadMessages])
+    return () => {
+      controller.abort()
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [isOpen, selectedUser, loadUsers, loadMessages, myId])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -243,6 +263,7 @@ export function ChatWidget() {
     if (msg.fileType === "image") {
       return (
         <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className="block mt-1.5 rounded-lg overflow-hidden border border-white/20">
+          {/* eslint-disable-next-line @next/next/no-img-element -- image dynamique (upload utilisateur) aux dimensions inconnues */}
           <img src={msg.fileUrl} alt={msg.fileName || "Image"} className="max-h-48 w-auto object-cover" loading="lazy" />
         </a>
       )

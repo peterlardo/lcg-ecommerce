@@ -1,6 +1,5 @@
 import Image from "next/image"
-import Link from "next/link"
-import { Droplets, Factory, HeartHandshake, Leaf, ArrowRight } from "lucide-react"
+import { Droplets, Factory, HeartHandshake, Leaf } from "lucide-react"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {

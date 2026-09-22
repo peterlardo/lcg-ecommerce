@@ -76,6 +76,7 @@ function ResetPasswordForm() {
       <div className="relative w-full max-w-md">
         <div className="rounded-2xl bg-white/95 backdrop-blur-sm p-8 shadow-2xl shadow-black/20">
           <div className="mb-8 flex flex-col items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element -- Logo statique simple (fichier public), next/image non requis */}
             <img
               src="/logo-lcg.jpeg"
               alt="LCG — La Congolaise des Glaçons"

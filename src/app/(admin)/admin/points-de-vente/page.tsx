@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Banknote, Boxes, CheckCircle2, ChevronRight, Clock3, Edit3, History, MapPin, Phone, Plus, RefreshCw, Search, Store, Truck, UserRound, XCircle } from "lucide-react"
+import { Banknote, Boxes, CheckCircle2, ChevronRight, Clock3, Edit3, History, MapPin, Phone, Plus, Search, Store, Truck, UserRound, XCircle } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 
 interface UserOption { id: string; name: string | null; email: string; role: string }
@@ -48,7 +48,6 @@ export default function PointsDeVentePage() {
   const [success, setSuccess] = useState("")
 
   const load = async (focusId?: string) => {
-    setLoading(true)
     try {
       const response = await fetch("/api/points-de-vente")
       if (!response.ok) throw new Error("Impossible de charger les points de vente")
@@ -69,7 +68,31 @@ export default function PointsDeVentePage() {
     if (response.ok) setDetail(await response.json())
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const response = await fetch("/api/points-de-vente", { signal: controller.signal })
+        if (!response.ok) throw new Error("Impossible de charger les points de vente")
+        const payload = await response.json()
+        if (controller.signal.aborted) return
+        setPoints(payload.points)
+        setUsers(payload.users)
+        setVariants(payload.variants)
+        setStats(Object.fromEntries(payload.stats.map((item: { pointOfSaleId: string; revenue: number }) => [item.pointOfSaleId, item.revenue])))
+        setNextCode(payload.nextCode || "PDV-001")
+        setSelectedId((current) => current || payload.points[0]?.id || "")
+        const nextId = payload.points[0]?.id || ""
+        if (nextId) await loadDetail(nextId)
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Erreur de chargement")
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [])
 
   const filteredPoints = useMemo(() => points.filter((point) => {
     const matchesSearch = `${point.name} ${point.code} ${point.city} ${point.managerName || ""}`.toLowerCase().includes(search.toLowerCase())
@@ -94,11 +117,6 @@ export default function PointsDeVentePage() {
     const response = await fetch(`/api/points-de-vente/${point.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isActive: !point.isActive }) })
     if (!response.ok) setError("Impossible de modifier le statut")
     else { setSuccess(point.isActive ? "Point de vente désactivé" : "Point de vente activé"); await load(point.id) }
-  }
-
-  const assignReservation = async (reservationId: string) => {
-    const response = await fetch(`/api/reservations/${reservationId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pointOfSaleId: selectedId }) })
-    if (response.ok) { setSuccess("Pré-commande rattachée"); await load(selectedId) } else setError("Impossible de rattacher la pré-commande")
   }
 
   const submitStock = async (event: React.FormEvent) => {
@@ -146,7 +164,7 @@ export default function PointsDeVentePage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-3 sm:p-5"><p className="text-xs sm:text-sm text-muted-foreground">Points actifs</p><p className="mt-2 text-xl sm:text-2xl font-bold text-foreground">{points.filter((point) => point.isActive).length} <span className="text-xs sm:text-sm font-normal text-muted-foreground">/ {points.length}</span></p></div>
-        <div className="rounded-xl border border-border bg-card p-3 sm:p-5"><p className="text-xs sm:text-sm text-muted-foreground">Chiffre d'affaires réseau</p><p className="mt-2 text-xl sm:text-2xl font-bold text-foreground">{formatPrice(Object.values(stats).reduce((sum, value) => sum + value, 0))}</p></div>
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-5"><p className="text-xs sm:text-sm text-muted-foreground">Chiffre d&apos;affaires réseau</p><p className="mt-2 text-xl sm:text-2xl font-bold text-foreground">{formatPrice(Object.values(stats).reduce((sum, value) => sum + value, 0))}</p></div>
         <div className="rounded-xl border border-border bg-card p-3 sm:p-5"><p className="text-xs sm:text-sm text-muted-foreground">Pré-commandes rattachées</p><p className="mt-2 text-xl sm:text-2xl font-bold text-foreground">{points.reduce((sum, point) => sum + point._count.reservations, 0)}</p></div>
       </div>
 
@@ -233,9 +251,9 @@ export default function PointsDeVentePage() {
             {tab === "overview" && (
               <div className="space-y-4 sm:space-y-5 p-3 sm:p-5">
                 <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 sm:p-5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-primary/70">Chiffre d'affaires aujourd'hui</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary/70">Chiffre d&apos;affaires aujourd&apos;hui</p>
                   <p className="mt-2 text-3xl font-bold text-primary">{formatPrice(detail.today.revenue)}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{detail.today.orders} vente(s) aujourd'hui</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{detail.today.orders} vente(s) aujourd&apos;hui</p>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div className="rounded-lg bg-muted/50 p-4"><p className="text-xs text-muted-foreground">CA total</p><p className="mt-2 text-xl font-bold text-foreground">{formatPrice(detail.summary.revenue)}</p></div>
@@ -304,7 +322,7 @@ export default function PointsDeVentePage() {
                     </select>
                     <input required min="1" type="number" value={stockForm.quantity} onChange={(event) => setStockForm({ ...stockForm, quantity: event.target.value })} placeholder="Quantité" className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground" />
                     <select value={stockForm.sourcePointOfSaleId} onChange={(event) => setStockForm({ ...stockForm, sourcePointOfSaleId: event.target.value })} className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground">
-                      <option value="">Approvisionnement central</option>
+                      <option value="">Entrée directe historisée</option>
                       {points.filter((point) => point.id !== selectedId && point.isActive).map((point) => <option key={point.id} value={point.id}>Depuis {point.name}</option>)}
                     </select>
                     <button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"><Truck className="h-4 w-4" />{stockForm.sourcePointOfSaleId ? "Transférer" : "Ajouter"}</button>
@@ -340,7 +358,7 @@ export default function PointsDeVentePage() {
                   <Banknote className="h-6 w-6 text-primary" />
                   <div>
                     <p className="font-semibold text-foreground">{detail.openCash ? "Caisse ouverte" : "Aucune caisse ouverte"}</p>
-                    <p className="text-sm text-muted-foreground">{detail.openCash ? `Ouverte le ${new Date(detail.openCash.openedAt).toLocaleString("fr-FR")}` : "Ouvrez une session avant d'encaisser."}</p>
+                    <p className="text-sm text-muted-foreground">{detail.openCash ? `Ouverte le ${new Date(detail.openCash.openedAt).toLocaleString("fr-FR")}` : "Ouvrez une session avant d&apos;encaisser."}</p>
                   </div>
                 </div>
                 <div className="flex max-w-md gap-3">

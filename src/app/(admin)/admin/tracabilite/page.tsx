@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertCircle, CheckCircle2, Clock, FileText, Package, Search, XCircle } from "lucide-react"
+import { AlertCircle, CheckCircle2, FileText, Package, Search, XCircle } from "lucide-react"
 
 interface LotOption {
   id: string
@@ -35,10 +35,30 @@ interface Allocation {
   pointOfSale: { name: string; code: string } | null
 }
 
+interface TraceMovement {
+  id: string
+  type: string
+  reason: string | null
+  reference: string | null
+  quantity: number
+  createdAt: string
+}
+
+interface LotApiItem {
+  id: string
+  lotNumber: string
+  status: string
+  remainingQuantity: number
+  variant?: {
+    product?: { name?: string | null } | null
+    format?: string | null
+  } | null
+}
+
 interface TraceData {
   lot: LotDetail
   allocations: Allocation[]
-  movements: any[]
+  movements: TraceMovement[]
   summary: {
     initialQuantity: number
     remainingQuantity: number
@@ -70,7 +90,7 @@ export default function TracabilitePage() {
   useEffect(() => {
     fetch("/api/lots")
       .then((r) => (r.ok ? r.json() : { lots: [] }))
-      .then((data: { lots: any[] }) => {
+      .then((data: { lots: LotApiItem[] }) => {
         const rows = Array.isArray(data.lots) ? data.lots : []
         setLots(rows.map((l) => ({
           id: l.id,
@@ -194,7 +214,7 @@ export default function TracabilitePage() {
           <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
             <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-900"><FileText className="h-4 w-4" /> Historique des allocations</h3>
             {data.allocations.length === 0 ? (
-              <p className="text-sm text-gray-500">Aucune allocation - ce lot n'a pas encore ete utilise.</p>
+              <p className="text-sm text-gray-500">Aucune allocation - ce lot n&apos;a pas encore ete utilise.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -241,7 +261,7 @@ export default function TracabilitePage() {
               <p className="text-sm text-gray-500">Aucun mouvement de stock lie.</p>
             ) : (
               <div className="space-y-2">
-                {data.movements.map((m: any) => (
+                {data.movements.map((m) => (
                   <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 sm:px-4 py-2 sm:py-2.5 text-sm">
                     <div>
                       <p className="font-medium">{m.type}</p>

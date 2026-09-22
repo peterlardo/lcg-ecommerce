@@ -3,13 +3,16 @@ import bcrypt from "bcryptjs"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
-const ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "CUSTOMER"] as const
-
 export async function GET() {
   const forbidden = await requireManagementAccess(["ADMIN"])
   if (forbidden) return forbidden
   const users = await getPrisma().user.findMany({ include: { permissions: true, managedPointOfSales: { select: { id: true, name: true, code: true } } }, orderBy: { createdAt: "desc" } })
-  return NextResponse.json(users.map(({ password, ...user }) => user))
+  return NextResponse.json(
+    users.map(({ password, ...user }) => {
+      void password // exclu volontairement de la réponse (jamais exposé)
+      return user
+    })
+  )
 }
 
 export async function POST(request: Request) {

@@ -36,7 +36,6 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "desc" },
   })
 
-  const allocationIds = allocations.map((a) => a.id)
   const allocMovements = movements.filter(
     (m) => m.type === "TRANSFER_IN" || m.type === "TRANSFER_OUT"
   )

@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 import { generateOrderNumber } from "@/lib/utils"
-import { allocateStockFIFOTx } from "@/lib/lot-utils"
+import {
+  COMPTOIR_CODE,
+  consumePointOfSaleStockTx,
+  ensureOperationalStockLocations,
+} from "@/lib/stock-service"
 
 const PAYMENT_METHODS = ["CASH_ON_DELIVERY", "MOBILE_MONEY", "CARD"] as const
 
@@ -20,6 +25,7 @@ interface SaleRequestBody {
   paymentMethod?: string
   notes?: string
   pointOfSaleId?: string
+  b2bClientId?: string
   items?: SaleItemInput[]
 }
 
@@ -41,8 +47,11 @@ function normalizeItems(value: unknown): SaleItemInput[] {
 }
 
 export async function GET() {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL"])
   if (forbidden) return forbidden
+
+  const session = await auth()
+  const isCommercial = session?.user?.role === "COMMERCIAL"
 
   const posFilter = await getUserPointOfSaleIds()
   const posIds = posFilter?.posIds ?? null
@@ -50,7 +59,11 @@ export async function GET() {
   const sales = await getPrisma().order.findMany({
     where: {
       notes: { startsWith: "Vente comptoir" },
-      ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}),
+      ...(isCommercial
+        ? { userId: session!.user!.id }
+        : posIds !== null
+          ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
+          : {}),
     },
     include: {
       pointOfSale: { select: { id: true, name: true, code: true } },
@@ -74,8 +87,8 @@ export async function GET() {
       pointOfSale: sale.pointOfSale,
       items: sale.items.map((item) => ({
         id: item.id,
-        name: (item as any).variant?.product?.name ?? "Produit",
-        format: (item as any).variant?.format ?? "",
+        name: item.variant?.product?.name ?? "Produit",
+        format: item.variant?.format ?? "",
         quantity: item.quantity,
         price: item.price,
         total: item.total,
@@ -85,10 +98,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL"])
   if (forbidden) return forbidden
 
   try {
+    const session = await auth()
+    const sellerId = session?.user?.id ?? null
+
     const body = (await request.json()) as SaleRequestBody
     const items = normalizeItems(body.items)
 
@@ -96,10 +112,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Au moins un article est requis" }, { status: 400 })
     }
 
-    if (body.pointOfSaleId) {
-      const point = await getPrisma().pointOfSale.findUnique({ where: { id: body.pointOfSaleId } })
-      if (!point || !point.isActive) return NextResponse.json({ error: "Point de vente invalide ou inactif" }, { status: 400 })
+    const stockLocations = await ensureOperationalStockLocations()
+    const defaultPointOfSaleId = stockLocations.find((location) => location.code === COMPTOIR_CODE)?.id
+    const pointOfSaleId = body.pointOfSaleId || defaultPointOfSaleId
+
+    if (!pointOfSaleId) {
+      return NextResponse.json({ error: "Moyen de stockage requis" }, { status: 400 })
     }
+
+    const point = await getPrisma().pointOfSale.findUnique({ where: { id: pointOfSaleId } })
+    if (!point || !point.isActive) return NextResponse.json({ error: "Moyen de stockage invalide ou inactif" }, { status: 400 })
 
     const variants = await getPrisma().productVariant.findMany({
       where: { id: { in: items.map((item) => item.variantId) } },
@@ -110,26 +132,6 @@ export async function POST(request: Request) {
     const orderNumber = generateOrderNumber()
 
     const order = await getPrisma().$transaction(async (tx) => {
-      for (const item of items) {
-        const variant = variantMap.get(item.variantId)
-        if (!variant) throw new Error("Produit introuvable")
-
-        if (!body.pointOfSaleId) {
-          if (variant.stock < item.quantity) {
-            throw new Error(`Stock insuffisant pour ${variant.product.name} ${variant.format} (disponible: ${variant.stock}, demandé: ${item.quantity})`)
-          }
-          await tx.productVariant.update({ where: { id: item.variantId }, data: { stock: { decrement: item.quantity } } })
-        } else {
-          const pointStock = await tx.pointOfSaleStock.findUnique({
-            where: { pointOfSaleId_variantId: { pointOfSaleId: body.pointOfSaleId, variantId: item.variantId } },
-          })
-          if (!pointStock || pointStock.quantity < item.quantity) {
-            throw new Error(`Stock insuffisant dans le point de vente pour ${variant.product.name} ${variant.format}`)
-          }
-          await tx.pointOfSaleStock.update({ where: { id: pointStock.id }, data: { quantity: { decrement: item.quantity } } })
-        }
-      }
-
       const subtotal = items.reduce((sum, item) => {
         const variant = variantMap.get(item.variantId)
         return sum + (variant?.price ?? 0) * item.quantity
@@ -138,9 +140,11 @@ export async function POST(request: Request) {
       const createdOrder = await tx.order.create({
         data: {
           orderNumber,
+          userId: sellerId,
           customerName: body.customerName?.trim() || "Client comptoir",
           customerEmail: body.customerEmail?.trim() || "",
           customerPhone: body.customerPhone?.trim() || "",
+          b2bClientId: body.b2bClientId || null,
           paymentMethod: normalizePaymentMethod(body.paymentMethod),
           paymentStatus: "PAID",
           status: "DELIVERED",
@@ -148,7 +152,7 @@ export async function POST(request: Request) {
           deliveryFee: 0,
           total: subtotal,
           notes: ["Vente comptoir", body.notes?.trim()].filter(Boolean).join(" - "),
-          pointOfSaleId: body.pointOfSaleId || null,
+          pointOfSaleId,
           items: {
             create: items.map((item) => {
               const variant = variantMap.get(item.variantId)
@@ -167,20 +171,14 @@ export async function POST(request: Request) {
       })
 
       for (const item of items) {
-        await tx.stockMovement.create({
-          data: {
-            variantId: item.variantId,
-            pointOfSaleId: body.pointOfSaleId || null,
-            type: "SALE",
-            quantity: item.quantity,
-            reason: "Vente comptoir",
-            reference: orderNumber,
-          },
+        const fifoResult = await consumePointOfSaleStockTx(tx, {
+          variantId: item.variantId,
+          pointOfSaleId,
+          quantity: item.quantity,
+          type: "SALE",
+          reason: "Vente comptoir",
+          reference: orderNumber,
         })
-      }
-
-      for (const item of items) {
-        const fifoResult = await allocateStockFIFOTx(tx, item.variantId, item.quantity, "SALE", orderNumber)
         const orderItem = createdOrder.items.find((oi) => oi.variantId === item.variantId)
         if (orderItem && fifoResult.allocations.length > 0) {
           await tx.orderItem.update({
@@ -206,8 +204,8 @@ export async function POST(request: Request) {
         createdAt: order.createdAt.toISOString(),
         items: order.items.map((item) => ({
           id: item.id,
-          name: (item as any).variant?.product?.name ?? "Produit",
-          format: (item as any).variant?.format ?? "",
+          name: item.variant?.product?.name ?? "Produit",
+          format: item.variant?.format ?? "",
           quantity: item.quantity,
           price: item.price,
           total: item.total,

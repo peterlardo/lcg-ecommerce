@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import type { Prisma, DeliveryStatus } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 
@@ -10,21 +11,24 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
 
   try {
     const { id } = await ctx.params
-    const body = await req.json()
-    const data: any = {}
+const body = await req.json()
+    const data: Prisma.DeliveryUpdateInput = {}
 
     if (body.status !== undefined) {
       const status = String(body.status).toUpperCase()
       if (!VALID_STATUS.includes(status)) {
         return NextResponse.json({ error: "Statut invalide" }, { status: 400 })
       }
-      data.status = status
+      data.status = status as DeliveryStatus
       if (status === "DELIVERED") data.deliveredAt = new Date()
     }
 
-    if (body.deliveryAgentId !== undefined) {
-      data.deliveryAgentId = body.deliveryAgentId ? String(body.deliveryAgentId) : null
-      if (data.deliveryAgentId && !data.status) data.status = "ASSIGNED"
+if (body.deliveryAgentId !== undefined) {
+      const agentId = body.deliveryAgentId ? String(body.deliveryAgentId) : null
+      data.deliveryAgent = agentId
+        ? { connect: { id: agentId } }
+        : { disconnect: true }
+      if (agentId && !data.status) data.status = "ASSIGNED"
     }
 
     if (body.scheduledDate !== undefined) {

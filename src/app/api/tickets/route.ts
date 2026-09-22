@@ -24,6 +24,7 @@ export async function GET() {
     id: ticket.id,
     ticketNumber: ticket.orderNumber,
     customerName: ticket.customerName || "Client comptoir",
+    customerPhone: ticket.customerPhone || "",
     paymentMethod: ticket.paymentMethod,
     paymentStatus: ticket.paymentStatus,
     total: ticket.total,

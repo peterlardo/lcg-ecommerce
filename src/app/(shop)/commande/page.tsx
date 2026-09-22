@@ -27,7 +27,7 @@ interface FormData {
 
 export default function CommandePage() {
   const router = useRouter()
-  const { items, subtotal, clearCart, removeItem, updateQuantity } = useCart()
+  const { items, subtotal, clearCart, removeItem } = useCart()
   const [paymentMethod, setPaymentMethod] = useState("cod")
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState<FormData>({

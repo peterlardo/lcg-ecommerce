@@ -149,8 +149,7 @@ async function getAirtelToken(): Promise<string> {
 export async function initiateAirtelPayment(
   amount: number,
   phone: string,
-  reference: string,
-  description?: string
+  reference: string
 ): Promise<PaymentInitiationResult> {
   try {
     const token = await getAirtelToken()
@@ -278,7 +277,7 @@ export async function initiatePayment(
     case "MTN_MOMO":
       return initiateMtnPayment(amount, phone, reference, description)
     case "AIRTEL_MONEY":
-      return initiateAirtelPayment(amount, phone, reference, description)
+      return initiateAirtelPayment(amount, phone, reference)
     case "VISA_CARD":
       return initiateStripePayment(amount, phone, reference, description, origin)
     default:

@@ -22,16 +22,6 @@ const statusFilters = [
   "Annulée",
 ]
 
-const statusMap: Record<string, string> = {
-  "En attente": "PENDING",
-  Confirmée: "CONFIRMED",
-  "En production": "PROCESSING",
-  Prête: "READY",
-  "En livraison": "OUT_FOR_DELIVERY",
-  Livrée: "DELIVERED",
-  Annulée: "CANCELLED",
-}
-
 interface OrderItem {
   productId: string
   variantId: string
@@ -141,8 +131,28 @@ export default function CommandesPage() {
   }, [])
 
   useEffect(() => {
-    load()
-  }, [load])
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const [ordersRes, posRes] = await Promise.all([
+          fetch("/api/orders", { signal: controller.signal }),
+          fetch("/api/points-de-vente", { signal: controller.signal }),
+        ])
+        if (ordersRes.ok) setOrders(await ordersRes.json())
+        if (posRes.ok) {
+          const posData = await posRes.json()
+          const pts = posData.points ?? posData
+          setPointsOfSale(Array.isArray(pts) ? pts.filter((p: PointOfSale) => p.isActive) : [])
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) console.error("Erreur chargement commandes:", error)
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [])
 
   const filtered = orders.filter((order) => {
     const matchesTab =

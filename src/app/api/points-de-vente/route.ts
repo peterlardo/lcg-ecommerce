@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
-import { getOrCreateComptoir } from "@/lib/comptoir"
+import { ensureOperationalStockLocations } from "@/lib/stock-service"
 
 async function getNextCode() {
   const existing = await getPrisma().pointOfSale.findMany({ select: { code: true } })
@@ -14,25 +14,34 @@ async function getNextCode() {
 export async function GET() {
   const forbidden = await requireManagementAccess()
   if (forbidden) return forbidden
-  await getOrCreateComptoir()
-  const points = await getPrisma().pointOfSale.findMany({
-    orderBy: [{ isActive: "desc" }, { name: "asc" }],
-    include: {
-      managerUser: { select: { id: true, name: true, email: true, role: true } },
-      _count: { select: { orders: true, reservations: true, stocks: true } },
-      cashSessions: { where: { status: "OPEN" }, orderBy: { openedAt: "desc" }, take: 1 },
-    },
-  })
-  const users = await getPrisma().user.findMany({
-    where: { role: { in: ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"] }, isActive: true },
-    select: { id: true, name: true, email: true, role: true },
-    orderBy: { name: "asc" },
-  })
-  const variants = await getPrisma().productVariant.findMany({ include: { product: { select: { name: true } } }, orderBy: { product: { name: "asc" } } })
-  const stats = await Promise.all(points.map(async (point) => {
-    const result = await getPrisma().order.aggregate({ where: { pointOfSaleId: point.id, status: { not: "CANCELLED" } }, _sum: { total: true } })
-    return { pointOfSaleId: point.id, revenue: result._sum.total ?? 0 }
-  }))
+  await ensureOperationalStockLocations()
+
+  const [points, users, variants, statsRaw] = await Promise.all([
+    getPrisma().pointOfSale.findMany({
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      include: {
+        managerUser: { select: { id: true, name: true, email: true, role: true } },
+        _count: { select: { orders: true, reservations: true, stocks: true } },
+        cashSessions: { where: { status: "OPEN" }, orderBy: { openedAt: "desc" }, take: 1 },
+      },
+    }),
+    getPrisma().user.findMany({
+      where: { role: { in: ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"] }, isActive: true },
+      select: { id: true, name: true, email: true, role: true },
+      orderBy: { name: "asc" },
+    }),
+    getPrisma().productVariant.findMany({ include: { product: { select: { name: true } } }, orderBy: { product: { name: "asc" } } }),
+    getPrisma().$queryRaw<{ "pointOfSaleId": string; "revenue": bigint }[]>`
+      SELECT "pointOfSaleId", COALESCE(SUM("total"), 0) as "revenue"
+      FROM "Order"
+      WHERE "status" != 'CANCELLED' AND "pointOfSaleId" IS NOT NULL
+      GROUP BY "pointOfSaleId"
+    `,
+  ])
+
+  const statsMap = new Map(statsRaw.map((s) => [s.pointOfSaleId, Number(s.revenue)]))
+  const stats = points.map((point) => ({ pointOfSaleId: point.id, revenue: statsMap.get(point.id) ?? 0 }))
+
   return NextResponse.json({ points, users, variants, stats, nextCode: await getNextCode() })
 }
 

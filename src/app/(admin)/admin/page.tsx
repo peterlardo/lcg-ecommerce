@@ -1,16 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, Fragment } from "react"
+import { useEffect, useMemo, useState, Fragment } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import {
   AlertCircle,
-  ArrowDownRight,
   ArrowRight,
-  ArrowUpRight,
   BarChart3,
   Bell,
-  CalendarRange,
   CheckCircle2,
   CircleDollarSign,
   ClipboardList,
@@ -20,7 +17,6 @@ import {
   Plus,
   ShoppingCart,
   Truck,
-  Warehouse,
 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { formatPrice, getStatusColor, getStatusLabel } from "@/lib/utils"
@@ -86,25 +82,29 @@ export default function DashboardPage() {
   const [recentStatusFilter, setRecentStatusFilter] = useState<string | null>(null)
   const [recentTab, setRecentTab] = useState<"commandes" | "precommandes">("commandes")
   const { notifications, newCount, dismiss, dismissAll } = useNotifications(15000)
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
 
-  const loadData = useCallback(() => {
-    Promise.all([fetch(`/api/reports?weekOffset=${weekOffset}&livraisonWeekOffset=${livraisonWeekOffset}`), fetch("/api/orders"), fetch("/api/reservations")])
-      .then(async ([reportRes, ordersRes, reservationsRes]) => {
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const [reportRes, ordersRes, reservationsRes] = await Promise.all([
+          fetch(`/api/reports?weekOffset=${weekOffset}&livraisonWeekOffset=${livraisonWeekOffset}`, { signal: controller.signal }),
+          fetch("/api/orders", { signal: controller.signal }),
+          fetch("/api/reservations", { signal: controller.signal }),
+        ])
         if (reportRes.ok) setReport(await reportRes.json())
         if (ordersRes.ok) setOrders(await ordersRes.json())
         if (reservationsRes.ok) setReservations(await reservationsRes.json())
-        setLastRefresh(new Date())
-      })
-      .catch((error) => console.error("Erreur dashboard:", error))
-      .finally(() => setLoading(false))
+      } catch (error) {
+        if (!controller.signal.aborted) console.error("Erreur dashboard:", error)
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    const interval = setInterval(() => { void init() }, 15000)
+    return () => { controller.abort(); clearInterval(interval) }
   }, [weekOffset, livraisonWeekOffset])
-
-  useEffect(() => {
-    loadData()
-    const interval = setInterval(loadData, 15000)
-    return () => clearInterval(interval)
-  }, [loadData])
 
   const role = session?.user?.role
   const isAdmin = role === "ADMIN"
@@ -491,7 +491,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Produits les plus vendus</h2><p className="mt-1 text-xs text-muted-foreground">Sur les sept derniers jours</p></div><BarChart3 className="h-5 w-5 text-primary" /></div><div className="mt-3 space-y-3 sm:mt-5 sm:space-y-4">{(report?.topProducts ?? []).map((product, index) => <div key={product.name}><div className="mb-1 flex justify-between text-sm"><span className="font-medium text-foreground">{product.name}</span><span className="text-muted-foreground">{product.quantity} unités</span></div><div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(8, product.quantity * 12))}%` }} /></div></div>)}{!loading && !report?.topProducts.length && <p className="text-sm text-muted-foreground">Pas encore de ventes.</p>}</div></section>
+        <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Produits les plus vendus</h2><p className="mt-1 text-xs text-muted-foreground">Sur les sept derniers jours</p></div><BarChart3 className="h-5 w-5 text-primary" /></div><div className="mt-3 space-y-3 sm:mt-5 sm:space-y-4">{(report?.topProducts ?? []).map((product) => <div key={product.name}><div className="mb-1 flex justify-between text-sm"><span className="font-medium text-foreground">{product.name}</span><span className="text-muted-foreground">{product.quantity} unités</span></div><div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(8, product.quantity * 12))}%` }} /></div></div>)}{!loading && !report?.topProducts.length && <p className="text-sm text-muted-foreground">Pas encore de ventes.</p>}</div></section>
       </div>
 
       {(report?.stockAlerts ?? []).length > 0 && (

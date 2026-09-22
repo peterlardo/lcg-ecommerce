@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import { Package, Plus, Edit, Trash2, Search, Filter, ChevronDown, X, DollarSign, RefreshCw, Check } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { categories } from "@/data/products"
-import type { Product, ProductVariant } from "@/data/products"
+import type { Product } from "@/data/products"
 
 const emptyVariant = { format: "", price: 0, unit: "" }
 
@@ -32,10 +33,6 @@ export default function ProduitsPage() {
   const [priceSaving, setPriceSaving] = useState(false)
   const [priceSaved, setPriceSaved] = useState(false)
 
-  useEffect(() => {
-    fetchProducts()
-  }, [])
-
   const fetchProducts = async () => {
     try {
       const res = await fetch("/api/produits")
@@ -56,6 +53,33 @@ export default function ProduitsPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const res = await fetch("/api/produits", { signal: controller.signal })
+        if (res.ok) {
+          const data = await res.json()
+          if (controller.signal.aborted) return
+          setProducts(data)
+          const edits: Record<string, number> = {}
+          for (const p of data) {
+            for (const v of p.variants) {
+              edits[v.id] = v.price
+            }
+          }
+          setPriceEdits(edits)
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) console.error("Erreur:", err)
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [])
 
   const handlePriceSync = async () => {
     setPriceSaving(true)
@@ -142,10 +166,16 @@ export default function ProduitsPage() {
     setForm({ ...form, variants: form.variants.filter((_, i) => i !== index) })
   }
 
-  const updateVariant = (index: number, field: string, value: string | number) => {
-    const variants = [...form.variants]
-    ;(variants[index] as any)[field] = value
-    setForm({ ...form, variants })
+  const updateVariant = (index: number, field: "format" | "price" | "unit", value: string | number) => {
+    setForm((prev) => {
+      const variants = prev.variants.map((v, i) => {
+        if (i !== index) return v
+        if (field === "format") return { ...v, format: String(value) }
+        if (field === "price") return { ...v, price: Number(value) }
+        return { ...v, unit: String(value) }
+      })
+      return { ...prev, variants }
+    })
   }
 
   const handleSave = async () => {
@@ -353,7 +383,7 @@ export default function ProduitsPage() {
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
                           {product.image ? (
-                            <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                            <Image src={product.image} alt={product.name} width={48} height={48} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
                               <Package className="h-5 w-5 text-gray-400" />
@@ -421,7 +451,7 @@ export default function ProduitsPage() {
                 <div className="flex items-start gap-2.5 sm:gap-3 mb-2.5 sm:mb-3">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
                     {product.image ? (
-                      <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                      <Image src={product.image} alt={product.name} width={48} height={48} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package className="h-5 w-5 text-gray-400" />

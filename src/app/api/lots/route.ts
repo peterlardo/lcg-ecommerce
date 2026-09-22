@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
+import type { Prisma } from "@prisma/client"
+import type { LotAllocation } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { generateLotNumber } from "@/lib/lot-utils"
+import { ensureOperationalStockLocations } from "@/lib/stock-service"
 
 export async function GET(req: Request) {
   const forbidden = await requireManagementAccess()
@@ -12,7 +15,7 @@ export async function GET(req: Request) {
   const status = url.searchParams.get("status")
   const withAllocations = url.searchParams.get("allocations") === "1"
 
-  const where: any = {}
+  const where: Prisma.ProductionLotWhereInput = {}
   if (variantId) where.variantId = variantId
   if (status) where.status = status
 
@@ -33,10 +36,15 @@ export async function GET(req: Request) {
     _count: true,
   })
 
+  type LotWithAllocations = (typeof lots)[number] & {
+    allocations?: LotAllocation[]
+  }
+
   let enrichedLots = lots
+  const lotsWithAllocations = lots as LotWithAllocations[]
 
   if (withAllocations) {
-    const lotIds = lots.filter((l: any) => l.allocations?.length > 0).map((l: any) => l.id)
+    const lotIds = lotsWithAllocations.filter((l) => l.allocations?.length > 0).map((l) => l.id)
     if (lotIds.length > 0) {
       const movements = await getPrisma().stockMovement.findMany({
         where: { lotId: { in: lotIds }, pointOfSaleId: { not: null } },
@@ -60,8 +68,8 @@ export async function GET(req: Request) {
       }
 
       const orderRefs = new Set<string>()
-      for (const lot of lots) {
-        for (const a of (lot as any).allocations ?? []) {
+      for (const lot of lotsWithAllocations) {
+        for (const a of lot.allocations ?? []) {
           if (a.type === "SALE" && a.reference) orderRefs.add(a.reference)
         }
       }
@@ -74,9 +82,9 @@ export async function GET(req: Request) {
         : []
       const orderPosMap = new Map(orders.filter((o) => o.pointOfSale).map((o) => [o.orderNumber, o.pointOfSale!]))
 
-      enrichedLots = lots.map((lot: any) => ({
+      enrichedLots = lotsWithAllocations.map((lot) => ({
         ...lot,
-        allocations: (lot.allocations ?? []).map((a: any) => {
+        allocations: (lot.allocations ?? []).map((a) => {
           let pointOfSale: { name: string; code: string } | null = null
           if (a.type === "SALE" && a.reference) {
             pointOfSale = orderPosMap.get(a.reference) ?? null
@@ -99,14 +107,21 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const { variantId, quantity, productionDate, expiryDate, notes } = body
+    const destinationId = body.pointOfSaleId ? String(body.pointOfSaleId) : null
 
     if (!variantId || !quantity || quantity <= 0) {
       return NextResponse.json({ error: "Donnees invalides" }, { status: 400 })
     }
 
-    const variant = await getPrisma().productVariant.findUnique({ where: { id: variantId } })
+    const [variant, destination] = await Promise.all([
+      getPrisma().productVariant.findUnique({ where: { id: variantId } }),
+      destinationId ? getPrisma().pointOfSale.findUnique({ where: { id: destinationId } }) : Promise.resolve(null),
+    ])
     if (!variant) {
       return NextResponse.json({ error: "Variante introuvable" }, { status: 404 })
+    }
+    if (destinationId && (!destination || !destination.isActive)) {
+      return NextResponse.json({ error: "Le point de vente de destination est invalide ou inactif" }, { status: 400 })
     }
 
     const lotNumber = await generateLotNumber()
@@ -140,12 +155,61 @@ export async function POST(req: Request) {
         },
       })
 
+      // Auto-distribute production to both operational stock locations
+      // unless a single destination point of sale has been chosen
+      if (destinationId) {
+        await tx.pointOfSaleStock.upsert({
+          where: { pointOfSaleId_variantId: { pointOfSaleId: destinationId, variantId } },
+          update: { quantity: { increment: quantity } },
+          create: { pointOfSaleId: destinationId, variantId, quantity },
+        })
+
+        await tx.stockMovement.create({
+          data: {
+            variantId,
+            type: "PRODUCTION",
+            quantity,
+            reason: notes || `Production vers ${destination!.name}`,
+            reference: lotNumber,
+            pointOfSaleId: destinationId,
+            lotId: newLot.id,
+          },
+        })
+      } else {
+        const locations = await ensureOperationalStockLocations()
+        const perLocation = Math.floor(quantity / locations.length)
+        const remainder = quantity % locations.length
+
+        for (let i = 0; i < locations.length; i++) {
+          const locQty = perLocation + (i < remainder ? 1 : 0)
+          if (locQty > 0) {
+            await tx.pointOfSaleStock.upsert({
+              where: { pointOfSaleId_variantId: { pointOfSaleId: locations[i].id, variantId } },
+              update: { quantity: { increment: locQty } },
+              create: { pointOfSaleId: locations[i].id, variantId, quantity: locQty },
+            })
+
+            await tx.stockMovement.create({
+              data: {
+                variantId,
+                type: "PRODUCTION",
+                quantity: locQty,
+                reason: notes || `Distribution production vers ${locations[i].name}`,
+                reference: lotNumber,
+                pointOfSaleId: locations[i].id,
+                lotId: newLot.id,
+              },
+            })
+          }
+        }
+      }
+
       return newLot
     })
 
-    return NextResponse.json({ lot }, { status: 201 })
-  } catch (error: any) {
+    return NextResponse.json({ lot, destination: destination ? { id: destination.id, name: destination.name, code: destination.code } : null }, { status: 201 })
+  } catch (error) {
     console.error("POST lots error:", error)
-    return NextResponse.json({ error: error.message ?? "Erreur serveur" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })
   }
 }

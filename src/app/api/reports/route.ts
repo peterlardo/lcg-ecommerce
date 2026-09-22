@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 
 function startOfDay(date: Date) {
   const d = new Date(date)
@@ -48,8 +49,93 @@ function getPeriodRange(period: string, now: Date) {
 
 const supplyTypes = ["IN", "PRODUCTION", "TRANSFER_IN", "RETURN"]
 
+const orderSelect = {
+  id: true,
+  orderNumber: true,
+  customerName: true,
+  status: true,
+  paymentMethod: true,
+  paymentStatus: true,
+  total: true,
+  source: true,
+  pointOfSaleId: true,
+  createdAt: true,
+  items: {
+    select: {
+      id: true,
+      productId: true,
+      quantity: true,
+      price: true,
+      total: true,
+      variant: { select: { format: true, product: { select: { name: true } } } },
+    },
+  },
+} as const
+
+const variantSelect = {
+  id: true,
+  format: true,
+  price: true,
+  stock: true,
+  product: { select: { name: true, category: { select: { name: true } } } },
+} as const
+
+const movementSelect = {
+  id: true,
+  type: true,
+  quantity: true,
+  reason: true,
+  reference: true,
+  createdAt: true,
+  variant: { select: { format: true, product: { select: { name: true } } } },
+  pointOfSale: { select: { name: true } },
+} as const
+
+const reservationSelect = {
+  id: true,
+  client: true,
+  type: true,
+  date: true,
+  heure: true,
+  status: true,
+  pointOfSaleId: true,
+  createdAt: true,
+} as const
+
+const deliverySelect = {
+  id: true,
+  status: true,
+  address: true,
+  deliveredAt: true,
+  createdAt: true,
+  order: { select: { orderNumber: true, customerName: true } },
+} as const
+
+const cashSessionSelect = {
+  id: true,
+  status: true,
+  openedAt: true,
+  openingBalance: true,
+  closingBalance: true,
+  pointOfSale: { select: { name: true, code: true } },
+} as const
+
+const lotSelect = {
+  id: true,
+  lotNumber: true,
+  initialQuantity: true,
+  remainingQuantity: true,
+  productionDate: true,
+  expiryDate: true,
+  status: true,
+  notes: true,
+  createdAt: true,
+  variant: { select: { format: true, product: { select: { name: true, category: { select: { name: true } } } } } },
+  _count: { select: { allocations: true } },
+} as const
+
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"])
   if (forbidden) return forbidden
 
   try {
@@ -60,6 +146,14 @@ export async function GET(request: Request) {
 
     const posFilter = await getUserPointOfSaleIds()
     const posIds = posFilter?.posIds ?? null
+
+    const session = await auth()
+    const isCommercial = session?.user?.role === "COMMERCIAL"
+    const orderPosFilter = isCommercial
+      ? { userId: session!.user!.id }
+      : posIds !== null
+        ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
+        : {}
 
     const now = new Date()
     const todayStart = startOfDay(now)
@@ -80,52 +174,48 @@ export async function GET(request: Request) {
     livraisonWeekEnd.setDate(livraisonWeekStart.getDate() + 6)
     livraisonWeekEnd.setHours(23, 59, 59, 999)
 
-    const orderPosFilter = posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}
-
     const [recentOrders, allOrders, variants, movements, reservations, deliveries, cashSessions, lots, weekOrders, weekReservations, weekDeliveries] = await Promise.all([
       getPrisma().order.findMany({
         where: { createdAt: { gte: sevenDaysAgo }, ...orderPosFilter },
-        include: { items: { include: { variant: { include: { product: true } } } } },
+        select: orderSelect,
         orderBy: { createdAt: "asc" },
       }),
       getPrisma().order.findMany({
         where: { createdAt: { gte: periodFrom }, ...orderPosFilter },
-        include: { items: { include: { variant: { include: { product: true } } } } },
+        select: orderSelect,
         orderBy: { createdAt: "asc" },
       }),
-      getPrisma().productVariant.findMany({ include: { product: { include: { category: true } } } }),
+      getPrisma().productVariant.findMany({ select: variantSelect }),
       getPrisma().stockMovement.findMany({
         where: { createdAt: { gte: periodFrom } },
-        include: { variant: { include: { product: true } }, pointOfSale: true },
+        select: movementSelect,
         orderBy: { createdAt: "desc" },
       }),
-      getPrisma().reservation.findMany({ where: posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}, orderBy: { createdAt: "desc" }, take: 100 }),
-      getPrisma().delivery.findMany({ include: { order: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+      getPrisma().reservation.findMany({ where: posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}, select: reservationSelect, orderBy: { createdAt: "desc" }, take: 100 }),
+      getPrisma().delivery.findMany({ select: deliverySelect, orderBy: { createdAt: "desc" }, take: 100 }),
       getPrisma().cashSession.findMany({
         where: { openedAt: { gte: periodFrom }, ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}) },
-        include: { pointOfSale: { select: { name: true, code: true } } },
+        select: cashSessionSelect,
         orderBy: { openedAt: "desc" },
       }),
       getPrisma().productionLot.findMany({
-        include: {
-          variant: { include: { product: { include: { category: true } } } },
-          _count: { select: { allocations: true } },
-        },
+        select: lotSelect,
         orderBy: { createdAt: "desc" },
         take: 200,
       }),
       getPrisma().order.findMany({
         where: { createdAt: { gte: weekStart, lte: weekEnd }, ...orderPosFilter },
-        include: { items: { include: { variant: { include: { product: true } } } } },
+        select: orderSelect,
         orderBy: { createdAt: "asc" },
       }),
       getPrisma().reservation.findMany({
         where: { createdAt: { gte: weekStart, lte: weekEnd }, ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}) },
+        select: reservationSelect,
         orderBy: { createdAt: "asc" },
       }),
       getPrisma().delivery.findMany({
         where: { createdAt: { gte: livraisonWeekStart, lte: livraisonWeekEnd } },
-        include: { order: true },
+        select: deliverySelect,
         orderBy: { createdAt: "asc" },
       }),
     ])

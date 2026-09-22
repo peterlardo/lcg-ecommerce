@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Banknote, ChevronDown, CreditCard, Minus, Plus, Printer, ReceiptText, RefreshCw, Search, Smartphone, Trash2 } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml } from "@/lib/ticket-template"
@@ -28,11 +28,23 @@ interface PointOfSale {
   isActive: boolean
 }
 
+interface B2BClient {
+  id: string
+  externalId: number
+  name: string
+  category: string
+  phone: string
+  status: string
+}
+
 interface PosStock { variantId: string; quantity: number }
+
+interface PosStockApiItem { variantId: string; quantity: number }
 
 interface SaleReceipt {
   orderNumber: string
   customerName?: string
+  customerPhone?: string
   paymentMethod?: string
   total: number
   createdAt: string
@@ -61,6 +73,21 @@ interface SaleHistoryItem {
   createdAt: string
   pointOfSale: { id: string; name: string; code: string } | null
   items: { id: string; name: string; format: string; quantity: number; price: number; total: number }[]
+}
+
+const generateOrderNumber = () => `LCG-${Date.now()}`
+
+const getWeekRange = (offset: number) => {
+  const now = new Date()
+  const day = now.getDay()
+  const diffToMonday = day === 0 ? -6 : 1 - day
+  const monday = new Date(now)
+  monday.setDate(now.getDate() + diffToMonday + offset * 7)
+  monday.setHours(0, 0, 0, 0)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  sunday.setHours(23, 59, 59, 999)
+  return { monday, sunday }
 }
 
 const paymentMethods = [
@@ -103,6 +130,10 @@ export default function VentesPage() {
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
   const [pointOfSaleId, setPointOfSaleId] = useState("")
+  const [b2bClients, setB2bClients] = useState<B2BClient[]>([])
+  const [selectedB2bClient, setSelectedB2bClient] = useState<B2BClient | null>(null)
+  const [clientSearch, setClientSearch] = useState("")
+  const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [lowStockThreshold] = useLowStockThreshold()
@@ -117,6 +148,7 @@ export default function VentesPage() {
   const HISTORY_PER_PAGE = 15
   const [pendingPayment, setPendingPayment] = useState<{ transactionId: string; reference: string; provider: string; paymentMethod: string; items: SaleCartItem[]; customerName: string; customerPhone: string; pointOfSaleId: string; notes: string } | null>(null)
   const [pollingStatus, setPollingStatus] = useState<string | null>(null)
+  const [todayStr] = useState(() => new Date().toISOString().slice(0, 10))
 
   const printReceipt = (ticket: SaleReceipt) => {
     const pointOfSale = pointsOfSale.find((point) => point.id === pointOfSaleId)
@@ -159,45 +191,99 @@ export default function VentesPage() {
     popup.print()
   }
 
-  const loadProducts = async () => {
-    setError("")
+  const loadProducts = useCallback(async () => {
     try {
-      const res = await fetch("/api/produits")
+      const [res, pointsRes, b2bRes] = await Promise.all([
+        fetch("/api/produits"),
+        fetch("/api/points-de-vente/list"),
+        fetch("/api/clients-b2b"),
+      ])
       if (!res.ok) throw new Error("Impossible de charger les produits")
       setProducts(await res.json())
-      const pointsRes = await fetch("/api/points-de-vente")
       if (pointsRes.ok) {
-        const payload = await pointsRes.json()
-        const points = (Array.isArray(payload) ? payload : payload.points) as PointOfSale[]
+        const points = (await pointsRes.json()) as PointOfSale[]
         setPointsOfSale(points.filter((point) => point.isActive))
         const comptoir = points.find((point) => point.code === "PDV-COMPTOIR" && point.isActive)
         setPointOfSaleId((current) => current || comptoir?.id || points.find((point) => point.isActive)?.id || "")
+      }
+      if (b2bRes.ok) {
+        const b2bData = await b2bRes.json()
+        if (Array.isArray(b2bData)) setB2bClients(b2bData)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de chargement")
     } finally {
       setLoading(false)
     }
-  }
-
-  useEffect(() => {
-    void loadProducts()
   }, [])
 
-  const loadPosStock = async (posId: string) => {
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const [res, pointsRes, b2bRes] = await Promise.all([
+          fetch("/api/produits", { signal: controller.signal }),
+          fetch("/api/points-de-vente/list", { signal: controller.signal }),
+          fetch("/api/clients-b2b", { signal: controller.signal }),
+        ])
+        if (!res.ok) throw new Error("Impossible de charger les produits")
+        if (controller.signal.aborted) return
+        setProducts(await res.json())
+        if (pointsRes.ok) {
+          const points = (await pointsRes.json()) as PointOfSale[]
+          setPointsOfSale(points.filter((point) => point.isActive))
+          const comptoir = points.find((point) => point.code === "PDV-COMPTOIR" && point.isActive)
+          setPointOfSaleId((current) => current || comptoir?.id || points.find((point) => point.isActive)?.id || "")
+        }
+        if (b2bRes.ok) {
+          const b2bData = await b2bRes.json()
+          if (Array.isArray(b2bData)) setB2bClients(b2bData)
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Erreur de chargement")
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [])
+
+  const filteredB2bClients = useMemo(() => {
+    if (!clientSearch.trim()) return b2bClients
+    const term = clientSearch.toLowerCase()
+    return b2bClients.filter((c) => c.name.toLowerCase().includes(term) || c.phone.includes(term) || c.category.toLowerCase().includes(term))
+  }, [b2bClients, clientSearch])
+
+  const loadPosStock = useCallback(async (posId: string) => {
     if (!posId) { setPosStocks([]); return }
     try {
-      const res = await fetch(`/api/points-de-vente/${posId}`)
+      const res = await fetch(`/api/points-de-vente/${posId}/stocks`)
       if (res.ok) {
         const data = await res.json()
-        setPosStocks((data.stocks ?? []).map((s: any) => ({ variantId: s.variantId ?? s.variant?.id, quantity: s.quantity })))
+        setPosStocks((data.stocks ?? []).map((s: PosStockApiItem) => ({ variantId: s.variantId, quantity: s.quantity })))
       }
     } catch { setPosStocks([]) }
-  }
+  }, [])
 
-  useEffect(() => { void loadPosStock(pointOfSaleId) }, [pointOfSaleId])
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const res = await fetch(`/api/points-de-vente/${pointOfSaleId}/stocks`, { signal: controller.signal })
+        if (res.ok && !controller.signal.aborted) {
+          const data = await res.json()
+          setPosStocks((data.stocks ?? []).map((s: PosStockApiItem) => ({ variantId: s.variantId, quantity: s.quantity })))
+        }
+      } catch {
+        if (!controller.signal.aborted) setPosStocks([])
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [pointOfSaleId])
 
-  const loadSalesHistory = async () => {
+  const loadSalesHistory = useCallback(async () => {
     setHistoryLoading(true)
     try {
       const res = await fetch("/api/sales")
@@ -206,10 +292,23 @@ export default function VentesPage() {
     } finally {
       setHistoryLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    if (tab === "historique") loadSalesHistory()
+    if (tab !== "historique") return
+    const controller = new AbortController()
+    const init = async () => {
+      setHistoryLoading(true)
+      try {
+        const res = await fetch("/api/sales", { signal: controller.signal })
+        if (res.ok && !controller.signal.aborted) setSalesHistory(await res.json())
+      } catch {
+      } finally {
+        if (!controller.signal.aborted) setHistoryLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
   }, [tab])
 
   useEffect(() => {
@@ -245,7 +344,7 @@ export default function VentesPage() {
                 paymentMethod: paymentMethodToApi[pendingPayment.paymentMethod] || "CASH_ON_DELIVERY",
                 pointOfSaleId: pendingPayment.pointOfSaleId,
                 notes: `Paiement ${pendingPayment.provider} - ${pendingPayment.transactionId}`,
-                items: pendingPayment.items.map((item: any) => ({ variantId: item.variantId, quantity: item.quantity })),
+                items: pendingPayment.items.map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
               }),
             })
             if (saleRes.ok) {
@@ -274,9 +373,9 @@ export default function VentesPage() {
       } catch {}
       setTimeout(poll, 3000)
     }
-    poll()
+    setTimeout(poll, 0)
     return () => { cancelled = true }
-  }, [pendingPayment])
+  }, [pendingPayment, loadProducts, loadPosStock, loadSalesHistory])
 
   const variants = useMemo(() => {
     const posMap = new Map(posStocks.map((s) => [s.variantId, s.quantity]))
@@ -371,7 +470,7 @@ export default function VentesPage() {
 
       if (isMobile || isCard) {
         const provider = isMobile ? mobileProviders[paymentMethod] : "VISA_CARD"
-        const orderNumber = `LCG-${Date.now()}`
+        const orderNumber = generateOrderNumber()
         const origin = window.location.origin
 
         const payRes = await fetch("/api/payments/initiate", {
@@ -411,6 +510,8 @@ export default function VentesPage() {
         setCart([])
         setCustomerName("")
         setCustomerPhone("")
+        setSelectedB2bClient(null)
+        setClientSearch("")
         setNotes("")
         return
       }
@@ -421,6 +522,7 @@ export default function VentesPage() {
         body: JSON.stringify({
           customerName,
           customerPhone,
+          b2bClientId: selectedB2bClient?.id || undefined,
           paymentMethod: paymentMethodToApi[paymentMethod] || "CASH_ON_DELIVERY",
           pointOfSaleId,
           notes,
@@ -436,6 +538,8 @@ export default function VentesPage() {
       setCart([])
       setCustomerName("")
       setCustomerPhone("")
+      setSelectedB2bClient(null)
+      setClientSearch("")
       setNotes("")
       await loadProducts()
       await loadPosStock(pointOfSaleId)
@@ -444,19 +548,6 @@ export default function VentesPage() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const getWeekRange = (offset: number) => {
-    const now = new Date()
-    const day = now.getDay()
-    const diffToMonday = day === 0 ? -6 : 1 - day
-    const monday = new Date(now)
-    monday.setDate(now.getDate() + diffToMonday + offset * 7)
-    monday.setHours(0, 0, 0, 0)
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
-    sunday.setHours(23, 59, 59, 999)
-    return { monday, sunday }
   }
 
   const { monday: weekStart, sunday: weekEnd } = getWeekRange(weekOffset)
@@ -478,16 +569,14 @@ export default function VentesPage() {
   const pagedHistory = filteredHistory.slice((historyCurrentPage - 1) * HISTORY_PER_PAGE, historyCurrentPage * HISTORY_PER_PAGE)
 
   const todayTotal = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
     return salesHistory
-      .filter((s) => s.createdAt.slice(0, 10) === today)
+      .filter((s) => s.createdAt.slice(0, 10) === todayStr)
       .reduce((sum, s) => sum + s.total, 0)
-  }, [salesHistory])
+  }, [salesHistory, todayStr])
 
   const todayCount = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    return salesHistory.filter((s) => s.createdAt.slice(0, 10) === today).length
-  }, [salesHistory])
+    return salesHistory.filter((s) => s.createdAt.slice(0, 10) === todayStr).length
+  }, [salesHistory, todayStr])
 
   const variantSummary = useMemo(() => {
     const map = new Map<string, { name: string; format: string; quantity: number; total: number; posNames: Set<string> }>()
@@ -536,7 +625,7 @@ export default function VentesPage() {
   }, [filteredHistory])
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6" suppressHydrationWarning>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Mes ventes</h1>
@@ -671,14 +760,50 @@ export default function VentesPage() {
               </div>
 
               <div className="space-y-3">
-                <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Client
-                  <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm" placeholder="Client comptoir" />
-                </label>
+                <div className="relative">
+                  <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Client B2B</label>
+                  <input
+                    value={selectedB2bClient ? selectedB2bClient.name : clientSearch}
+                    onChange={(e) => {
+                      setClientSearch(e.target.value)
+                      setSelectedB2bClient(null)
+                      setCustomerName(e.target.value)
+                      setCustomerPhone("")
+                      setShowClientDropdown(true)
+                    }}
+                    onFocus={() => setShowClientDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm"
+                    placeholder="Rechercher un client B2B..."
+                  />
+                  {showClientDropdown && filteredB2bClients.length > 0 && (
+                    <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                      {filteredB2bClients.map((client) => (
+                        <button
+                          key={client.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setSelectedB2bClient(client)
+                            setCustomerName(client.name)
+                            setCustomerPhone(client.phone)
+                            setClientSearch("")
+                            setShowClientDropdown(false)
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs sm:text-sm hover:bg-primary/5 border-b border-gray-50 last:border-0"
+                        >
+                          <p className="font-medium text-gray-900">{client.name}</p>
+                          <p className="text-[11px] text-gray-500">{client.category} · {client.phone}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Téléphone
                   <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm" placeholder="Optionnel" />
                 </label>
                 <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Point de vente
-                  <select value={pointOfSaleId} onChange={(e) => setPointOfSaleId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs sm:text-sm">
+                  <select value={pointOfSaleId} onChange={(e) => setPointOfSaleId(e.target.value)} suppressHydrationWarning className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs sm:text-sm">
                     <option value="">Sélectionner un point de vente</option>
                     {pointsOfSale.map((point) => <option key={point.id} value={point.id}>{point.name} ({point.code})</option>)}
                   </select>

@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowRight, CirclePercent, CalendarRange, Truck, Building2, Snowflake } from "lucide-react"
 import type { Metadata } from "next"
 
@@ -94,12 +95,11 @@ export default function ProfessionnelsPage() {
           </div>
           <div>
             <div className="overflow-hidden rounded-3xl shadow-frost">
-              <img
+              <Image
                 src="/assets/product-sac.jpg"
                 alt="Big bag professionnel de glaçons LCG 25 kg"
-                width="1200"
-                height="800"
-                loading="lazy"
+                width={1200}
+                height={800}
                 className="h-full w-full object-cover"
               />
             </div>
