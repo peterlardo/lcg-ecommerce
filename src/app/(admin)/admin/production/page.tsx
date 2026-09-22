@@ -93,6 +93,8 @@ export default function ProductionPage() {
   const [note, setNote] = useState("")
 
   const [filterStatus, setFilterStatus] = useState<string>("")
+  const [filterVariantId, setFilterVariantId] = useState<string>("")
+  const [filterPointOfSaleId, setFilterPointOfSaleId] = useState<string>("")
   const [searchLot, setSearchLot] = useState("")
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null)
   const [tab, setTab] = useState<"lots" | "alerts">("lots")
@@ -180,14 +182,16 @@ export default function ProductionPage() {
 
   const filteredLots = useMemo(() => {
     const lots = lotsData?.lots ?? []
-    if (!searchLot) return lots
     const q = searchLot.toLowerCase()
     return lots.filter((l) =>
-      l.lotNumber.toLowerCase().includes(q) ||
-      l.variant.product.name.toLowerCase().includes(q) ||
-      l.variant.format.toLowerCase().includes(q)
+      (!filterVariantId || l.variantId === filterVariantId) &&
+      (!filterPointOfSaleId || l.destination?.id === filterPointOfSaleId) &&
+      (!q ||
+        l.lotNumber.toLowerCase().includes(q) ||
+        l.variant.product.name.toLowerCase().includes(q) ||
+        l.variant.format.toLowerCase().includes(q))
     )
-  }, [lotsData, searchLot])
+  }, [lotsData, searchLot, filterVariantId, filterPointOfSaleId])
 
   const totalProduced = (lotsData?.lots ?? []).reduce((s, l) => s + l.initialQuantity, 0)
   const totalRemaining = lotsData?.summary?._sum?.remainingQuantity ?? 0
@@ -363,6 +367,19 @@ export default function ProductionPage() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input value={searchLot} onChange={(e) => setSearchLot(e.target.value)} className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none sm:w-56 sm:py-2 sm:text-sm" placeholder="Rechercher un lot..." />
               </div>
+              <select value={filterVariantId} onChange={(e) => setFilterVariantId(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs bg-white sm:py-2 sm:text-sm">
+                <option value="">Tous les produits</option>
+                {stockVariants.map((v) => <option key={v.variantId} value={v.variantId}>{v.productName} - {v.format}</option>)}
+              </select>
+              <select value={filterPointOfSaleId} onChange={(e) => setFilterPointOfSaleId(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs bg-white sm:py-2 sm:text-sm">
+                <option value="">Tous les PDV</option>
+                {(lotsData?.lots ?? [])
+                  .reduce<{ id: string; name: string }[]>((acc, l) => {
+                    if (l.destination && !acc.some((p) => p.id === l.destination!.id)) acc.push(l.destination!)
+                    return acc
+                  }, [])
+                  .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs bg-white sm:py-2 sm:text-sm">
                 <option value="">Tous les statuts</option>
                 <option value="ACTIVE">Actif</option>
