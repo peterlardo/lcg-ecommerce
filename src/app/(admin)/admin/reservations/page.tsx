@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CalendarRange, Search, ChevronDown, Check, X, Plus, ShoppingCart } from "lucide-react"
+import Link from "next/link"
+import { CalendarRange, Search, ChevronDown, Check, X, Plus, ShoppingCart, Archive } from "lucide-react"
 import type { Reservation } from "@/data/store"
 import { products } from "@/data/products"
 import { formatPrice } from "@/lib/utils"
 
-const statusFilters = ["Toutes", "En attente", "Annulée"]
+const statusFilters = ["Toutes", "En attente"]
 
 const statusStyles: Record<string, string> = {
   PENDING: "bg-yellow-100 text-yellow-800",
@@ -88,20 +89,14 @@ export default function ReservationsPage() {
       body: JSON.stringify({ status }),
     })
     if (res.ok) {
-      if (status === "CONFIRMED") {
-        // Confirmée → devient commande et disparaît de la liste
-        setReservations((prev) => prev.filter((r) => r.id !== id))
-        if (expanded === id) setExpanded(null)
-      } else {
-        setReservations((prev) =>
-          prev.map((r) => (r.id === id ? { ...r, status } : r))
-        )
-      }
+      // Confirmée → devient commande, Annulée → archivée : disparaît de la liste principale
+      setReservations((prev) => prev.filter((r) => r.id !== id))
+      if (expanded === id) setExpanded(null)
     }
   }
 
   const filtered = reservations.filter((r) => {
-    if (r.status === "CONFIRMED") return false
+    if (r.status === "CONFIRMED" || r.status === "CANCELLED") return false
     const matchesTab =
       activeTab === "Toutes" || statusLabels[r.status] === activeTab
     const matchesSearch =
@@ -188,12 +183,16 @@ export default function ReservationsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Pré-commandes</h1>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <p className="text-sm text-gray-500">
-            {reservations.filter((r) => r.status === "PENDING").length} en attente
-            {" · "}
-            {reservations.filter((r) => r.status === "CANCELLED").length} annulée
-            {reservations.filter((r) => r.status === "CANCELLED").length > 1 ? "s" : ""}
-          </p>
+          <div className="flex items-center gap-3 text-sm text-gray-500">
+            <span>{reservations.filter((r) => r.status === "PENDING").length} en attente</span>
+            <Link
+              href="/admin/reservations/archive"
+              className="inline-flex items-center gap-1.5 text-gray-600 hover:text-primary transition-colors"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              {reservations.filter((r) => r.status === "CANCELLED").length} archivée{reservations.filter((r) => r.status === "CANCELLED").length > 1 ? "s" : ""} → Voir archive
+            </Link>
+          </div>
           <button
             onClick={() => setShowModal(true)}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors"
