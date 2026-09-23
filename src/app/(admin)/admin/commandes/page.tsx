@@ -1,14 +1,16 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import Link from "next/link"
 import {
   ShoppingCart,
   ChevronDown,
   Search,
   Plus,
   X,
+  Receipt,
 } from "lucide-react"
-import { formatPrice, getStatusColor, getStatusLabel } from "@/lib/utils"
+import { formatPrice, getStatusLabel } from "@/lib/utils"
 import { products } from "@/data/products"
 
 const statusFilters = [
@@ -73,13 +75,6 @@ interface DraftItem {
   quantity: number
 }
 
-interface PointOfSale {
-  id: string
-  name: string
-  code: string
-  isActive: boolean
-}
-
 function formatDate(iso: string): string {
   const d = new Date(iso)
   return d.toLocaleDateString("fr-FR")
@@ -107,22 +102,10 @@ export default function CommandesPage() {
   const [formError, setFormError] = useState("")
   const [page, setPage] = useState(1)
   const PER_PAGE = 5
-  const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([])
-  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null)
-  const [confirmPosId, setConfirmPosId] = useState("")
-
   const load = useCallback(async () => {
     try {
-      const [ordersRes, posRes] = await Promise.all([
-        fetch("/api/orders"),
-        fetch("/api/points-de-vente"),
-      ])
+      const ordersRes = await fetch("/api/orders")
       if (ordersRes.ok) setOrders(await ordersRes.json())
-      if (posRes.ok) {
-        const posData = await posRes.json()
-        const pts = posData.points ?? posData
-        setPointsOfSale(Array.isArray(pts) ? pts.filter((p: PointOfSale) => p.isActive) : [])
-      }
     } catch (error) {
       console.error("Erreur chargement commandes:", error)
     } finally {
@@ -134,16 +117,8 @@ export default function CommandesPage() {
     const controller = new AbortController()
     const init = async () => {
       try {
-        const [ordersRes, posRes] = await Promise.all([
-          fetch("/api/orders", { signal: controller.signal }),
-          fetch("/api/points-de-vente", { signal: controller.signal }),
-        ])
-        if (ordersRes.ok) setOrders(await ordersRes.json())
-        if (posRes.ok) {
-          const posData = await posRes.json()
-          const pts = posData.points ?? posData
-          setPointsOfSale(Array.isArray(pts) ? pts.filter((p: PointOfSale) => p.isActive) : [])
-        }
+        const ordersRes = await fetch("/api/orders", { signal: controller.signal })
+        if (!controller.signal.aborted && ordersRes.ok) setOrders(await ordersRes.json())
       } catch (error) {
         if (!controller.signal.aborted) console.error("Erreur chargement commandes:", error)
       } finally {
@@ -171,39 +146,6 @@ export default function CommandesPage() {
   const handleSearchName = (v: string) => { setSearchName(v); setPage(1) }
   const handleSearchCode = (v: string) => { setSearchCode(v); setPage(1) }
   const handleTab = (t: string) => { setActiveTab(t); setPage(1) }
-
-  const handleStatusChange = async (orderId: string, newStatus: string, posId?: string) => {
-    if (newStatus === "CONFIRMED" && !posId) {
-      setConfirmingOrderId(orderId)
-      setConfirmPosId("")
-      return
-    }
-    try {
-      const res = await fetch(`/api/orders/${orderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus, pointOfSaleId: posId || undefined }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        alert(err?.error || "Erreur lors de la mise à jour")
-        return
-      }
-      await load()
-    } catch (error) {
-      console.error(`Erreur mise à jour commande ${orderId}:`, error)
-    }
-  }
-
-  const handleConfirmWithPOS = async () => {
-    if (!confirmPosId) {
-      alert("Veuillez sélectionner un point de vente")
-      return
-    }
-    await handleStatusChange(confirmingOrderId!, "CONFIRMED", confirmPosId)
-    setConfirmingOrderId(null)
-    setConfirmPosId("")
-  }
 
   const addDraftItem = () => {
     setDraftItems([...draftItems, { productId: "", variantId: "", quantity: 1 }])
@@ -351,11 +293,6 @@ export default function CommandesPage() {
                       {order.orderNumber}
                     </span>
                     <span
-                      className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}
-                    >
-                      {getStatusLabel(order.status)}
-                    </span>
-                    <span
                       className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                         sourceLabels[order.source]?.className || "bg-gray-100 text-gray-600"
                       }`}
@@ -374,8 +311,16 @@ export default function CommandesPage() {
                   </div>
                   <p className="text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
                 </div>
-                <div className="flex items-center gap-4 sm:text-right">
-                  <div>
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                  <Link
+                    href={`/admin/commandes/${order.id}/facture`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
+                  >
+                    <Receipt className="h-3.5 w-3.5" />
+                    Établir la facture
+                  </Link>
+                  <div className="hidden sm:block text-right">
                     <p className="text-sm font-semibold text-gray-900">
                       {formatPrice(order.total)}
                     </p>
@@ -464,43 +409,15 @@ export default function CommandesPage() {
                       )}
                     </div>
 
-                    {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
-                      <div className="mt-3">
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                          Mettre à jour le statut
-                        </h4>
-                        <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                          {(() => {
-                            const statuses = [
-                              "CONFIRMED",
-                              "PROCESSING",
-                              "READY",
-                              "OUT_FOR_DELIVERY",
-                              "DELIVERED",
-                              "CANCELLED",
-                            ]
-                            const currentIdx = statuses.indexOf(order.status)
-                            const nextStatuses = statuses.slice(currentIdx + 1)
-                            if (currentIdx > 0) nextStatuses.unshift("PENDING")
-                            return nextStatuses.slice(0, 4).map((s) => (
-                              <button
-                                key={s}
-                                onClick={() => handleStatusChange(order.id, s)}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                                  s === "CANCELLED"
-                                    ? "bg-red-100 text-red-700 hover:bg-red-200"
-                                    : s === "DELIVERED"
-                                      ? "bg-green-100 text-green-700 hover:bg-green-200"
-                                      : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
-                                }`}
-                              >
-                                {getStatusLabel(s)}
-                              </button>
-                            ))
-                          })()}
-                        </div>
-                      </div>
-                    )}
+                    <div className="mt-4">
+                      <Link
+                        href={`/admin/commandes/${order.id}/facture`}
+                        className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors"
+                      >
+                        <Receipt className="h-4 w-4" />
+                        Établir la facture
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -716,39 +633,6 @@ export default function CommandesPage() {
         </div>
       )}
 
-      {confirmingOrderId && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
-          <div className="bg-white sm:rounded-2xl rounded-t-2xl shadow-xl w-full sm:max-w-md p-4 sm:p-6">
-            <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1">Confirmer la commande</h3>
-            <p className="text-sm text-gray-500 mb-4">Sélectionnez le point de vente pour décrémenter le stock.</p>
-            <select
-              value={confirmPosId}
-              onChange={(e) => setConfirmPosId(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 mb-4"
-            >
-              <option value="">-- Choisir un point de vente --</option>
-              {pointsOfSale.map((pos) => (
-                <option key={pos.id} value={pos.id}>{pos.name} ({pos.code})</option>
-              ))}
-            </select>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => { setConfirmingOrderId(null); setConfirmPosId("") }}
-                className="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleConfirmWithPOS}
-                disabled={!confirmPosId}
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors disabled:opacity-50"
-              >
-                Confirmer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

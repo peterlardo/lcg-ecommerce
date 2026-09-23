@@ -19,12 +19,63 @@ const VALID_STATUS = [
   "CANCELLED",
 ]
 
-export async function PATCH(req: Request, ctx: RouteContext<"/api/orders/[id]">) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"])
+  if (forbidden) return forbidden
+  try {
+    const { id } = await params
+    const order = await getPrisma().order.findUnique({
+      where: { id },
+      include: {
+        items: { include: { variant: { include: { product: true } } } },
+        delivery: true,
+        pointOfSale: { select: { id: true, name: true, code: true } },
+        user: { select: { id: true, name: true } },
+      },
+    })
+    if (!order) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
+    return NextResponse.json({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      customerEmail: order.customerEmail,
+      customerPhone: order.customerPhone,
+      status: order.status,
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
+      source: order.source,
+      subtotal: order.subtotal,
+      deliveryFee: order.deliveryFee,
+      total: order.total,
+      createdAt: order.createdAt.toISOString(),
+      notes: order.notes,
+      pointOfSaleId: order.pointOfSaleId,
+      pointOfSale: order.pointOfSale,
+      delivery: order.delivery,
+      seller: order.user ? { id: order.user.id, name: order.user.name } : null,
+      items: order.items.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+        name: item.variant?.product?.name ?? "Produit",
+        format: item.variant?.format ?? "",
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+      })),
+    })
+  } catch (error) {
+    console.error("GET order error:", error)
+    return NextResponse.json({ error: "Erreur interne" }, { status: 500 })
+  }
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const forbidden = await requireManagementAccess()
   if (forbidden) return forbidden
 
   try {
-    const { id } = await ctx.params
+    const { id } = await params
     const body = await req.json()
     const { status, pointOfSaleId } = body
 
