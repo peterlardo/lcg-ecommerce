@@ -217,6 +217,9 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/reservations/[
     if (!status || !["PENDING", "CONFIRMED", "CANCELLED"].includes(status)) {
       return NextResponse.json({ error: "Statut invalide" }, { status: 400 })
     }
+    if (status === "PENDING") {
+      return NextResponse.json({ error: "Action non autorisée — seul Confirmer ou Annuler est disponible" }, { status: 400 })
+    }
 
     if (pointOfSaleId !== undefined) {
       await getPrisma().reservation.update({ where: { id }, data: { pointOfSaleId: pointOfSaleId || null } })

@@ -81,7 +81,7 @@ export default function ReservationsPage() {
     return () => controller.abort()
   }, [])
 
-  const handleStatusChange = async (id: string, status: "PENDING" | "CONFIRMED" | "CANCELLED") => {
+  const handleStatusChange = async (id: string, status: "CONFIRMED" | "CANCELLED") => {
     const res = await fetch(`/api/reservations/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -353,14 +353,6 @@ export default function ReservationsPage() {
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
                           >
                             <X className="h-3.5 w-3.5" /> Annuler
-                          </button>
-                        )}
-                        {res.status !== "PENDING" && (
-                          <button
-                            onClick={() => handleStatusChange(res.id, "PENDING")}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-yellow-100 text-yellow-700 hover:bg-yellow-200 transition-colors"
-                          >
-                            Remettre en attente
                           </button>
                         )}
                       </div>
