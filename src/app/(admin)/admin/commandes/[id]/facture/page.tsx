@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Printer, Receipt } from "lucide-react"
+import { ArrowLeft, Printer, Receipt, Trash2 } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml, type TicketData } from "@/lib/ticket-template"
 
@@ -102,7 +102,8 @@ export default function FacturePage() {
     void load()
   }, [load])
 
-  const subtotal = order ? order.items.reduce((sum, it) => sum + it.price * (quantities[it.id] ?? it.quantity), 0) : 0
+  const visibleItems = order ? order.items.filter((it) => quantities[it.id] !== undefined) : []
+  const subtotal = visibleItems.reduce((sum, it) => sum + it.price * quantities[it.id], 0)
   const deliveryFee = order?.deliveryFee ?? 0
   const total = subtotal + deliveryFee
 
@@ -111,7 +112,19 @@ export default function FacturePage() {
     setQuantities((prev) => ({ ...prev, [itemId]: v }))
   }
 
+  const handleRemove = (itemId: string) => {
+    setQuantities((prev) => {
+      const next = { ...prev }
+      delete next[itemId]
+      return next
+    })
+  }
+
   const handleInvoice = async () => {
+    if (visibleItems.length === 0) {
+      setError("Veuillez conserver au moins un article à facturer")
+      return
+    }
     if (!selectedPos) {
       setError("Veuillez sélectionner un point de vente")
       return
@@ -214,30 +227,42 @@ export default function FacturePage() {
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-2">Articles — ajustez les quantités selon les choix du client</h3>
               <div className="space-y-2">
-                {order.items.map((item) => (
-                  <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">
-                        {item.name}
-                        {item.format ? ` — ${item.format}` : ""}
-                      </p>
-                      <p className="text-xs text-gray-500">{formatPrice(item.price)} / unité</p>
+                {visibleItems.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4 border border-dashed border-gray-300 rounded-lg">Aucun article — la commande sera vide.</p>
+                ) : (
+                  visibleItems.map((item) => (
+                    <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">
+                          {item.name}
+                          {item.format ? ` — ${item.format}` : ""}
+                        </p>
+                        <p className="text-xs text-gray-500">{formatPrice(item.price)} / unité</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-medium text-gray-500">Qté</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={quantities[item.id]}
+                          onChange={(e) => handleQuantity(item.id, Number(e.target.value))}
+                          className="w-20 px-2 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/40 text-center font-semibold"
+                        />
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900 w-20 text-right">
+                        {formatPrice(item.price * quantities[item.id])}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(item.id)}
+                        title="Supprimer cette ligne"
+                        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs font-medium text-gray-500">Qté</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={quantities[item.id] ?? item.quantity}
-                        onChange={(e) => handleQuantity(item.id, Number(e.target.value))}
-                        className="w-20 px-2 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/40 text-center font-semibold"
-                      />
-                    </div>
-                    <span className="text-sm font-semibold text-gray-900 w-28 text-right">
-                      {formatPrice(item.price * (quantities[item.id] ?? item.quantity))}
-                    </span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
               <div className="flex items-center justify-between text-sm font-semibold pt-3 mt-3 border-t border-gray-200">
                 <span className="text-gray-900">Sous-total</span>
@@ -284,7 +309,7 @@ export default function FacturePage() {
             </button>
             <button
               onClick={handleInvoice}
-              disabled={submitting || !selectedPos}
+              disabled={submitting || !selectedPos || visibleItems.length === 0}
               className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg disabled:opacity-50"
             >
               <Receipt className="h-4 w-4" />

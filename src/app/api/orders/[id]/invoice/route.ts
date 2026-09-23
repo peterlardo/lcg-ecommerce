@@ -65,6 +65,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const result = await getPrisma().$transaction(async (tx) => {
+      const incomingIds = new Set(incomingItems.map((it) => it.orderItemId))
+      const toDeleteIds = order.items.filter((it) => !incomingIds.has(it.id)).map((it) => it.id)
+      if (toDeleteIds.length > 0) {
+        await tx.orderItem.deleteMany({ where: { id: { in: toDeleteIds } } })
+      }
+
       for (const it of incomingItems) {
         const original = orderItemMap.get(it.orderItemId)!
         const qty = Math.floor(Number(it.quantity))
