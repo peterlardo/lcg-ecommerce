@@ -6,12 +6,14 @@ type SessionPermission = { module: string; canView: boolean; canCreate: boolean;
 declare module "next-auth" {
   interface User {
     role?: Role
+    sessionId?: string
   }
   interface Session {
     user: {
       id: string
       role: Role
       permissions: SessionPermission[]
+      sessionId?: string
     } & DefaultSession["user"]
   }
 }
@@ -21,5 +23,6 @@ declare module "next-auth/jwt" {
     role: Role
     id: string
     permissions?: SessionPermission[]
+    sessionId?: string
   }
 }
