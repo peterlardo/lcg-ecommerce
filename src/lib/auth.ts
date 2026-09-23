@@ -35,7 +35,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         })
 
         const STAFF_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
-        const isStaff = user ? STAFF_ROLES.includes(user.role) && user.emailVerified : false
+        const isStaff = user ? STAFF_ROLES.includes(user.role) : false
         const nonStaffValid = user ? !STAFF_ROLES.includes(user.role) && !!user.emailVerified : false
 
         if (!user || !user.password || !user.isActive || (!isStaff && !nonStaffValid)) {
