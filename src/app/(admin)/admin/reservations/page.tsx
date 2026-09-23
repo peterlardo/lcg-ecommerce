@@ -6,7 +6,7 @@ import type { Reservation } from "@/data/store"
 import { products } from "@/data/products"
 import { formatPrice } from "@/lib/utils"
 
-const statusFilters = ["Toutes", "En attente", "Confirmée", "Annulée"]
+const statusFilters = ["Toutes", "En attente", "Annulée"]
 
 const statusStyles: Record<string, string> = {
   PENDING: "bg-yellow-100 text-yellow-800",
@@ -88,13 +88,20 @@ export default function ReservationsPage() {
       body: JSON.stringify({ status }),
     })
     if (res.ok) {
-      setReservations((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, status } : r))
-      )
+      if (status === "CONFIRMED") {
+        // Confirmée → devient commande et disparaît de la liste
+        setReservations((prev) => prev.filter((r) => r.id !== id))
+        if (expanded === id) setExpanded(null)
+      } else {
+        setReservations((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, status } : r))
+        )
+      }
     }
   }
 
   const filtered = reservations.filter((r) => {
+    if (r.status === "CONFIRMED") return false
     const matchesTab =
       activeTab === "Toutes" || statusLabels[r.status] === activeTab
     const matchesSearch =
@@ -182,10 +189,10 @@ export default function ReservationsPage() {
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Pré-commandes</h1>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <p className="text-sm text-gray-500">
-            {reservations.filter((r) => r.status === "CONFIRMED").length} confirmée
-            {reservations.filter((r) => r.status === "CONFIRMED").length > 1 ? "s" : ""}
-            {" · "}
             {reservations.filter((r) => r.status === "PENDING").length} en attente
+            {" · "}
+            {reservations.filter((r) => r.status === "CANCELLED").length} annulée
+            {reservations.filter((r) => r.status === "CANCELLED").length > 1 ? "s" : ""}
           </p>
           <button
             onClick={() => setShowModal(true)}
