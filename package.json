@@ -10,7 +10,7 @@
     "seed": "tsx prisma/seed.ts",
     "postinstall": "prisma generate && node scripts/patch-prisma-wasm.js",
     "preview": "prisma generate && node scripts/patch-prisma-wasm.js && opennextjs-cloudflare build && node scripts/fix-cf-wasm.js && opennextjs-cloudflare preview",
-    "deploy": "prisma generate && node scripts/patch-prisma-wasm.js && opennextjs-cloudflare build && node scripts/fix-cf-wasm.js && wrangler deploy --minify",
+    "deploy": "node scripts/deploy.mjs",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
