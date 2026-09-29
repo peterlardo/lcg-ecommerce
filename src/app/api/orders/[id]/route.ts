@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, isRestrictedOrder } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 import { sendStatusChangeEmail } from "@/lib/mailer"
 import { pushNotification } from "@/lib/notifications"
 import {
@@ -34,6 +35,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       },
     })
     if (!order) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
+
+    const accessSession = await auth()
+    if (isRestrictedOrder(order, accessSession?.user?.role, accessSession?.user?.id)) {
+      return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
+    }
+
     return NextResponse.json({
       id: order.id,
       orderNumber: order.orderNumber,
@@ -78,6 +85,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params
     const body = await req.json()
     const { status, pointOfSaleId } = body
+    const actor = await auth()
+    const actorId = actor?.user?.id ?? null
 
     if (!status || !VALID_STATUS.includes(status)) {
       return NextResponse.json({ error: "Statut invalide" }, { status: 400 })
@@ -89,10 +98,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         select: {
           items: true, paymentStatus: true, status: true,
           orderNumber: true, source: true, pointOfSaleId: true,
+          notes: true, userId: true,
         },
       })
 
       if (!previous) throw new Error("Commande introuvable")
+
+      if (isRestrictedOrder(previous, actor?.user?.role, actorId ?? undefined)) {
+        throw new Error("Commande introuvable")
+      }
 
       if (status === "CONFIRMED" && previous.status === "PENDING") {
         if (!pointOfSaleId) {
@@ -108,24 +122,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         for (const item of previous.items) {
-          // Les commandes issues d'une pré-commande ont déjà été débitées lors de
-          // la confirmation de la réservation.
+          // Commandes issues d'une pré-commande : débit uniquement à la facturation.
           if (previous.source === "RESERVATION") break
 
-          const fifoResult = await consumePointOfSaleStockTx(tx, {
-            variantId: item.variantId,
-            pointOfSaleId,
-            quantity: item.quantity,
-            type: "SALE",
-            reason: `Vente commande ${previous.orderNumber}`,
-            reference: previous.orderNumber,
-          })
-
-          if (fifoResult.allocations.length > 0) {
-            await tx.orderItem.update({
-              where: { id: item.id },
-              data: { lotId: fifoResult.allocations[0].lotId },
+          try {
+            const fifoResult = await consumePointOfSaleStockTx(tx, {
+              variantId: item.variantId,
+              pointOfSaleId,
+              quantity: item.quantity,
+              type: "SALE",
+              reason: `Vente commande ${previous.orderNumber}`,
+              reference: previous.orderNumber,
+              userId: actorId,
             })
+
+            if (fifoResult.allocations.length > 0) {
+              await tx.orderItem.update({
+                where: { id: item.id },
+                data: { lotId: fifoResult.allocations[0].lotId },
+              })
+            }
+          } catch (stockError) {
+            // Vérification de stock réservée à la vente POS : on ne bloque jamais.
+            console.warn(
+              `Confirmation commande ${previous.orderNumber} sans débit stock:`,
+              stockError instanceof Error ? stockError.message : stockError
+            )
           }
         }
 
@@ -136,11 +158,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
 
       if (status === "CANCELLED" && previous.status !== "CANCELLED") {
-        const lotAllocations = await tx.lotAllocation.findMany({
-          where: { reference: previous.orderNumber },
-        })
+        // Les commandes issues d'une pré-commande ne consomment le stock qu'au
+        // moment de la facturation : aucune restitution automatique ici.
+        const isReservationSource = previous.source === "RESERVATION"
+        const lotAllocations = isReservationSource
+          ? []
+          : await tx.lotAllocation.findMany({
+              where: { reference: previous.orderNumber },
+            })
         const statusSetStock = ["CONFIRMED", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(previous.status)
-        const shouldRestock = statusSetStock || lotAllocations.length > 0
+        const shouldRestock = isReservationSource ? false : statusSetStock || lotAllocations.length > 0
 
         if (shouldRestock && previous.pointOfSaleId) {
           for (const item of previous.items) {
@@ -151,6 +178,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               type: "CANCEL_RESTOCK",
               reason: "Retour stock après annulation commande",
               reference: previous.orderNumber,
+              userId: actorId,
             })
           }
         } else if (shouldRestock) {

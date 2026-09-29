@@ -129,6 +129,7 @@ export default function VentesPage() {
   const [search, setSearch] = useState("")
   const [cart, setCart] = useState<SaleCartItem[]>([])
   const [paymentMethod, setPaymentMethod] = useState("CASH_ON_DELIVERY")
+  const [paymentOpen, setPaymentOpen] = useState(false)
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
   const [pointOfSaleId, setPointOfSaleId] = useState("")
@@ -314,6 +315,17 @@ export default function VentesPage() {
     void init()
     return () => controller.abort()
   }, [tab])
+
+  // L'apercu du ticket se ferme tout seul 5 s apres la generation : on revient
+  // sur la page des ventes (liste rechargee) pour enchainer la vente suivante.
+  useEffect(() => {
+    if (!receipt) return
+    const timer = setTimeout(() => {
+      setReceipt(null)
+      void loadSalesHistory()
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [receipt, loadSalesHistory])
 
   useEffect(() => {
     if (!pendingPayment) return
@@ -640,7 +652,7 @@ export default function VentesPage() {
         </button>
       </div>
 
-      <div className="flex gap-2 border-b border-gray-200 overflow-x-auto scrollbar-none">
+      <div className="flex gap-2 border-b border-gray-200 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
           onClick={() => setTab("nouvelle")}
           className={`shrink-0 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
@@ -679,6 +691,7 @@ export default function VentesPage() {
                 <div>
                   <p className="text-base font-bold text-primary">Vente enregistrée</p>
                   <p className="text-sm text-gray-600">{receipt.orderNumber} · {new Date(receipt.createdAt).toLocaleString("fr-FR")} · {formatPrice(receipt.total)}</p>
+                  <p className="mt-1 text-xs text-gray-500">Cet aperçu se ferme automatiquement dans 5 secondes.</p>
                 </div>
                 <button type="button" onClick={() => printReceipt(receipt)} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90">
                   <Printer className="h-4 w-4" /> Imprimer le ticket
@@ -709,22 +722,21 @@ export default function VentesPage() {
                   <iframe
                     ref={(el) => { if (el) { try { el.contentDocument?.open(); el.contentDocument?.write(buildTicketHtml({ orderNumber: receipt.orderNumber, customerName: receipt.customerName || "Client comptoir", sellerName: receipt.seller || null, paymentMethod: receipt.paymentMethod || "CASH_ON_DELIVERY", paymentStatus: "PAID", total: receipt.total, createdAt: receipt.createdAt, pointOfSale: null, items: receipt.items })); el.contentDocument?.close(); } catch {} } }}
                     title="Aperçu ticket"
-                    className="w-full rounded border-0"
-                    style={{ height: "420px" }}
+                    className="h-[360px] w-full rounded border-0 sm:h-[420px]"
                   />
                 </div>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[1fr_420px]">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[1fr_680px]">
             <section className="space-y-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un produit, format ou catégorie..." className="w-full rounded-lg border border-gray-300 py-2 sm:py-2.5 pl-9 pr-4 text-xs sm:text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40" />
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {loading && <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 text-center text-xs sm:text-sm text-gray-500 md:col-span-2">Chargement...</div>}
                 {!loading && !pointOfSaleId && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-6 text-center text-xs sm:text-sm text-amber-700 md:col-span-2">
@@ -742,15 +754,15 @@ export default function VentesPage() {
                   const disabled = outOfStock
                   const inCart = cart.some((item) => item.variantId === variant.id)
                   return (
-                    <button key={variant.id} disabled={disabled} onClick={() => addToCart(variant)} className={`rounded-xl border p-3 sm:p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${inCart ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600/30" : outOfStock ? "border-red-300 bg-red-50 hover:border-red-400" : lowStock ? "border-red-200 bg-red-50 hover:border-red-300" : "border-gray-200 bg-white hover:border-primary-300"}`}>
+                    <button key={variant.id} disabled={disabled} onClick={() => (inCart ? removeItem(variant.id) : addToCart(variant))} className={`rounded-xl border p-3 sm:p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${inCart ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600/30" : outOfStock ? "border-red-300 bg-red-50 hover:border-red-400" : lowStock ? "border-red-200 bg-red-50 hover:border-red-300" : "border-gray-200 bg-white hover:border-primary-300"}`}>
                       <div className="flex items-start justify-between gap-2 sm:gap-3">
                         <div className="min-w-0">
                           <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{variant.productName}</p>
-                          <p className="mt-1 text-[11px] sm:text-xs text-gray-500 truncate">{variant.format} - {variant.categoryName}</p>
+                          <p className="mt-1   text-gray-500 truncate">{variant.format} - {variant.categoryName}</p>
                         </div>
-                        <span className="shrink-0 rounded-full bg-primary-50 px-2 py-1 text-[11px] sm:text-xs font-semibold text-primary-700">{formatPrice(variant.price)}</span>
+                        <span className="shrink-0 rounded-full bg-primary-50 px-2 py-1   font-semibold text-primary-700">{formatPrice(variant.price)}</span>
                       </div>
-                      <p className={`mt-2 sm:mt-3 text-[11px] sm:text-xs font-medium ${variant.stock <= lowStockThreshold ? "text-red-600" : "text-gray-500"}`}>Stock : {variant.stock} {variant.unit ?? ""}</p>
+                      <p className={`mt-2 sm:mt-3   font-medium ${variant.stock <= lowStockThreshold ? "text-red-600" : "text-gray-500"}`}>Stock : {variant.stock} {variant.unit ?? ""}</p>
                     </button>
                   )
                 })}
@@ -760,18 +772,20 @@ export default function VentesPage() {
             <aside className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5 xl:sticky xl:top-6 xl:self-start">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><ReceiptText className="h-4 w-4" /> Ticket de vente</h2>
-                <span className="text-[11px] sm:text-xs text-gray-500">{cart.length} ligne(s)</span>
+                <span className="  text-gray-500">{cart.length} ligne(s)</span>
               </div>
 
               <div className="space-y-3">
+                <label className="block   font-medium text-gray-600">Nom du client
+                  <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm sm:text-base" placeholder="Ex: Mabiala Jean" />
+                </label>
                 <div className="relative">
-                  <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Client B2B</label>
+                  <label className="block   font-medium text-gray-600">Client B2B</label>
                   <input
                     value={selectedB2bClient ? selectedB2bClient.name : clientSearch}
                     onChange={(e) => {
                       setClientSearch(e.target.value)
                       setSelectedB2bClient(null)
-                      setCustomerName(e.target.value)
                       setCustomerPhone("")
                       setShowClientDropdown(true)
                     }}
@@ -797,17 +811,17 @@ export default function VentesPage() {
                           className="w-full text-left px-3 py-2 text-xs sm:text-sm hover:bg-primary/5 border-b border-gray-50 last:border-0"
                         >
                           <p className="font-medium text-gray-900">{client.name}</p>
-                          <p className="text-[11px] text-gray-500">{client.category} · {client.phone}</p>
+                          <p className="text-xs text-gray-500">{client.category} · {client.phone}</p>
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
-                <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Téléphone
-                  <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm" placeholder="Optionnel" />
+                <label className="block   font-medium text-gray-600">Téléphone
+                  <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm sm:text-base" placeholder="Optionnel" />
                 </label>
-                <label className="block text-[11px] sm:text-xs font-medium text-gray-600">Point de vente
-                  <select value={pointOfSaleId} onChange={(e) => setPointOfSaleId(e.target.value)} suppressHydrationWarning className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs sm:text-sm">
+                <label className="block   font-medium text-gray-600">Point de vente
+                  <select value={pointOfSaleId} onChange={(e) => setPointOfSaleId(e.target.value)} suppressHydrationWarning className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm sm:text-base">
                     <option value="">Sélectionner un point de vente</option>
                     {pointsOfSale.map((point) => <option key={point.id} value={point.id}>{point.name} ({point.code})</option>)}
                   </select>
@@ -816,7 +830,7 @@ export default function VentesPage() {
 
               {pointOfSaleId && posStocks.length > 0 && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-2">Stock du point de vente</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">Stock du point de vente</p>
                   <div className="space-y-1.5">
                     {(() => {
                       const posMap = new Map(posStocks.map((s) => [s.variantId, s.quantity]))
@@ -833,7 +847,7 @@ export default function VentesPage() {
                         const isLow = v.stock > 0 && v.stock <= lowStockThreshold
                         return (
                           <div key={i} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-700 truncate">{v.name} {v.format}</span>
+                            <span className="min-w-0 truncate text-gray-700">{v.name} {v.format}</span>
                             <span className={`ml-2 shrink-0 font-semibold ${isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-gray-900"}`}>
                               {v.stock} {v.unit ?? ""}
                             </span>
@@ -851,7 +865,7 @@ export default function VentesPage() {
                     <div className="flex items-start justify-between gap-2 sm:gap-3">
                       <div className="min-w-0">
                         <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{item.productName}</p>
-                        <p className="text-[11px] sm:text-xs text-gray-500">{item.format}</p>
+                        <p className="  text-gray-500">{item.format}</p>
                       </div>
                       <button onClick={() => removeItem(item.variantId)} className="text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     </div>
@@ -870,11 +884,24 @@ export default function VentesPage() {
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm sm:text-base"><span className="font-semibold text-gray-900">Total</span><span className="text-lg sm:text-xl font-bold text-gray-900">{formatPrice(total)}</span></div>
-                <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-                  {paymentMethods.map((method) => {
-                    const Icon = method.icon
-                    return <button key={method.value} onClick={() => setPaymentMethod(method.value)} className={`rounded-lg border px-2 py-2 text-[10px] sm:text-xs font-medium ${paymentMethod === method.value ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}><Icon className="mx-auto mb-1 h-4 w-4" />{method.label}</button>
-                  })}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentOpen((value) => !value)}
+                    aria-expanded={paymentOpen}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-left text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100"
+                  >
+                    <span className="truncate">Moyen de paiement : <span className="font-semibold text-gray-900">{paymentLabels[paymentMethod] || paymentMethod}</span></span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${paymentOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {paymentOpen && (
+                    <div className="mt-2 grid grid-cols-2 gap-1.5 sm:gap-2">
+                      {paymentMethods.map((method) => {
+                        const Icon = method.icon
+                        return <button key={method.value} onClick={() => { setPaymentMethod(method.value); setPaymentOpen(false) }} className={`rounded-lg border px-2 py-2   font-medium ${paymentMethod === method.value ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}><Icon className="mx-auto mb-1 h-4 w-4" />{method.label}</button>
+                      })}
+                    </div>
+                  )}
                 </div>
                 {paymentMethod !== "CASH_ON_DELIVERY" && (
                   <input
@@ -908,24 +935,24 @@ export default function VentesPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-              <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">Ventes aujourd&apos;hui</p>
+              <p className="  font-semibold text-gray-500 uppercase tracking-wide">Ventes aujourd&apos;hui</p>
               <p className="mt-1 text-xl sm:text-2xl font-bold text-gray-900">{todayCount}</p>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-              <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">Total aujourd&apos;hui</p>
+              <p className="  font-semibold text-gray-500 uppercase tracking-wide">Total aujourd&apos;hui</p>
               <p className="mt-1 text-xl sm:text-2xl font-bold text-primary">{formatPrice(todayTotal)}</p>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-              <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">Total général</p>
+              <p className="  font-semibold text-gray-500 uppercase tracking-wide">Total général</p>
               <p className="mt-1 text-xl sm:text-2xl font-bold text-gray-900">{formatPrice(salesHistory.reduce((sum, s) => sum + s.total, 0))}</p>
             </div>
           </div>
 
           {variantSummary.length > 0 && (
             <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-              <h3 className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Ventes par variante (sacs)</h3>
+              <h3 className="  font-semibold text-gray-500 uppercase tracking-wider mb-3">Ventes par variante (sacs)</h3>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[460px] text-sm sm:min-w-[560px]">
                   <thead>
                     <tr className="border-b border-gray-100">
                       <th className="text-left py-2 text-xs font-semibold text-gray-500">Produit</th>
@@ -946,7 +973,7 @@ export default function VentesPage() {
                           {v.posNames.size > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {Array.from(v.posNames).map((name) => (
-                                <span key={name} className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">{name}</span>
+                                <span key={name} className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">{name}</span>
                               ))}
                             </div>
                           ) : <span className="text-gray-400">—</span>}
@@ -969,12 +996,12 @@ export default function VentesPage() {
 
           {posSummary.length > 0 && (
             <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-              <h3 className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Stock décrémenté par point de vente</h3>
+              <h3 className="  font-semibold text-gray-500 uppercase tracking-wider mb-3">Stock décrémenté par point de vente</h3>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {posSummary.map((pos, i) => (
                   <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 p-2.5 sm:p-3">
-                    <p className="text-xs sm:text-sm font-semibold text-gray-900">{pos.name} <span className="text-[11px] sm:text-xs font-normal text-gray-400">({pos.code})</span></p>
-                    <div className="mt-2 space-y-1 text-[11px] sm:text-xs">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-900">{pos.name} <span className="  font-normal text-gray-400">({pos.code})</span></p>
+                    <div className="mt-2 space-y-1  ">
                       <div className="flex justify-between"><span className="text-gray-500">Ventes</span><span className="font-medium text-gray-900">{pos.salesCount}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Articles vendus</span><span className="font-semibold text-primary">{pos.itemsSold} sacs</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">CA total</span><span className="font-medium text-gray-900">{formatPrice(pos.totalRevenue)}</span></div>
@@ -986,12 +1013,12 @@ export default function VentesPage() {
           )}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 <button onClick={() => setWeekOffset((v) => v - 1)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-50">&lsaquo;</button>
                 <div className="flex flex-col items-center min-w-[140px] sm:min-w-[180px]">
                   <span className="text-xs sm:text-sm font-semibold text-gray-900">{weekLabel}</span>
-                {weekOffset === 0 && <span className="text-[11px] text-primary font-medium">Cette semaine</span>}
-                {weekOffset === -1 && <span className="text-[11px] text-gray-400">Semaine passée</span>}
+                {weekOffset === 0 && <span className="text-xs text-primary font-medium">Cette semaine</span>}
+                {weekOffset === -1 && <span className="text-xs text-gray-400">Semaine passée</span>}
               </div>
                 <button onClick={() => setWeekOffset((v) => v + 1)} disabled={weekOffset >= 0} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
               {weekOffset !== 0 && (
@@ -1102,18 +1129,18 @@ export default function VentesPage() {
 
           {!historyLoading && filteredHistory.length > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 gap-2 sm:gap-0">
-                      <p className="text-[11px] sm:text-xs text-gray-500">
+                      <p className="  text-gray-500">
                 {filteredHistory.length} vente{filteredHistory.length > 1 ? "s" : ""} · Page {historyCurrentPage}/{historyTotalPages}
               </p>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setHistoryPage(1)} disabled={historyCurrentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
-                <button onClick={() => setHistoryPage(historyCurrentPage - 1)} disabled={historyCurrentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
+              <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto">
+                <button onClick={() => setHistoryPage(1)} disabled={historyCurrentPage <= 1} className="hidden shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed sm:inline-flex">&laquo;</button>
+                <button onClick={() => setHistoryPage(historyCurrentPage - 1)} disabled={historyCurrentPage <= 1} className="shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
                 {Array.from({ length: historyTotalPages }, (_, i) => i + 1)
                   .filter((p) => p === 1 || p === historyTotalPages || Math.abs(p - historyCurrentPage) <= 1)
                   .reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, [])
                   .map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1.5 text-xs text-gray-400">…</span> : <button key={p} onClick={() => setHistoryPage(p)} className={`min-w-[28px] rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${p === historyCurrentPage ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-100"}`}>{p}</button>)}
                 <button onClick={() => setHistoryPage(historyCurrentPage + 1)} disabled={historyCurrentPage >= historyTotalPages} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
-                <button onClick={() => setHistoryPage(historyTotalPages)} disabled={historyCurrentPage >= historyTotalPages} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&raquo;</button>
+                <button onClick={() => setHistoryPage(historyTotalPages)} disabled={historyCurrentPage >= historyTotalPages} className="hidden shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed sm:inline-flex">&raquo;</button>
               </div>
             </div>
           )}

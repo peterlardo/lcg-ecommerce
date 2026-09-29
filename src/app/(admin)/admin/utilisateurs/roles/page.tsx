@@ -19,8 +19,8 @@ interface RoleData {
 const moduleLabels: Record<string, string> = {
   dashboard: "Tableau de bord", ventes: "Ventes", tickets: "Tickets", commandes: "Commandes", stock: "Stock", caisse: "Caisse",
   production: "Production", distribution: "Distribution", livraisons: "Livraisons",
-  reservations: "Réservations", "points-de-vente": "Points de vente", produits: "Produits", rapports: "Rapports",
-  "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs",
+  reservations: "Réservations", "points-de-vente": "Points de vente", produits: "Produits", promotions: "Promotions & Coupons", rapports: "Rapports",
+  "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", "etat-stock": "État de stock & caisse",
 }
 
 export default function RolesPage() {
@@ -212,7 +212,7 @@ export default function RolesPage() {
                 <span className="text-sm font-semibold text-foreground">{p.label}</span>
               </div>
               {p.isSystem ? (
-                <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">Système</span>
+                <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">Système</span>
               ) : (
                 <button onClick={() => deleteRole(p.id)} className="text-muted-foreground hover:text-red-600 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
               )}
@@ -220,7 +220,7 @@ export default function RolesPage() {
             <p className="mt-1 text-xs text-muted-foreground">{p.description || "—"}</p>
             <div className="mt-3 flex items-center justify-between">
               <span className="flex items-center gap-1 text-xs text-muted-foreground"><Users className="h-3 w-3" /> {p.userCount} utilisateur(s)</span>
-              <button onClick={() => toggleActive(p.id, p.isActive)} className={`text-[10px] font-medium rounded-full px-2 py-0.5 ${p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+              <button onClick={() => toggleActive(p.id, p.isActive)} className={`text-xs font-medium rounded-full px-2 py-0.5 ${p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
                 {p.isActive ? "Actif" : "Inactif"}
               </button>
             </div>
@@ -252,10 +252,10 @@ export default function RolesPage() {
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {profile && <span className="h-3 w-3 rounded-full" style={{ backgroundColor: profile.color || "#6b7280" }} />}
                     <span className="text-xs font-semibold text-foreground sm:text-sm">{profile?.label || rd.role}</span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground sm:text-xs">
+                    <span className="flex items-center gap-1.5  text-muted-foreground ">
                       <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> {profile?.userCount ?? 0} utilisateur(s)
                     </span>
-                    <span className="text-[10px] text-muted-foreground sm:text-xs">{activeCount} module(s)</span>
+                    <span className=" text-muted-foreground ">{activeCount} module(s)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {isExpanded && hasChanges === rd.role && (
@@ -270,8 +270,8 @@ export default function RolesPage() {
                 {isExpanded && (
                   <div className="border-t border-border">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs sm:text-sm">
-                        <thead className="bg-muted/50 text-[10px] text-muted-foreground sm:text-xs">
+                      <table className="w-full min-w-[440px] text-xs sm:text-sm">
+                        <thead className="bg-muted/50  text-muted-foreground ">
                           <tr>
                             <th className="px-2 py-2 text-left font-medium sm:px-5 sm:py-2.5">Module</th>
                             <th className="px-2 py-2 text-center font-medium sm:px-3 sm:py-2.5"><button onClick={() => toggleAllModules(rd.role, "canView", !allView)} className="hover:text-foreground transition-colors">Voir {allView ? "✓" : ""}</button></th>

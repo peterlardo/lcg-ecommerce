@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
+import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds, saleMovementsFilter } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
 function startOfDay(date: Date) {
@@ -143,17 +144,36 @@ export async function GET(request: Request) {
     const period = searchParams.get("period") || "month"
     const weekOffset = parseInt(searchParams.get("weekOffset") || "0", 10)
     const livraisonWeekOffset = parseInt(searchParams.get("livraisonWeekOffset") || "0", 10)
+    const clientParam = (searchParams.get("client") || "").trim()
+    const dateParam = searchParams.get("date") || ""
+    const userIdParam = searchParams.get("userId") || ""
 
     const posFilter = await getUserPointOfSaleIds()
     const posIds = posFilter?.posIds ?? null
 
     const session = await auth()
-    const isCommercial = session?.user?.role === "COMMERCIAL"
-    const orderPosFilter = isCommercial
-      ? { userId: session!.user!.id }
-      : posIds !== null
+    const role = session?.user?.role
+    const selfId = session!.user!.id
+
+    const posClause =
+      posIds !== null
         ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
-        : {}
+        : null
+
+    const ownScope: Prisma.OrderWhereInput = {
+      OR: [{ NOT: { notes: { startsWith: "Vente comptoir" } } }, { userId: selfId }],
+    }
+
+    const orderPosFilter: Prisma.OrderWhereInput =
+      role === "ADMIN"
+        ? (posClause ?? {})
+        : role === "COMMERCIAL"
+          ? { userId: selfId }
+          : { AND: [...(posClause ? [posClause] : []), ownScope] }
+
+    // Mouvements de stock : masque aux non-ADMIN les ventes comptoir des autres
+    // vendeurs (leur reference = numero de commande d'autrui).
+    const movementFilter: Prisma.StockMovementWhereInput = saleMovementsFilter(role, selfId)
 
     const now = new Date()
     const todayStart = startOfDay(now)
@@ -174,7 +194,28 @@ export async function GET(request: Request) {
     livraisonWeekEnd.setDate(livraisonWeekStart.getDate() + 6)
     livraisonWeekEnd.setHours(23, 59, 59, 999)
 
-    const [recentOrders, allOrders, variants, movements, reservations, deliveries, cashSessions, lots, weekOrders, weekReservations, weekDeliveries] = await Promise.all([
+    const trendFrom = new Date(todayStart)
+    trendFrom.setMonth(trendFrom.getMonth() - 12)
+
+    const thirtyDaysAgo = new Date(todayStart)
+    thirtyDaysAgo.setDate(todayStart.getDate() - 29)
+
+    // Filtres de la carte « Commandes par semaine / mois » (appliques uniquement aux series trend)
+    const trendCreatedAt: { gte: Date; lte?: Date } = { gte: trendFrom }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const dayFrom = startOfDay(new Date(`${dateParam}T00:00:00`))
+      if (!Number.isNaN(dayFrom.getTime())) {
+        const dayTo = new Date(dayFrom)
+        dayTo.setHours(23, 59, 59, 999)
+        trendCreatedAt.gte = dayFrom
+        trendCreatedAt.lte = dayTo
+      }
+    }
+    const trendFilter: Record<string, unknown> = { createdAt: trendCreatedAt }
+    if (clientParam) trendFilter.customerName = { contains: clientParam, mode: "insensitive" }
+    if (session?.user?.role === "ADMIN" && userIdParam) trendFilter.userId = userIdParam
+
+    const [recentOrders, allOrders, variants, movements, reservations, deliveries, cashSessions, lots, weekOrders, weekReservations, weekDeliveries, trendOrders] = await Promise.all([
       getPrisma().order.findMany({
         where: { createdAt: { gte: sevenDaysAgo }, ...orderPosFilter },
         select: orderSelect,
@@ -187,7 +228,7 @@ export async function GET(request: Request) {
       }),
       getPrisma().productVariant.findMany({ select: variantSelect }),
       getPrisma().stockMovement.findMany({
-        where: { createdAt: { gte: periodFrom } },
+        where: { createdAt: { gte: periodFrom }, ...movementFilter },
         select: movementSelect,
         orderBy: { createdAt: "desc" },
       }),
@@ -218,6 +259,11 @@ export async function GET(request: Request) {
         select: deliverySelect,
         orderBy: { createdAt: "asc" },
       }),
+      getPrisma().order.findMany({
+        where: { ...orderPosFilter, ...trendFilter },
+        select: { createdAt: true, total: true, status: true, orderNumber: true, customerName: true, paymentMethod: true },
+        orderBy: { createdAt: "asc" },
+      }),
     ])
 
     const activeRecent = recentOrders.filter((o) => o.status !== "CANCELLED")
@@ -228,6 +274,13 @@ export async function GET(request: Request) {
     const todayOrdersDelivered = activeRecentDelivered.filter((o) => o.createdAt >= todayStart)
     const todayInDelivery = todayOrders.filter((o) => o.status === "OUT_FOR_DELIVERY")
     const todayConfirmed = todayOrders.filter((o) => o.status === "CONFIRMED")
+
+    const yesterdayStart = new Date(todayStart)
+    yesterdayStart.setDate(todayStart.getDate() - 1)
+    const yesterdayOrders = activeRecent.filter((o) => o.createdAt >= yesterdayStart && o.createdAt < todayStart)
+    const countItems = (list: typeof activeRecent) => list.reduce((sum, o) => sum + o.items.reduce((sub, i) => sub + i.quantity, 0), 0)
+    const todayItems = countItems(todayOrders)
+    const yesterdayItems = countItems(yesterdayOrders)
 
     const todayDeliveries = deliveries.filter((d) => d.createdAt >= todayStart)
     const todayReservations = reservations.filter((r) => r.createdAt >= todayStart)
@@ -297,6 +350,47 @@ export async function GET(request: Request) {
       }
     }
     const topProducts = Array.from(productTotals.values()).sort((a, b) => b.quantity - a.quantity).slice(0, 10)
+
+    const activeTrend = trendOrders.filter((o) => o.status !== "CANCELLED")
+
+    const trendDays = daysArray(thirtyDaysAgo, 30).map((date) => {
+      const key = dayKey(date)
+      const inDay = activeTrend.filter((o) => dayKey(o.createdAt) === key)
+      const isToday = key === dayKey(todayStart)
+      const isYesterday = key === dayKey(sevenDaysAgo)
+      return {
+        label: isToday ? "Aujourd'hui" : isYesterday ? "Hier" : date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }),
+        commandes: inDay.length,
+        montant: inDay.reduce((s, o) => s + o.total, 0),
+      }
+    })
+
+    const trendWeeks = Array.from({ length: 12 }, (_, i) => {
+      const start = new Date(todayStart)
+      start.setDate(todayStart.getDate() - ((todayStart.getDay() + 6) % 7) - (11 - i) * 7)
+      const end = new Date(start)
+      end.setDate(start.getDate() + 6)
+      end.setHours(23, 59, 59, 999)
+      const inWeek = activeTrend.filter((o) => o.createdAt >= start && o.createdAt <= end)
+      return {
+        label: i === 11 ? "Cette semaine" : `Sem. du ${start.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}`,
+        range: `${start.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} — ${end.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}`,
+        commandes: inWeek.length,
+        montant: inWeek.reduce((s, o) => s + o.total, 0),
+        details: inWeek.map((o) => ({ orderNumber: o.orderNumber, customerName: o.customerName, total: o.total, paymentMethod: o.paymentMethod })),
+      }
+    })
+
+    const trendMonths = Array.from({ length: 12 }, (_, i) => {
+      const start = new Date(todayStart.getFullYear(), todayStart.getMonth() - (11 - i), 1)
+      const end = new Date(todayStart.getFullYear(), todayStart.getMonth() - (11 - i) + 1, 0, 23, 59, 59, 999)
+      const inMonth = activeTrend.filter((o) => o.createdAt >= start && o.createdAt <= end)
+      return {
+        label: i === 11 ? "Ce mois" : start.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }),
+        commandes: inMonth.length,
+        montant: inMonth.reduce((s, o) => s + o.total, 0),
+      }
+    })
 
     const paymentBreakdown = ["CASH_ON_DELIVERY", "MOBILE_MONEY", "CARD"].map((method) => ({
       method,
@@ -415,6 +509,8 @@ export async function GET(request: Request) {
         stockUnits: variants.reduce((s, v) => s + v.stock, 0), totalVariants: variants.length,
         todayInDelivery: todayInDelivery.length,
         todayConfirmed: todayConfirmed.length,
+        todayItems,
+        yesterdayItems,
         lowStock: stockAlerts.filter((i) => i.stock > 0).length, outOfStock: stockAlerts.filter((i) => i.stock <= 0).length,
         pendingReservations: reservations.filter((r) => r.status === "PENDING").length,
         totalReservations: reservations.length,
@@ -427,7 +523,7 @@ export async function GET(request: Request) {
         cashExpected, cashGap: 0,
         totalProduced: productionSummary.totalProduced, totalLoss: productionSummary.totalLoss,
       },
-      daily7, daily30, salesByDay, topProducts, paymentBreakdown, paymentBreakdown30,
+      daily7, daily30, salesByDay, topProducts, trendDays, trendWeeks, trendMonths, paymentBreakdown, paymentBreakdown30,
       stockAlerts, stockByCategory, allStockVariants,
       supplyByDay, supplyByType, supplyMovements: recentMovements.filter((m) => supplyTypes.includes(m.type)),
       ordersByStatus, ordersByDay,

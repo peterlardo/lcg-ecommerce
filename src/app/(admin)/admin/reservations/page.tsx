@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { CalendarRange, Search, ChevronDown, Check, X, Plus, ShoppingCart, Archive } from "lucide-react"
+import { CalendarRange, Search, ChevronDown, Check, X, Plus, ShoppingCart, Archive, MessageCircle } from "lucide-react"
 import type { Reservation } from "@/data/store"
-import { products } from "@/data/products"
+import type { Product } from "@/data/products"
 import { formatPrice } from "@/lib/utils"
+import { buildReservationDevisText, buildWaLink } from "@/lib/devis-text"
 
 const statusFilters = ["Toutes", "En attente"]
 
@@ -32,8 +33,31 @@ interface DraftItem {
   quantity: number
 }
 
+function reservationWaLink(res: Reservation): string {
+  const total = res.items.reduce((sum, i) => sum + i.price * i.quantity, 0)
+  return buildWaLink(
+    res.telephone,
+    buildReservationDevisText({
+      ref: `RSV-${res.id.slice(-6).toUpperCase()}`,
+      createdAt: res.createdAt,
+      client: res.client,
+      telephone: res.telephone,
+      email: res.email || "",
+      type: res.type,
+      date: res.date,
+      heure: res.heure || "",
+      address: res.address || "",
+      source: res.source || "WEB",
+      notes: res.notes || "",
+      items: res.items,
+      total,
+    })
+  )
+}
+
 export default function ReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [activeTab, setActiveTab] = useState("Toutes")
@@ -53,6 +77,10 @@ export default function ReservationsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState("")
   const [page, setPage] = useState(1)
+  const [statusPending, setStatusPending] = useState<string | null>(null)
+  const [statusMsg, setStatusMsg] = useState("")
+  const [statusError, setStatusError] = useState("")
+  const [createdOrder, setCreatedOrder] = useState<{ id: string; orderNumber: string } | null>(null)
   const PER_PAGE = 5
 
   const fetchReservations = async () => {
@@ -72,6 +100,8 @@ export default function ReservationsPage() {
       try {
         const res = await fetch("/api/reservations", { signal: controller.signal })
         if (res.ok) setReservations(await res.json())
+        const prodRes = await fetch("/api/produits?all=1", { signal: controller.signal })
+        if (!controller.signal.aborted && prodRes.ok) setProducts(await prodRes.json())
       } catch (err) {
         if (!controller.signal.aborted) console.error("Erreur:", err)
       } finally {
@@ -83,15 +113,46 @@ export default function ReservationsPage() {
   }, [])
 
   const handleStatusChange = async (id: string, status: "CONFIRMED" | "CANCELLED") => {
-    const res = await fetch(`/api/reservations/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    })
-    if (res.ok) {
-      // Confirmée → devient commande, Annulée → archivée : disparaît de la liste principale
-      setReservations((prev) => prev.filter((r) => r.id !== id))
-      if (expanded === id) setExpanded(null)
+    setStatusError("")
+    setStatusPending(`${id}:${status}`)
+    try {
+      const res = await fetch(`/api/reservations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        // Confirmée → devient commande, Annulée → archivée : disparaît de la liste principale
+        setReservations((prev) => prev.filter((r) => r.id !== id))
+        if (expanded === id) setExpanded(null)
+        if (status === "CONFIRMED") {
+          const orderId = (data as { orderId?: string }).orderId
+          const orderNumber = (data as { orderNumber?: string }).orderNumber
+          setCreatedOrder(orderId ? { id: orderId, orderNumber: orderNumber || "" } : null)
+          setStatusMsg(
+            orderId
+              ? `Pré-commande confirmée. La commande ${orderNumber || ""} est créée, il reste à la facturer.`
+              : "Pré-commande confirmée. La commande est créée, il reste à la facturer."
+          )
+        } else {
+          setCreatedOrder(null)
+          setStatusMsg("Pré-commande annulée et archivée.")
+        }
+      } else {
+        setCreatedOrder(null)
+        setStatusError(
+          (data as { error?: string }).error ||
+            (status === "CONFIRMED"
+              ? "Impossible de confirmer la pré-commande"
+              : "Impossible d'annuler la pré-commande")
+        )
+      }
+    } catch (error) {
+      console.error("Erreur changement de statut:", error)
+      setStatusError("Erreur réseau, réessayez")
+    } finally {
+      setStatusPending(null)
     }
   }
 
@@ -183,11 +244,11 @@ export default function ReservationsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Pré-commandes</h1>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="flex items-center gap-3 text-sm text-gray-500">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
             <span>{reservations.filter((r) => r.status === "PENDING").length} en attente</span>
             <Link
               href="/admin/reservations/archive"
-              className="inline-flex items-center gap-1.5 text-gray-600 hover:text-primary transition-colors"
+              className="inline-flex min-w-0 flex-wrap items-center gap-1.5 text-gray-600 hover:text-primary transition-colors"
             >
               <Archive className="h-3.5 w-3.5" />
               {reservations.filter((r) => r.status === "CANCELLED").length} archivée{reservations.filter((r) => r.status === "CANCELLED").length > 1 ? "s" : ""} → Voir archive
@@ -232,6 +293,33 @@ export default function ReservationsPage() {
         ))}
       </div>
 
+      {statusMsg && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
+          <span>{statusMsg}</span>
+          <span className="flex items-center gap-3 shrink-0">
+            {createdOrder && (
+              <Link
+                href={`/admin/commandes/${createdOrder.id}/facture`}
+                className="inline-flex items-center gap-1.5 font-semibold text-green-800 hover:underline"
+              >
+                <ShoppingCart className="h-4 w-4" /> Établir la facture
+              </Link>
+            )}
+            <button onClick={() => setStatusMsg("")} className="text-green-500 hover:text-green-700">
+              <X className="h-4 w-4" />
+            </button>
+          </span>
+        </div>
+      )}
+      {statusError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 flex items-center justify-between gap-3">
+          <span>{statusError}</span>
+          <button onClick={() => setStatusError("")} className="text-red-500 hover:text-red-700 shrink-0">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
           <p className="text-sm text-gray-500">Chargement...</p>
@@ -249,9 +337,9 @@ export default function ReservationsPage() {
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
                       <CalendarRange className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm font-semibold text-gray-900">{res.client}</span>
+                      <span className="break-words text-sm font-semibold text-gray-900">{res.client}</span>
                       <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusStyles[res.status]}`}>
                         {statusLabels[res.status]}
                       </span>
@@ -263,7 +351,7 @@ export default function ReservationsPage() {
                         {sourceLabels[res.source]?.label || res.source || "En ligne"}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-500">
+                    <p className="break-words text-sm text-gray-500">
                       {res.type} · {res.date} à {res.heure}
                       {res.address ? ` · ${res.address}` : ""}
                       {res.inviteCount > 0 ? ` · ${res.inviteCount} invités` : ""}
@@ -305,7 +393,7 @@ export default function ReservationsPage() {
                                 key={idx}
                                 className="flex items-center justify-between text-sm"
                               >
-                                <span className="text-gray-700">
+                                <span className="min-w-0 break-words text-gray-700">
                                   {item.name}
                                   {item.format ? ` — ${item.format}` : ""}
                                 </span>
@@ -345,18 +433,35 @@ export default function ReservationsPage() {
                         Statut
                       </h4>
                       <div className="flex flex-wrap gap-2">
+                        {(() => {
+                          const waLink = reservationWaLink(res)
+                          return waLink ? (
+                            <a
+                              href={waLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Envoyer le devis au client sur WhatsApp"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" /> Devis WhatsApp
+                            </a>
+                          ) : null
+                        })()}
                         {res.status !== "CONFIRMED" && (
                           <button
                             onClick={() => handleStatusChange(res.id, "CONFIRMED")}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                            disabled={statusPending === `${res.id}:CONFIRMED`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <Check className="h-3.5 w-3.5" /> Confirmer
+                            <Check className="h-3.5 w-3.5" />
+                            {statusPending === `${res.id}:CONFIRMED` ? "Confirmation..." : "Confirmer"}
                           </button>
                         )}
                         {res.status !== "CANCELLED" && (
                           <button
                             onClick={() => handleStatusChange(res.id, "CANCELLED")}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                            disabled={statusPending === `${res.id}:CANCELLED`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <X className="h-3.5 w-3.5" /> Annuler
                           </button>
@@ -377,7 +482,7 @@ export default function ReservationsPage() {
           {filtered.length > 0 && (
             <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3">
               <p className="text-xs text-gray-500">{filtered.length} résultat(s) · Page {currentPage}/{totalPages}</p>
-              <div className="flex items-center gap-1">
+              <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto">
                 <button onClick={() => setPage(1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
                 <button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []).map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1.5 text-xs text-gray-400">…</span> : <button key={p} onClick={() => setPage(p)} className={`min-w-[28px] rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${p === currentPage ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-100"}`}>{p}</button>)}
@@ -390,9 +495,9 @@ export default function ReservationsPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-full mx-2 sm:mx-0 sm:max-w-2xl my-8">
-            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/40 p-2 sm:p-4 overflow-y-auto">
+          <div className="flex max-h-[92dvh] w-full max-w-full flex-col overflow-hidden rounded-2xl shadow-xl mx-2 sm:mx-0 sm:max-w-2xl my-8">
+            <div className="flex shrink-0 items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">Nouvelle pré-commande</h2>
                 <p className="text-xs text-gray-500 mt-0.5">Saisie opérateur — source : Opérateur</p>
@@ -405,7 +510,7 @@ export default function ReservationsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreate} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+            <form onSubmit={handleCreate} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-white p-4 sm:p-6 space-y-4 sm:space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Client *</label>
@@ -541,7 +646,7 @@ export default function ReservationsPage() {
                           onChange={(e) => updateDraftItem(index, { quantity: Math.max(1, Number(e.target.value) || 1) })}
                           className="w-20 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none"
                         />
-                        <span className="text-sm font-semibold text-gray-900 w-28 text-right sm:text-left">
+                        <span className="w-28 break-words text-right text-sm font-semibold text-gray-900 tabular-nums sm:text-left">
                           {variant ? formatPrice(variant.price * item.quantity) : ""}
                         </span>
                         <button
@@ -564,7 +669,7 @@ export default function ReservationsPage() {
                 </div>
               )}
 
-              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+              <div className="flex flex-wrap justify-end gap-3 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}

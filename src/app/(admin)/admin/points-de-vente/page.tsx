@@ -17,6 +17,7 @@ interface Detail {
   stocks: StockLine[]
   movements: { id: string; type: string; quantity: number; reason: string | null; createdAt: string; variant: { format: string; product: { name: string } } }[]
   openCash: CashSession | null
+  otherOpenCash: { id: string; openedAt: string; openingBalance: number; openedBy: { id: string; name: string } | null }[]
   summary: { revenue: number; orders: number }
   today: { revenue: number; orders: number }
   weeklyHistory: { label: string; revenue: number; orders: number }[]
@@ -230,8 +231,8 @@ export default function PointsDeVentePage() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-bold text-foreground">{selectedPoint.name}</h2>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${selectedPoint.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{selectedPoint.isActive ? "Actif" : "Inactif"}</span>
+                    <h2 className="min-w-0 truncate text-xl font-bold text-foreground">{selectedPoint.name}</h2>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${selectedPoint.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{selectedPoint.isActive ? "Actif" : "Inactif"}</span>
                   </div>
                   <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><MapPin className="h-4 w-4" />{selectedPoint.address}, {selectedPoint.city}</p>
                   <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground"><UserRound className="h-4 w-4" />{selectedPoint.managerUser?.name || selectedPoint.managerName || "Responsable non affecté"}{selectedPoint.phone && <><Phone className="ml-3 h-4 w-4" />{selectedPoint.phone}</>}</p>
@@ -268,13 +269,13 @@ export default function PointsDeVentePage() {
                         const maxRevenue = Math.max(...detail.weeklyHistory.map((w) => w.revenue), 1)
                         const pct = Math.round((week.revenue / maxRevenue) * 100)
                         return (
-                          <div key={i} className="flex items-center gap-3">
-                            <p className="w-[180px] shrink-0 text-xs text-muted-foreground">{week.label}</p>
-                            <div className="relative h-5 flex-1 overflow-hidden rounded bg-muted/50">
+                          <div key={i} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                            <p className="w-full shrink-0 text-xs text-muted-foreground sm:w-[180px]">{week.label}</p>
+                            <div className="relative h-5 w-full flex-1 overflow-hidden rounded bg-muted/50">
                               <div className="absolute inset-y-0 left-0 rounded bg-primary/70" style={{ width: `${pct}%` }} />
                               <p className="relative z-10 flex h-full items-center px-2 text-xs font-medium text-foreground">{formatPrice(week.revenue)}</p>
                             </div>
-                            <p className="w-[60px] shrink-0 text-right text-xs text-muted-foreground">{week.orders} cmd</p>
+                            <p className="w-full shrink-0 text-xs text-muted-foreground sm:w-[60px] sm:text-right">{week.orders} cmd</p>
                           </div>
                         )
                       })}
@@ -301,8 +302,8 @@ export default function PointsDeVentePage() {
                   <div className="divide-y divide-border rounded-lg border border-border">
                     {detail.reservations.slice(0, 5).map((reservation) => (
                       <div key={reservation.id} className="flex items-center justify-between gap-3 p-3 text-sm">
-                        <div><p className="font-medium text-foreground">{reservation.client}</p><p className="text-xs text-muted-foreground">{reservation.type} — {reservation.date} {reservation.heure}</p></div>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${reservation.status === "CONFIRMED" ? "bg-green-100 text-green-700" : reservation.status === "CANCELLED" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>{reservation.status}</span>
+                        <div className="min-w-0"><p className="truncate font-medium text-foreground">{reservation.client}</p><p className="text-xs text-muted-foreground">{reservation.type} — {reservation.date} {reservation.heure}</p></div>
+                        <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${reservation.status === "CONFIRMED" ? "bg-green-100 text-green-700" : reservation.status === "CANCELLED" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>{reservation.status}</span>
                       </div>
                     ))}
                     {detail.reservations.length === 0 && <p className="p-5 text-sm text-muted-foreground">Aucune pré-commande rattachée.</p>}
@@ -361,6 +362,18 @@ export default function PointsDeVentePage() {
                     <p className="text-sm text-muted-foreground">{detail.openCash ? `Ouverte le ${new Date(detail.openCash.openedAt).toLocaleString("fr-FR")}` : "Ouvrez une session avant d&apos;encaisser."}</p>
                   </div>
                 </div>
+                {detail.otherOpenCash && detail.otherOpenCash.length > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm sm:p-4">
+                    <p className="font-semibold text-foreground">Autres caisses ouvertes sur ce point de vente</p>
+                    <ul className="mt-1 space-y-1 text-muted-foreground">
+                      {detail.otherOpenCash.map((session) => (
+                        <li key={session.id}>
+                          {session.openedBy?.name ?? "Vendeur"} — fonds {session.openingBalance.toLocaleString("fr-FR")} · ouverte le {new Date(session.openedAt).toLocaleString("fr-FR")}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="flex max-w-md gap-3">
                   <input type="number" min="0" value={cashBalance} onChange={(event) => setCashBalance(event.target.value)} placeholder={detail.openCash ? "Solde de clôture" : "Fond de caisse"} className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground" />
                   {detail.openCash ? <button onClick={closeCash} disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Fermer la caisse</button> : <button onClick={openCash} disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Ouvrir la caisse</button>}

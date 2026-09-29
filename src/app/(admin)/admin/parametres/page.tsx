@@ -464,7 +464,7 @@ export default function ParametresPage() {
             >
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-gray-900">{item.label}</p>
-                <p className="text-[10px] sm:text-xs text-gray-500">{item.desc}</p>
+                <p className="  text-gray-500">{item.desc}</p>
               </div>
               <button
                 onClick={() => togglePayment(item.key)}
@@ -501,7 +501,7 @@ export default function ParametresPage() {
             >
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-gray-900">{item.label}</p>
-                <p className="text-[10px] sm:text-xs text-gray-500">{item.desc}</p>
+                <p className="  text-gray-500">{item.desc}</p>
               </div>
               <button
                 onClick={() => toggleNotification(item.key)}
@@ -523,7 +523,7 @@ export default function ParametresPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
         <div className="flex items-center justify-between gap-2 mb-4">
           <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Annonces (bannière)</h3>
-          <span className="text-[10px] sm:text-xs text-gray-400">Messages diffusés aux utilisateurs connectés</span>
+          <span className="  text-gray-400">Messages diffusés aux utilisateurs connectés</span>
         </div>
 
         <div className="space-y-4">
@@ -561,7 +561,7 @@ export default function ParametresPage() {
                 className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
                 placeholder="24 = 24h, vide = jamais"
               />
-              <p className="mt-1 text-[10px] text-gray-400">Vide ou 0 = n&apos;expire jamais. Défaut : 24h.</p>
+              <p className="mt-1 text-xs text-gray-400">Vide ou 0 = n&apos;expire jamais. Défaut : 24h.</p>
             </div>
           </div>
 
@@ -669,7 +669,7 @@ export default function ParametresPage() {
                     <p className="text-xs sm:text-sm text-gray-900 whitespace-pre-wrap break-words">
                       {a.message}
                     </p>
-                    <p className="mt-1 text-[10px] text-gray-400">
+                    <p className="mt-1 text-xs text-gray-400">
                       {a.tone.toUpperCase()} ·{" "}
                       {a.audience === "ALL"
                         ? "Tous"

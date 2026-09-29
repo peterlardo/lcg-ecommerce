@@ -91,11 +91,12 @@ interface ConsumeStockParams {
   type: string;
   reason: string;
   reference: string;
+  userId?: string | null;
 }
 
 export async function consumePointOfSaleStockTx(
   tx: TxClient,
-  { variantId, pointOfSaleId, quantity, type, reason, reference }: ConsumeStockParams,
+  { variantId, pointOfSaleId, quantity, type, reason, reference, userId }: ConsumeStockParams,
 ) {
   // Decrement POS stock
   const posStock = await tx.pointOfSaleStock.findUnique({
@@ -128,6 +129,7 @@ export async function consumePointOfSaleStockTx(
       reason,
       reference,
       pointOfSaleId,
+      userId: userId ?? null,
     },
   });
 
@@ -148,11 +150,12 @@ interface RestockParams {
   type: string;
   reason: string;
   reference: string;
+  userId?: string | null;
 }
 
 export async function restockPointOfSaleStockTx(
   tx: TxClient,
-  { variantId, pointOfSaleId, quantity, type, reason, reference }: RestockParams,
+  { variantId, pointOfSaleId, quantity, type, reason, reference, userId }: RestockParams,
 ) {
   // Ensure POS stock row exists
   await tx.pointOfSaleStock.upsert({
@@ -176,6 +179,7 @@ export async function restockPointOfSaleStockTx(
       reason,
       reference,
       pointOfSaleId,
+      userId: userId ?? null,
     },
   });
 }
@@ -191,6 +195,7 @@ interface TransferStockParams {
   quantity: number;
   reason: string;
   reference: string;
+  userId?: string | null;
 }
 
 export async function transferPointOfSaleStockTx(
@@ -202,6 +207,7 @@ export async function transferPointOfSaleStockTx(
     quantity,
     reason,
     reference,
+    userId,
   }: TransferStockParams,
 ) {
   // Check source stock
@@ -237,6 +243,7 @@ export async function transferPointOfSaleStockTx(
       reason,
       reference,
       pointOfSaleId: sourcePointOfSaleId,
+      userId: userId ?? null,
     },
   });
 
@@ -249,6 +256,7 @@ export async function transferPointOfSaleStockTx(
       reason,
       reference,
       pointOfSaleId: destinationPointOfSaleId,
+      userId: userId ?? null,
     },
   });
 
@@ -268,6 +276,7 @@ interface CreateProductionLocationParams {
   reason: string;
   reference: string;
   notes: string;
+  userId?: string | null;
 }
 
 export async function createProductionForLocationTx(
@@ -280,6 +289,7 @@ export async function createProductionForLocationTx(
     reason,
     reference,
     notes,
+    userId,
   }: CreateProductionLocationParams,
 ) {
   // Create a production lot for traceability
@@ -320,6 +330,7 @@ export async function createProductionForLocationTx(
       reference,
       pointOfSaleId,
       lotId: lot.id,
+      userId: userId ?? null,
     },
   });
 

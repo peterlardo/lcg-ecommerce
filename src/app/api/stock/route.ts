@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, saleMovementsFilter } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 
 import { allocateStockFIFOTx, generateLotNumberTx } from "@/lib/lot-utils"
 import { fetchCachedLocations, ensureOperationalStockLocations, OPERATIONAL_STOCK_CODES } from "@/lib/stock-service"
@@ -26,6 +27,9 @@ export async function GET() {
       await ensureOperationalStockLocations()
     }
 
+    const stockSession = await auth()
+    const movementWhere = saleMovementsFilter(stockSession?.user?.role, stockSession?.user?.id)
+
     const [variants, movements, posStocks] = await Promise.all([
       getPrisma().productVariant.findMany({
         select: {
@@ -41,6 +45,7 @@ export async function GET() {
         },
       }),
       getPrisma().stockMovement.findMany({
+        where: movementWhere,
         select: {
           id: true,
           variantId: true,
@@ -151,6 +156,8 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
+    const authSession = await auth()
+    const actorId = authSession?.user?.id ?? null
     const variantId = String(body.variantId || "")
     const type = String(body.type || "IN").toUpperCase()
     const quantity = Math.max(1, Number(body.quantity) || 0)
@@ -175,7 +182,7 @@ export async function POST(request: Request) {
         data: { stock: nextStock },
       })
       const movement = await tx.stockMovement.create({
-        data: { variantId, type, quantity, reason, reference, pointOfSaleId },
+        data: { variantId, type, quantity, reason, reference, pointOfSaleId, userId: actorId },
       })
 
       if (POSITIVE_TYPES.has(type)) {

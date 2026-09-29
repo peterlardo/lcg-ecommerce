@@ -135,7 +135,7 @@ useEffect(() => {
             {!loading && distributionOrders.map((order) => (
               <div key={order.id} className="rounded-lg border border-gray-100 bg-gray-50 p-3 sm:p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
+                  <div className="min-w-0 break-words">
                     <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs font-semibold text-gray-900 sm:text-sm">{order.orderNumber}</span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span></div>
                     <p className="mt-1 text-xs font-medium text-gray-700 sm:text-sm">{order.customerName || "Client"}</p>
                     <p className="mt-1 text-xs text-gray-500">{order.delivery ? `${order.delivery.address}, ${order.delivery.city}` : "Retrait / comptoir"}</p>
@@ -155,7 +155,7 @@ useEffect(() => {
             {inTransit.map((delivery) => (
               <div key={delivery.id} className="rounded-lg bg-gray-50 p-3 sm:p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0 break-words">
                     <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs font-semibold text-gray-900 sm:text-sm">{delivery.orderNumber}</span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getStatusColor(delivery.status)}`}>{getStatusLabel(delivery.status)}</span></div>
                     <p className="mt-1 text-xs text-gray-700 sm:text-sm">{delivery.customer}</p>
                     <p className="mt-1 text-xs text-gray-500">{delivery.address}, {delivery.city}</p>

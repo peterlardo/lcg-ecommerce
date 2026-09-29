@@ -89,15 +89,15 @@ export default function ReservationsArchivePage() {
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
                       <CalendarRange className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm font-semibold text-gray-900">{res.client}</span>
+                      <span className="break-words text-sm font-semibold text-gray-900">{res.client}</span>
                       <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusStyles[res.status]}`}>Annulée</span>
                       <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${sourceLabels[res.source]?.className || "bg-gray-100 text-gray-600"}`}>
                         {sourceLabels[res.source]?.label || res.source || "En ligne"}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-500">
+                    <p className="break-words text-sm text-gray-500">
                       {res.type} · {res.date} à {res.heure}
                       {res.address ? ` · ${res.address}` : ""}
                     </p>
@@ -112,7 +112,7 @@ export default function ReservationsArchivePage() {
                       <div className="bg-white p-3 rounded-lg border border-gray-100">
                         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Coordonnées</h4>
                         <p className="text-sm text-gray-700"><span className="font-medium text-gray-500">Tél: </span>{res.telephone}</p>
-                        {res.email && <p className="text-sm text-gray-700 mt-1"><span className="font-medium text-gray-500">Email: </span>{res.email}</p>}
+                        {res.email && <p className="text-sm text-gray-700 mt-1"><span className="font-medium text-gray-500">Email: </span><span className="break-all">{res.email}</span></p>}
                       </div>
                       <div className="bg-white p-3 rounded-lg border border-gray-100">
                         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Articles réservés</h4>
@@ -120,7 +120,7 @@ export default function ReservationsArchivePage() {
                           <div className="space-y-1.5">
                             {res.items.map((item, idx) => (
                               <div key={idx} className="flex items-center justify-between text-sm">
-                                <span className="text-gray-700">{item.name}{item.format ? ` — ${item.format}` : ""}</span>
+                                <span className="min-w-0 break-words text-gray-700">{item.name}{item.format ? ` — ${item.format}` : ""}</span>
                                 <span className="text-gray-500">x{item.quantity}</span>
                               </div>
                             ))}
@@ -149,7 +149,7 @@ export default function ReservationsArchivePage() {
           {filtered.length > 0 && (
             <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3">
               <p className="text-xs text-gray-500">{filtered.length} résultat(s) · Page {currentPage}/{totalPages}</p>
-              <div className="flex items-center gap-1">
+              <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto">
                 <button onClick={() => setPage(1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
                 <button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []).map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1.5 text-xs text-gray-400">…</span> : <button key={p} onClick={() => setPage(p)} className={`min-w-[28px] rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${p === currentPage ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-100"}`}>{p}</button>)}

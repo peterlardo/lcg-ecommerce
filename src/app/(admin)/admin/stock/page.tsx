@@ -222,7 +222,7 @@ export default function StockPage() {
                   <p className={`text-sm font-semibold ${isSelected ? "text-primary" : "text-gray-900"}`}>{location.name}</p>
                   <p className="mt-0.5 text-xs text-gray-500">{location.code}</p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${location.type === "VEHICLE" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${location.type === "VEHICLE" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
                   {location.type === "VEHICLE" ? "Stock Mobile" : "Comptoir"}
                 </span>
               </div>
@@ -251,7 +251,7 @@ export default function StockPage() {
             <h3 className="mb-3 text-sm font-semibold text-gray-900">Tableau de bord — {selectedLocation?.name}</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-lg bg-gray-50 p-3">
-                <p className="text-[11px] font-medium text-gray-500 uppercase">Aujourd&apos;hui</p>
+                <p className="text-xs font-medium text-gray-500 uppercase">Aujourd&apos;hui</p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                   <div><span className="text-green-600">Entrées</span><p className="font-bold text-gray-900">{locationDashboard.today.entries}</p></div>
                   <div><span className="text-red-600">Sorties</span><p className="font-bold text-gray-900">{locationDashboard.today.exits}</p></div>
@@ -260,7 +260,7 @@ export default function StockPage() {
                 </div>
               </div>
               <div className="rounded-lg bg-gray-50 p-3">
-                <p className="text-[11px] font-medium text-gray-500 uppercase">Cette semaine</p>
+                <p className="text-xs font-medium text-gray-500 uppercase">Cette semaine</p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                   <div><span className="text-green-600">Entrées</span><p className="font-bold text-gray-900">{locationDashboard.week.entries}</p></div>
                   <div><span className="text-red-600">Sorties</span><p className="font-bold text-gray-900">{locationDashboard.week.exits}</p></div>
@@ -269,7 +269,7 @@ export default function StockPage() {
                 </div>
               </div>
               <div className="rounded-lg bg-gray-50 p-3">
-                <p className="text-[11px] font-medium text-gray-500 uppercase">Ce mois</p>
+                <p className="text-xs font-medium text-gray-500 uppercase">Ce mois</p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                   <div><span className="text-green-600">Entrées</span><p className="font-bold text-gray-900">{locationDashboard.month.entries}</p></div>
                   <div><span className="text-red-600">Sorties</span><p className="font-bold text-gray-900">{locationDashboard.month.exits}</p></div>
@@ -283,9 +283,9 @@ export default function StockPage() {
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-900">Écoulement par produit (20 derniers mouvements)</h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full min-w-[420px] text-xs sm:min-w-[520px]">
                 <thead>
-                  <tr className="border-b border-gray-200 text-left text-[11px] font-semibold uppercase text-gray-500">
+                  <tr className="border-b border-gray-200 text-left text-xs font-semibold uppercase text-gray-500">
                     <th className="pb-2 pr-4">Produit</th>
                     <th className="pb-2 pr-4">Format</th>
                     <th className="pb-2 pr-4 text-right">Entrées</th>
@@ -340,8 +340,8 @@ export default function StockPage() {
                     </span>
                     <span className="truncate font-medium text-gray-700">{movement.productName} ({movement.format})</span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3 text-xs text-gray-500">
-                    <span>{opt?.label ?? movement.type}</span>
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-gray-500 sm:gap-3">
+                    <span className="hidden sm:inline">{opt?.label ?? movement.type}</span>
                     <span className="font-semibold">{movement.quantity}</span>
                     {movement.pointOfSaleName && <span className="hidden md:inline text-gray-400">{movement.pointOfSaleName}</span>}
                     <span className="hidden sm:inline">{movement.reference || movement.reason}</span>

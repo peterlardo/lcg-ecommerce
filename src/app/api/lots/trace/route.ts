@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 
 export async function GET(req: Request) {
   const forbidden = await requireManagementAccess()
@@ -31,8 +32,13 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "desc" },
   })
 
+  const session = await auth()
+  const role = session?.user?.role
+  const selfId = session?.user?.id
+  const movementWhere = saleMovementsFilter(role, selfId)
+
   const movements = await getPrisma().stockMovement.findMany({
-    where: { lotId: lot.id },
+    where: { lotId: lot.id, AND: [movementWhere] },
     orderBy: { createdAt: "desc" },
   })
 
@@ -48,11 +54,19 @@ export async function GET(req: Request) {
   const orders = uniqueRefs.length > 0
     ? await getPrisma().order.findMany({
         where: { orderNumber: { in: uniqueRefs } },
-        select: { orderNumber: true, pointOfSaleId: true, pointOfSale: { select: { name: true, code: true } } },
+        select: { orderNumber: true, notes: true, userId: true, pointOfSaleId: true, pointOfSale: { select: { name: true, code: true } } },
       })
     : []
 
-  const orderMap = new Map(orders.map((o) => [o.orderNumber, o]))
+  const orderByNumber = new Map(orders.map((o) => [o.orderNumber, o]))
+  const visibleAllocations = allocations.filter((a) => {
+    if (a.type !== "SALE" || !a.reference) return true
+    const order = orderByNumber.get(a.reference)
+    if (!order) return true
+    return !isRestrictedOrder(order, role, selfId)
+  })
+
+  const orderMap = orderByNumber
 
   const movementsByRef = new Map<string, typeof movements[0]>()
   for (const m of allocMovements) {
@@ -63,7 +77,7 @@ export async function GET(req: Request) {
 
   const posCache = new Map<string, { name: string; code: string }>()
 
-  const trace = allocations.map((a) => {
+  const trace = visibleAllocations.map((a) => {
     let pointOfSale: { name: string; code: string } | null = null
 
     if (a.type === "SALE" && a.reference) {
@@ -100,6 +114,7 @@ export async function GET(req: Request) {
         lotId: lot.id,
         type: { in: ["TRANSFER_IN", "TRANSFER_OUT"] },
         pointOfSaleId: { not: null },
+        AND: [movementWhere],
       },
       select: { reference: true, pointOfSaleId: true },
       distinct: ["reference"],
@@ -135,8 +150,8 @@ export async function GET(req: Request) {
       initialQuantity: lot.initialQuantity,
       remainingQuantity: lot.remainingQuantity,
       consumedQuantity: lot.initialQuantity - lot.remainingQuantity,
-      totalAllocations: allocations.length,
-      saleAllocations: allocations.filter((a) => a.type === "SALE").length,
+      totalAllocations: visibleAllocations.length,
+      saleAllocations: visibleAllocations.filter((a) => a.type === "SALE").length,
     },
   })
 }

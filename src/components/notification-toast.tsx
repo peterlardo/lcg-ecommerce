@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ShoppingCart, Bell, X, Globe, User } from "lucide-react"
+import { ShoppingCart, Bell, X, Globe, User, ReceiptText } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 
 interface Notification {
   id: string
+  kind?: "commande" | "precommande" | "vente"
   orderNumber: string
   customerName: string
   status: string
@@ -22,6 +23,7 @@ const statusLabels: Record<string, string> = {
   OUT_FOR_DELIVERY: "En livraison",
   DELIVERED: "Livrée",
   CANCELLED: "Annulée",
+  SOLD: "Vente réalisée",
 }
 
 const statusColors: Record<string, string> = {
@@ -31,6 +33,7 @@ const statusColors: Record<string, string> = {
   OUT_FOR_DELIVERY: "bg-orange-500",
   DELIVERED: "bg-emerald-600",
   CANCELLED: "bg-red-500",
+  SOLD: "bg-emerald-600",
 }
 
 function NotificationItem({ notification, onDismiss }: { notification: Notification; onDismiss: (id: string) => void }) {
@@ -61,7 +64,9 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
       <div className="p-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 shrink-0">
-            {notification.status === "PENDING" ? (
+            {notification.kind === "vente" ? (
+              <ReceiptText className="h-5 w-5 text-primary" />
+            ) : notification.status === "PENDING" ? (
               <Bell className="h-5 w-5 text-primary" />
             ) : (
               <ShoppingCart className="h-5 w-5 text-primary" />
@@ -69,8 +74,18 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-foreground">
-                {statusLabels[notification.status] || notification.status}
+              <p className={`text-sm font-semibold text-foreground ${notification.kind === "vente" ? "uppercase tracking-wide" : ""}`}>
+                {notification.kind === "vente"
+                  ? "VENTE RÉALISÉE"
+                  : notification.kind === "precommande"
+                  ? notification.status === "PENDING"
+                    ? "Nouvelle pré-commande"
+                    : notification.status === "CONFIRMED"
+                      ? "Pré-commande confirmée"
+                      : notification.status === "CANCELLED"
+                        ? "Pré-commande annulée"
+                        : `Pré-commande · ${statusLabels[notification.status] || notification.status}`
+                  : statusLabels[notification.status] || notification.status}
               </p>
               <span className={`h-2 w-2 rounded-full ${statusColors[notification.status] || "bg-gray-400"}`} />
             </div>
@@ -80,8 +95,22 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
             <div className="flex items-center gap-2 mt-1.5">
               <p className="text-sm font-bold text-primary">{formatPrice(notification.total)}</p>
               <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {notification.source === "WEB" ? <Globe className="h-2.5 w-2.5" /> : <User className="h-2.5 w-2.5" />}
-                {notification.source === "WEB" ? "En ligne" : "Opérateur"}
+                {notification.source === "CAISSE" ? (
+                  <>
+                    <ReceiptText className="h-2.5 w-2.5" />
+                    Caisse
+                  </>
+                ) : notification.source === "WEB" ? (
+                  <>
+                    <Globe className="h-2.5 w-2.5" />
+                    En ligne
+                  </>
+                ) : (
+                  <>
+                    <User className="h-2.5 w-2.5" />
+                    Opérateur
+                  </>
+                )}
               </span>
             </div>
           </div>
@@ -101,7 +130,7 @@ export function NotificationToast({ notifications, onDismiss }: { notifications:
   if (notifications.length === 0) return null
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full">
+    <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2 max-w-sm w-full">
       {notifications.slice(0, 3).map((n) => (
         <NotificationItem key={n.id} notification={n} onDismiss={onDismiss} />
       ))}

@@ -258,7 +258,7 @@ export default function ClientsPage() {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className={`${inputCls} pl-9 pr-8 appearance-none bg-white`}
+            className={`${inputCls} pl-9 pr-8 appearance-none bg-white w-full sm:w-auto max-w-full`}
           >
             <option value="tous">Tous les types</option>
             <option value="B2B">B2B (entreprise)</option>
@@ -271,7 +271,7 @@ export default function ClientsPage() {
           <select
             value={commercialFilter}
             onChange={(e) => setCommercialFilter(e.target.value)}
-            className={`${inputCls} pl-9 pr-8 appearance-none bg-white`}
+            className={`${inputCls} pl-9 pr-8 appearance-none bg-white w-full sm:w-auto max-w-full`}
           >
             <option value="tous">Tous les commerciaux</option>
             {commerciaux.map((c) => (
@@ -286,7 +286,7 @@ export default function ClientsPage() {
           <select
             value={activeFilter}
             onChange={(e) => setActiveFilter(e.target.value)}
-            className={`${inputCls} pr-8 appearance-none bg-white`}
+            className={`${inputCls} pr-8 appearance-none bg-white w-full sm:w-auto max-w-full`}
           >
             <option value="tous">Tous les statuts</option>
             <option value="true">Actif</option>
@@ -328,12 +328,12 @@ export default function ClientsPage() {
                     )}
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <p className="min-w-0 truncate text-xs sm:text-sm font-medium text-gray-900">
                         {displayName(c)}
                       </p>
                       <span
-                        className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                        className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
                           c.type === "B2B"
                             ? "bg-blue-100 text-blue-700"
                             : "bg-purple-100 text-purple-700"
@@ -342,20 +342,20 @@ export default function ClientsPage() {
                         {c.type}
                       </span>
                       {!c.isActive && (
-                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 text-gray-500">
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-500">
                           Inactif
                         </span>
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
                       {c.email && (
-                        <span className="flex items-center gap-1">
+                        <span className="flex min-w-0 items-center gap-1 break-words">
                           <Mail className="h-3 w-3 hidden sm:inline" />
                           {c.email}
                         </span>
                       )}
                       {c.phone && (
-                        <span className="flex items-center gap-1">
+                        <span className="flex min-w-0 items-center gap-1 break-words">
                           <Phone className="h-3 w-3 hidden sm:inline" />
                           {c.phone}
                         </span>
@@ -421,7 +421,7 @@ export default function ClientsPage() {
 
               <div>
                 <label className={labelCls}>Type de client</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, type: "B2C" })}

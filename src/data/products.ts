@@ -10,6 +10,12 @@ export interface ProductVariant {
   price: number
   stock: number
   unit: string | null
+  promoPrice?: number | null
+}
+
+export interface ProductPromo {
+  name: string
+  percent: number
 }
 
 export interface Product {
@@ -22,7 +28,9 @@ export interface Product {
   categorySlug: string | null
   categoryName: string | null
   isFeatured: boolean
+  isActive: boolean
   badge: string | null
+  promo: ProductPromo | null
   variants: ProductVariant[]
 }
 
@@ -37,6 +45,8 @@ export const products: Product[] = [
     categorySlug: "particuliers",
     categoryName: "Particuliers",
     isFeatured: true,
+    isActive: true,
+    promo: null,
     badge: "Best-seller",
     variants: [
       { id: "var-1-1", format: "1kg", price: 1000, stock: 0, unit: "sac" },
@@ -54,6 +64,8 @@ export const products: Product[] = [
     categorySlug: "particuliers",
     categoryName: "Particuliers",
     isFeatured: true,
+    isActive: true,
+    promo: null,
     badge: null,
     variants: [
       { id: "var-2-1", format: "1kg", price: 1000, stock: 0, unit: "sac" },
@@ -71,6 +83,8 @@ export const products: Product[] = [
     categorySlug: "evenementiel",
     categoryName: "Événementiel",
     isFeatured: true,
+    isActive: true,
+    promo: null,
     badge: null,
     variants: [
       { id: "var-3-1", format: "1kg", price: 2000, stock: 0, unit: "sac" },
@@ -88,6 +102,8 @@ export const products: Product[] = [
     categorySlug: "evenementiel",
     categoryName: "Événementiel",
     isFeatured: true,
+    isActive: true,
+    promo: null,
     badge: null,
     variants: [
       { id: "var-4-1", format: "1kg", price: 1500, stock: 0, unit: "sac" },

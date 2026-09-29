@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
@@ -8,6 +8,7 @@ import { formatPrice, generateOrderNumber } from "@/lib/utils"
 import { CreditCard, Smartphone, Banknote, Trash2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useDeliveryFee } from "@/hooks/use-delivery-fee"
+import { useCartValidation } from "@/hooks/use-cart-validation"
 
 const paymentMethods = [
   { id: "card", label: "Carte bancaire", icon: CreditCard },
@@ -45,7 +46,76 @@ export default function CommandePage() {
   }
 
   const { deliveryFee, isFreeDelivery } = useDeliveryFee(subtotal)
-  const total = subtotal + deliveryFee
+
+  const [couponInput, setCouponInput] = useState("")
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null)
+  const [couponMsg, setCouponMsg] = useState<{ type: "ok" | "error"; text: string } | null>(null)
+  const [checkingCoupon, setCheckingCoupon] = useState(false)
+
+  const appliedCode = appliedCoupon?.code ?? ""
+  const discount = appliedCoupon?.discount ?? 0
+  const total = Math.max(0, subtotal - discount) + deliveryFee
+
+  useEffect(() => {
+    if (!appliedCode) return
+    const init = async () => {
+      try {
+        const res = await fetch("/api/coupons/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: appliedCode, subtotal }),
+        })
+        const data = await res.json().catch(() => null)
+        if (res.ok && data?.ok) {
+          setAppliedCoupon({ code: data.code, discount: data.discount })
+        } else {
+          setAppliedCoupon(null)
+          setCouponMsg({ type: "error", text: data?.error || "Code promo invalide." })
+        }
+      } catch {
+        // réseau indisponible : on garde le dernier état connu
+      }
+    }
+    void init()
+  }, [subtotal, appliedCode])
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase()
+    if (!code) return
+    setCheckingCoupon(true)
+    setCouponMsg(null)
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, subtotal }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.ok) {
+        setAppliedCoupon({ code: data.code, discount: data.discount })
+        setCouponMsg({ type: "ok", text: `Code ${data.code} appliqué : − ${formatPrice(data.discount)}` })
+      } else {
+        setAppliedCoupon(null)
+        setCouponMsg({ type: "error", text: data?.error || "Code promo invalide." })
+      }
+    } catch {
+      setCouponMsg({ type: "error", text: "Erreur réseau, réessayez." })
+    } finally {
+      setCheckingCoupon(false)
+    }
+  }
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponMsg(null)
+    setCouponInput("")
+  }
+
+  useCartValidation((names) => {
+    alert(
+      `Article(s) de votre panier plus disponible(s) et retiré(s) :\n${names.join("\n")}\nMerci de recommencer votre sélection.`
+    )
+  })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,6 +141,7 @@ export default function CommandePage() {
           district: form.district,
           paymentMethod: paymentMap[paymentMethod] || "CASH_ON_DELIVERY",
           deliveryFee,
+          couponCode: appliedCoupon?.code || undefined,
           notes: form.notes,
           items: items.map((i) => ({
             productId: i.productId,
@@ -295,11 +366,60 @@ export default function CommandePage() {
 
               <hr className="border-gray-200" />
 
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-gray-700">Code promo</p>
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-bold text-green-600">
+                      {appliedCoupon.code} — − {formatPrice(appliedCoupon.discount)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={removeCoupon}
+                      className="text-xs font-semibold text-gray-400 underline hover:text-gray-600"
+                    >
+                      Retirer
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyCoupon() } }}
+                      className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      placeholder="EX : BIENVENUE10"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyCoupon}
+                      disabled={checkingCoupon}
+                      className="shrink-0 rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600 disabled:opacity-50"
+                    >
+                      {checkingCoupon ? "…" : "Appliquer"}
+                    </button>
+                  </div>
+                )}
+                {couponMsg && !appliedCoupon && (
+                  <p className={`text-xs font-medium ${couponMsg.type === "ok" ? "text-green-600" : "text-red-500"}`}>
+                    {couponMsg.text}
+                  </p>
+                )}
+              </div>
+
+              <hr className="border-gray-200" />
+
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Sous-total</span>
                   <span className="font-medium text-gray-900">{formatPrice(subtotal)}</span>
                 </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Remise ({appliedCoupon?.code})</span>
+                    <span className="font-semibold">− {formatPrice(discount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-gray-500">Livraison</span>
                   <span className={`font-medium ${isFreeDelivery ? "text-green-600" : ""}`}>

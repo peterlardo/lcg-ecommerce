@@ -39,6 +39,11 @@ enum DeliveryStatus {
   FAILED
 }
 
+enum DeliveryMode {
+  DELIVERY
+  PICKUP
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -52,29 +57,31 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts            Account[]
-  sessions            Session[]
-  addresses           Address[]
-  orders              Order[]
-  reservations        Reservation[]
-  deliveries          Delivery[]
-  managedPointOfSales PointOfSale[]    @relation("PointOfSaleManager")
-  permissions         UserPermission[]
-  producedLots        ProductionLot[]
-  passwordResetTokens PasswordResetToken[]
-  sentMessages        ChatMessage[]      @relation("ChatSender")
-  receivedMessages    ChatMessage[]      @relation("ChatReceiver")
-  chatPresence        ChatPresence?
-  clients             Client[]
-  announcements       Announcement[]
-  deviceSessions      UserDeviceSession[]
-  loginLogs           LoginLog[]
-  activityLogs        ActivityLog[]
+  accounts             Account[]
+  sessions             Session[]
+  addresses            Address[]
+  orders               Order[]
+  reservations         Reservation[]
+  deliveryAgentProfile DeliveryAgent?
+  managedPointOfSales  PointOfSale[]        @relation("PointOfSaleManager")
+  permissions          UserPermission[]
+  producedLots         ProductionLot[]
+  stockMovements       StockMovement[]
+  openedCashSessions   CashSession[]
+  passwordResetTokens  PasswordResetToken[]
+  sentMessages         ChatMessage[]        @relation("ChatSender")
+  receivedMessages     ChatMessage[]        @relation("ChatReceiver")
+  chatPresence         ChatPresence?
+  clients              Client[]
+  announcements        Announcement[]
+  deviceSessions       UserDeviceSession[]
+  loginLogs            LoginLog[]
+  activityLogs         ActivityLog[]
 
-  operationZone  String?
-  zoneLat        Float?
-  zoneLng        Float?
-  zoneRadiusKm   Float?  @default(10)
+  operationZone String?
+  zoneLat       Float?
+  zoneLng       Float?
+  zoneRadiusKm  Float?  @default(10)
 }
 
 model RoleProfile {
@@ -182,7 +189,8 @@ model Category {
   image       String?
   createdAt   DateTime @default(now())
 
-  products Product[]
+  products   Product[]
+  promotions Promotion[]
 }
 
 model Product {
@@ -201,6 +209,7 @@ model Product {
   category   Category?        @relation(fields: [categoryId], references: [id])
   variants   ProductVariant[]
   orderItems OrderItem[]
+  promotions Promotion[]
 }
 
 model ProductVariant {
@@ -218,27 +227,72 @@ model ProductVariant {
   productionLots    ProductionLot[]
 }
 
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+model Promotion {
+  id         String   @id @default(cuid())
+  name       String
+  percent    Float
+  productId  String?
+  categoryId String?
+  startsAt   DateTime
+  endsAt     DateTime
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([isActive, startsAt, endsAt])
+  @@index([productId])
+  @@index([categoryId])
+}
+
+model Coupon {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  description String?
+  type        CouponType @default(PERCENT)
+  value       Float
+  minSubtotal Float      @default(0)
+  startsAt    DateTime   @default(now())
+  endsAt      DateTime?
+  maxUses     Int?
+  usedCount   Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([isActive])
+}
+
 model Order {
-  id            String         @id @default(cuid())
-  orderNumber   String         @unique
-  userId        String?
-  b2bClientId   String?
-  customerName  String?
-  customerEmail String?
-  customerPhone String?
-  addressId     String?
-  status        OrderStatus    @default(PENDING)
-  paymentMethod PaymentMethod?
-  paymentStatus PaymentStatus  @default(PENDING)
-  subtotal      Float          @default(0)
-  deliveryFee   Float          @default(0)
-  total         Float          @default(0)
-  notes         String?
-  pointOfSaleId String?
-  source        String         @default("WEB")
-  ticketGenerated Boolean    @default(false)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  orderNumber     String         @unique
+  userId          String?
+  b2bClientId     String?
+  customerName    String?
+  customerEmail   String?
+  customerPhone   String?
+  addressId       String?
+  status          OrderStatus    @default(PENDING)
+  paymentMethod   PaymentMethod?
+  paymentStatus   PaymentStatus  @default(PENDING)
+  subtotal        Float          @default(0)
+  deliveryFee     Float          @default(0)
+  discountAmount  Float          @default(0)
+  couponCode      String?
+  total           Float          @default(0)
+  notes           String?
+  pointOfSaleId   String?
+  source          String         @default("WEB")
+  ticketGenerated Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   user         User?         @relation(fields: [userId], references: [id])
   b2bClient    B2BClient?    @relation(fields: [b2bClientId], references: [id], onDelete: SetNull)
@@ -272,40 +326,104 @@ model OrderItem {
 }
 
 model Delivery {
-  id              String         @id @default(cuid())
-  orderId         String         @unique
-  deliveryAgentId String?
-  status          DeliveryStatus @default(PENDING)
-  address         String
-  city            String
-  district        String?
-  scheduledDate   DateTime?
-  deliveredAt     DateTime?
-  notes           String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id            String         @id @default(cuid())
+  orderId       String         @unique
+  mode          DeliveryMode   @default(DELIVERY)
+  agentId       String?
+  zoneId        String?
+  fee           Float          @default(0)
+  status        DeliveryStatus @default(PENDING)
+  address       String
+  city          String
+  district      String?
+  scheduledDate DateTime?
+  assignedAt    DateTime?
+  deliveredAt   DateTime?
+  failedReason  String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
-  order         Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  deliveryAgent User? @relation(fields: [deliveryAgentId], references: [id])
+  order  Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  agent  DeliveryAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  zone   DeliveryZone?  @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([agentId, status])
+  @@index([scheduledDate])
+  @@index([deliveredAt])
+  @@index([mode])
+}
+
+model DeliveryZone {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  baseFee   Float    @default(0)
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agentFees  DeliveryAgentFee[]
+  deliveries Delivery[]
+}
+
+model DeliveryAgent {
+  id          String   @id @default(cuid())
+  name        String
+  kind        String   @default("MAISON")
+  userId      String?  @unique
+  companyName String?
+  phone       String?
+  vehicle     String?
+  plateNumber String?
+  zonesLabel  String?
+  isAvailable Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user       User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fees       DeliveryAgentFee[]
+  deliveries Delivery[]
+
+  @@index([kind, isActive])
+}
+
+model DeliveryAgentFee {
+  id      String  @id @default(cuid())
+  agentId String
+  zoneId  String
+  fee     Float   @default(0)
+
+  agent DeliveryAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  zone  DeliveryZone  @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, zoneId])
 }
 
 model StockMovement {
-  id            String   @id @default(cuid())
-  variantId     String
-  type          String
-  quantity      Int
-  reason        String?
-  reference     String?
-  pointOfSaleId String?
-  lotId         String?
-  createdAt     DateTime @default(now())
+  id                String   @id @default(cuid())
+  variantId         String
+  type              String
+  quantity          Int
+  reason            String?
+  reference         String?
+  pointOfSaleId     String?
+  lotId             String?
+  userId            String?
+  createdAt         DateTime @default(now())
 
-  variant     ProductVariant @relation(fields: [variantId], references: [id])
-  pointOfSale PointOfSale?   @relation(fields: [pointOfSaleId], references: [id], onDelete: SetNull)
-  lot         ProductionLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  variant          ProductVariant   @relation(fields: [variantId], references: [id])
+  pointOfSale      PointOfSale?     @relation(fields: [pointOfSaleId], references: [id], onDelete: SetNull)
+  lot              ProductionLot?   @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  user             User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([pointOfSaleId, createdAt])
   @@index([variantId])
+  @@index([userId, createdAt])
+  @@index([type])
 }
 
 model ProductionLot {
@@ -322,11 +440,11 @@ model ProductionLot {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  variant        ProductVariant  @relation(fields: [variantId], references: [id])
-  createdBy      User?           @relation(fields: [createdById], references: [id])
-  stockMovements StockMovement[]
-  allocations    LotAllocation[]
-  orderItems     OrderItem[]
+  variant           ProductVariant   @relation(fields: [variantId], references: [id])
+  createdBy         User?            @relation(fields: [createdById], references: [id])
+  stockMovements    StockMovement[]
+  allocations       LotAllocation[]
+  orderItems        OrderItem[]
 }
 
 model LotAllocation {
@@ -381,17 +499,28 @@ model Reservation {
 }
 
 model B2BClient {
-  id           String   @id @default(cuid())
-  externalId   Int      @unique
-  name         String
-  category     String
-  phone        String
-  status       String   @default("Validé")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id         String   @id @default(cuid())
+  externalId Int      @unique
+  name       String
+  category   String
+  phone      String
+  status     String   @default("Validé")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  address       String?
+  city          String?
+  latitude      Float?
+  longitude     Float?
+  geoSource     String?
+  geoConfidence String?
+  geoVerified   Boolean @default(false)
 
   orders Order[]
+
+  @@index([latitude, longitude])
+  @@index([geoVerified])
 }
 
 enum ClientType {
@@ -440,8 +569,8 @@ model PointOfSale {
   phone         String?
   managerName   String?
   managerUserId String?
-  plateNumber   String?  // Immatriculation (véhicules uniquement)
-  capacity      Int?     // Capacité max en unités (null = illimité)
+  plateNumber   String? // Immatriculation (véhicules uniquement)
+  capacity      Int? // Capacité max en unités (null = illimité)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -470,6 +599,10 @@ model PointOfSaleStock {
   @@unique([pointOfSaleId, variantId])
 }
 
+// NOTE : le modele SellerDailyStock (affectation de stock a un vendeur) a ete
+// supprime. Le stock appartient au seul point de vente : le vendeur puise dans
+// le pool du PDV, sans stock reserve ni retour de stock a la cloture.
+
 model CashSession {
   id             String    @id @default(cuid())
   pointOfSaleId  String
@@ -479,25 +612,29 @@ model CashSession {
   openingBalance Float     @default(0)
   closingBalance Float?
   status         String    @default("OPEN")
+  reportGeneratedAt DateTime?
+  reportReference   String?
 
   pointOfSale PointOfSale @relation(fields: [pointOfSaleId], references: [id], onDelete: Cascade)
+  openedBy    User?       @relation(fields: [openedById], references: [id], onDelete: SetNull)
 
   @@index([pointOfSaleId, status])
   @@index([pointOfSaleId, openedAt])
+  @@index([openedById, status])
 }
 
 model ChatMessage {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   senderId   String
   receiverId String
   content    String
-  read       Boolean   @default(false)
-  createdAt  DateTime  @default(now())
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
-  fileUrl    String?
-  fileName   String?
-  fileType   String?
-  fileSize   Int?
+  fileUrl  String?
+  fileName String?
+  fileType String?
+  fileSize Int?
 
   sender   User @relation("ChatSender", fields: [senderId], references: [id], onDelete: Cascade)
   receiver User @relation("ChatReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
@@ -508,27 +645,27 @@ model ChatMessage {
 }
 
 model ChatPresence {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  lastSeen  DateTime @default(now())
-  isTyping  Boolean  @default(false)
+  id       String   @id @default(cuid())
+  userId   String   @unique
+  lastSeen DateTime @default(now())
+  isTyping Boolean  @default(false)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Announcement {
-  id        String   @id @default(cuid())
-  message   String
-  tone      String   @default("danger") // danger = red, warning = amber, info = blue
-  audience  String   @default("ALL") // ALL | ROLES | USERS
-  targetRoles  String[] @default([])
-  targetUserIds String[] @default([])
-  startsAt  DateTime @default(now())
-  expiresAt DateTime?
-  isActive  Boolean  @default(true)
-  createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  message       String
+  tone          String    @default("danger") // danger = red, warning = amber, info = blue
+  audience      String    @default("ALL") // ALL | ROLES | USERS
+  targetRoles   String[]  @default([])
+  targetUserIds String[]  @default([])
+  startsAt      DateTime  @default(now())
+  expiresAt     DateTime?
+  isActive      Boolean   @default(true)
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
 }
@@ -538,19 +675,19 @@ model Announcement {
 // authentifiée à l'appareil correspondant (vu que le provider Credentials ne
 // remplit jamais la table Session de l'adaptateur).
 model UserDeviceSession {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String
-  sessionId    String   @unique
+  sessionId    String    @unique
   fingerprint  String
   deviceName   String?
   deviceType   String? // mobile | tablet | desktop
   ip           String?
   userAgent    String?
-  lastActiveAt DateTime @default(now())
+  lastActiveAt DateTime  @default(now())
   expiresAt    DateTime?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

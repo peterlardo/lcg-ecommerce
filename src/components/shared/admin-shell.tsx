@@ -1,24 +1,20 @@
 "use client"
 
-import { useState, useCallback } from "react"
-import { AdminSidebar, MobileSidebar } from "@/components/shared/admin-sidebar"
-import { AdminHeader } from "@/components/shared/admin-header"
+import { AdminTopNav } from "@/components/shared/admin-top-nav"
 import { ChatWidget } from "@/components/shared/chat-widget"
+import { NotificationToast } from "@/components/notification-toast"
 import { useInactivityTimer } from "@/hooks/use-inactivity-timer"
+import { useNotifications } from "@/hooks/use-notifications"
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const closeMobile = useCallback(() => setMobileOpen(false), [])
   useInactivityTimer()
+  const { notifications, recent, newCount, dismiss, dismissAll } = useNotifications(8000)
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <AdminSidebar />
-      <MobileSidebar open={mobileOpen} onClose={closeMobile} />
-      <div className="flex-1 flex flex-col min-w-0">
-        <AdminHeader onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 p-3 sm:p-4 md:p-6">{children}</main>
-      </div>
+    <div className="flex min-h-screen flex-col bg-gray-50">
+      <AdminTopNav recent={recent} newCount={newCount} onMarkAllRead={dismissAll} />
+      <main className="flex-1 px-3 py-4 sm:px-4 sm:py-6 md:px-6">{children}</main>
+      <NotificationToast notifications={notifications} onDismiss={dismiss} />
       <ChatWidget />
     </div>
   )

@@ -23,6 +23,8 @@ export interface OrderMailData {
   items: OrderMailItem[]
   subtotal: number
   deliveryFee: number
+  discountAmount?: number
+  couponCode?: string | null
   total: number
 }
 
@@ -39,6 +41,7 @@ export interface ReservationMailData {
   source: string
   notes: string
   items: OrderMailItem[]
+  total: number
 }
 
 const MAIL_TO = process.env.MAIL_TO || "fred.bialard@gmail.com"
@@ -156,6 +159,10 @@ const sourceLabel = data.source === "OPERATOR" ? "Saisie opérateur (plateforme)
         <td style="font-size: 14px; color: #374151;">Livraison</td>
         <td style="font-size: 14px; color: #1f2937; text-align: right;">${data.deliveryFee > 0 ? formatPrice(data.deliveryFee) : "Gratuite"}</td>
       </tr>
+      ${data.discountAmount && data.discountAmount > 0 ? `<tr>
+        <td style="font-size: 14px; color: #059669;">Remise${data.couponCode ? ` (${data.couponCode})` : ""}</td>
+        <td style="font-size: 14px; color: #059669; text-align: right;">− ${formatPrice(data.discountAmount)}</td>
+      </tr>` : ""}
       <tr>
         <td style="padding-top: 10px; font-size: 16px; font-weight: 800; color: #111827;">TOTAL</td>
         <td style="padding-top: 10px; font-size: 18px; font-weight: 800; color: #059669; text-align: right;">${formatPrice(data.total)}</td>
@@ -198,6 +205,13 @@ function buildReservationHtml(data: ReservationMailData): string {
 
     <h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Articles réservés</h2>
     ${itemsTable(data.items)}
+
+    <table style="width: 100%; margin-top: 16px;">
+      <tr>
+        <td style="padding-top: 10px; font-size: 16px; font-weight: 800; color: #111827;">TOTAL</td>
+        <td style="padding-top: 10px; font-size: 18px; font-weight: 800; color: #059669; text-align: right;">${formatPrice(data.total)}</td>
+      </tr>
+    </table>
 
     ${data.notes ? `<h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Notes</h2><p style="margin: 0; font-size: 14px; color: #374151; white-space: pre-wrap;">${data.notes}</p>` : ""}
   `
@@ -245,6 +259,134 @@ export async function sendReservationEmail(data: ReservationMailData): Promise<b
     return false
   }
 }
+
+const PAYMENT_LABELS: Record<string, string> = {
+  CARD: "Carte bancaire",
+  MOBILE_MONEY: "Mobile Money",
+  CASH_ON_DELIVERY: "Paiement à la livraison",
+}
+
+function paymentLabel(method: string): string {
+  return PAYMENT_LABELS[method] || method || "—"
+}
+
+function totalsTable(subtotal: number, deliveryFee: number | null, total: number, discount?: number, couponCode?: string | null): string {
+  return `
+    <table style="width: 100%; margin-top: 16px;">
+      <tr>
+        <td style="font-size: 14px; color: #374151;">Sous-total</td>
+        <td style="font-size: 14px; color: #1f2937; text-align: right;">${formatPrice(subtotal)}</td>
+      </tr>
+      ${deliveryFee !== null ? `<tr>
+        <td style="font-size: 14px; color: #374151;">Livraison</td>
+        <td style="font-size: 14px; color: #1f2937; text-align: right;">${deliveryFee > 0 ? formatPrice(deliveryFee) : "Gratuite"}</td>
+      </tr>` : ""}
+      ${discount && discount > 0 ? `<tr>
+        <td style="font-size: 14px; color: #059669;">Remise${couponCode ? ` (${couponCode})` : ""}</td>
+        <td style="font-size: 14px; color: #059669; text-align: right;">− ${formatPrice(discount)}</td>
+      </tr>` : ""}
+      <tr>
+        <td style="padding-top: 10px; font-size: 16px; font-weight: 800; color: #111827;">TOTAL</td>
+        <td style="padding-top: 10px; font-size: 18px; font-weight: 800; color: #059669; text-align: right;">${formatPrice(total)}</td>
+      </tr>
+    </table>`
+}
+
+function buildOrderDevisHtml(data: OrderMailData): string {
+  const inner = `
+    <h1 style="margin: 0; font-size: 22px; color: #111827;">Votre commande ${data.orderNumber}</h1>
+    <p style="margin: 6px 0 0; font-size: 14px; color: #6b7280;">Bonjour ${data.customerName}, voici le récapitulatif (devis) de votre commande du ${formatDate(data.createdAt)}.</p>
+
+    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 18px; margin-top: 18px;">
+      <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #059669; font-weight: 700;">Référence</div>
+      <div style="font-size: 20px; font-weight: 800; color: #047857; margin-top: 2px;">${data.orderNumber}</div>
+    </div>
+
+    <h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Articles</h2>
+    ${itemsTable(data.items)}
+    ${totalsTable(data.subtotal, data.deliveryFee, data.total, data.discountAmount, data.couponCode)}
+
+    <h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Livraison</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+      ${infoRow("Adresse", `${data.address}${data.district ? ` — ${data.district}` : ""}`)}
+      ${infoRow("Ville", data.city)}
+      ${infoRow("Paiement", paymentLabel(data.paymentMethod))}
+    </table>
+
+    ${data.notes ? `<h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Notes</h2><p style="margin: 0; font-size: 14px; color: #374151; white-space: pre-wrap;">${data.notes}</p>` : ""}
+
+    <p style="margin-top: 20px; font-size: 14px; color: #374151;">
+      Notre équipe vous contactera très vite pour confirmer la livraison et le paiement (espèces ou Mobile Money).
+    </p>
+  `
+  return shell("Votre commande LCG", "Devis commande", inner)
+}
+
+function buildReservationDevisHtml(data: ReservationMailData): string {
+  const inner = `
+    <h1 style="margin: 0; font-size: 22px; color: #111827;">Votre pré-commande ${data.ref}</h1>
+    <p style="margin: 6px 0 0; font-size: 14px; color: #6b7280;">Bonjour ${data.client}, voici le récapitulatif (devis) de votre pré-commande enregistrée le ${formatDate(data.createdAt)}.</p>
+
+    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 18px; margin-top: 18px;">
+      <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #059669; font-weight: 700;">Référence</div>
+      <div style="font-size: 20px; font-weight: 800; color: #047857; margin-top: 2px;">${data.ref}</div>
+    </div>
+
+    <h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Détails</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+      ${infoRow("Type", data.type)}
+      ${infoRow("Date", data.date)}
+      ${infoRow("Heure", data.heure)}
+      ${infoRow("Lieu", data.address)}
+      ${infoRow("Téléphone", data.telephone)}
+    </table>
+
+    <h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Articles réservés</h2>
+    ${itemsTable(data.items)}
+    ${totalsTable(data.total, null, data.total)}
+
+    ${data.notes ? `<h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Notes</h2><p style="margin: 0; font-size: 14px; color: #374151; white-space: pre-wrap;">${data.notes}</p>` : ""}
+
+    <p style="margin-top: 20px; font-size: 14px; color: #374151;">
+      Notre équipe vous contactera pour confirmer le créneau de livraison et le mode de paiement.
+    </p>
+  `
+  return shell("Votre pré-commande LCG", "Devis pré-commande", inner)
+}
+
+export async function sendOrderDevisEmail(data: OrderMailData): Promise<boolean> {
+  if (!data.customerEmail) return false
+  try {
+    await getTransporter().sendMail({
+      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      to: data.customerEmail,
+      subject: `Votre commande ${data.orderNumber} — devis LCG`,
+      html: buildOrderDevisHtml(data),
+    })
+    return true
+  } catch (error) {
+    console.error("Échec envoi devis commande au client:", error)
+    return false
+  }
+}
+
+export async function sendReservationDevisEmail(data: ReservationMailData): Promise<boolean> {
+  if (!data.email) return false
+  try {
+    await getTransporter().sendMail({
+      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      to: data.email,
+      subject: `Votre pré-commande ${data.ref} — devis LCG`,
+      html: buildReservationDevisHtml(data),
+    })
+    return true
+  } catch (error) {
+    console.error("Échec envoi devis réservation au client:", error)
+    return false
+  }
+}
+
+export { buildOrderDevisText, buildReservationDevisText } from "./devis-text"
 
 export interface ReservationConfirmedMailData {
   ref: string

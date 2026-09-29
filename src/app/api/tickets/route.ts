@@ -1,21 +1,32 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 
 export async function GET() {
   const forbidden = await requireManagementAccess()
   if (forbidden) return forbidden
 
+  const session = await auth()
+  const role = session?.user?.role
+  const selfId = session?.user?.id
+
   const posFilter = await getUserPointOfSaleIds()
   const posIds = posFilter?.posIds ?? null
+  const posClause =
+    posIds !== null
+      ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
+      : null
 
   const tickets = await getPrisma().order.findMany({
     where: {
-      OR: [
-        { notes: { startsWith: "Vente comptoir" } },
-        { ticketGenerated: true },
+      AND: [
+        { OR: [{ notes: { startsWith: "Vente comptoir" } }, { ticketGenerated: true }] },
+        ...(posClause ? [posClause] : []),
+        ...(role === "ADMIN" || !role || !selfId
+          ? []
+          : [{ OR: [{ NOT: { notes: { startsWith: "Vente comptoir" } } }, { userId: selfId }] }]),
       ],
-      ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}),
     },
 include: { pointOfSale: { select: { name: true, code: true } }, user: { select: { name: true } }, items: { include: { variant: { include: { product: true } } } } },
     orderBy: { createdAt: "desc" },

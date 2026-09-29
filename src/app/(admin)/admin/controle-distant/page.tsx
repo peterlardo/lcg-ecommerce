@@ -123,7 +123,7 @@ useEffect(() => {
         <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
           <h2 className="mb-4 flex items-center gap-2 text-xs font-semibold text-gray-900 sm:text-sm"><Package className="h-4 w-4" /> Stocks à surveiller</h2>
           <div className="space-y-2">
-            {(data?.stockAlerts ?? []).slice(0, 5).map((alert) => <div key={alert.variantId} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 text-xs sm:p-3 sm:text-sm"><div><p className="font-medium text-gray-800">{alert.productName}</p><p className="text-xs text-gray-500">{alert.format}</p></div><span className="font-semibold text-red-700">{alert.stock}</span></div>)}
+            {(data?.stockAlerts ?? []).slice(0, 5).map((alert) => <div key={alert.variantId} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 p-2 text-xs sm:p-3 sm:text-sm"><div className="min-w-0"><p className="truncate font-medium text-gray-800">{alert.productName}</p><p className="text-xs text-gray-500">{alert.format}</p></div><span className="shrink-0 font-semibold text-red-700">{alert.stock}</span></div>)}
             {(data?.stockAlerts ?? []).length === 0 && <p className="text-xs text-gray-500 sm:text-sm">Stocks sous contrôle.</p>}
           </div>
         </section>

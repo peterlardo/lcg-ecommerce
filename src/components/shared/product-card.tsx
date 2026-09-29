@@ -14,7 +14,14 @@ interface ProductCardProps {
     subtitle: string | null
     image: string | null
     badge: string | null
-    variants: { id: string; format: string; price: number; unit: string | null }[]
+    promo?: { name: string; percent: number } | null
+    variants: {
+      id: string
+      format: string
+      price: number
+      unit: string | null
+      promoPrice?: number | null
+    }[]
   }
 }
 
@@ -22,6 +29,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const { addItem } = useCart()
   const [added, setAdded] = useState(false)
   const firstVar = product.variants[0]
+  const promoPrice = firstVar.promoPrice ?? null
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -32,7 +40,7 @@ export function ProductCard({ product }: ProductCardProps) {
       name: product.name,
       image: product.image || "",
       format: firstVar.format,
-      price: firstVar.price,
+      price: promoPrice ?? firstVar.price,
     })
     setAdded(true)
     setTimeout(() => setAdded(false), 1500)
@@ -61,6 +69,11 @@ export function ProductCard({ product }: ProductCardProps) {
             {product.badge}
           </span>
         )}
+        {product.promo && (
+          <span className="absolute right-3 top-3 rounded-full bg-red-600 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+            -{product.promo.percent}%
+          </span>
+        )}
       </div>
       <div className="flex flex-1 flex-col p-5">
         <h3 className="font-display text-base font-bold leading-snug">{product.name}</h3>
@@ -69,7 +82,14 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
         <div className="mt-4 flex items-center justify-between gap-3">
           <div>
-            <p className="font-display text-lg font-bold text-primary">{formatPrice(firstVar.price)}</p>
+            {promoPrice !== null ? (
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <p className="font-display text-lg font-bold text-primary">{formatPrice(promoPrice)}</p>
+                <p className="text-xs text-muted-foreground line-through">{formatPrice(firstVar.price)}</p>
+              </div>
+            ) : (
+              <p className="font-display text-lg font-bold text-primary">{formatPrice(firstVar.price)}</p>
+            )}
             <p className="text-xs text-muted-foreground">{firstVar.format}</p>
           </div>
           <button

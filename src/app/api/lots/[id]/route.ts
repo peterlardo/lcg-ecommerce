@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const forbidden = await requireManagementAccess()
@@ -21,8 +22,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Lot introuvable" }, { status: 404 })
   }
 
+  const session = await auth()
+  const role = session?.user?.role
+  const selfId = session?.user?.id
   const movements = await getPrisma().stockMovement.findMany({
-    where: { lotId: id, pointOfSaleId: { not: null } },
+    where: { lotId: id, pointOfSaleId: { not: null }, AND: [saleMovementsFilter(role, selfId)] },
     select: { reference: true, pointOfSaleId: true },
   })
 
@@ -46,12 +50,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const orders = orderRefs.length > 0
     ? await getPrisma().order.findMany({
         where: { orderNumber: { in: [...new Set(orderRefs)] } },
-        select: { orderNumber: true, pointOfSale: { select: { name: true, code: true } } },
+        select: { orderNumber: true, notes: true, userId: true, pointOfSale: { select: { name: true, code: true } } },
       })
     : []
   const orderPosMap = new Map(orders.filter((o) => o.pointOfSale).map((o) => [o.orderNumber, o.pointOfSale!]))
+  const orderByNumber = new Map(orders.map((o) => [o.orderNumber, o]))
 
-  const enrichedAllocations = lot.allocations.map((a) => {
+  const enrichedAllocations = lot.allocations
+    .filter((a) => {
+      if (a.type !== "SALE" || !a.reference) return true
+      const order = orderByNumber.get(a.reference)
+      if (!order) return true
+      return !isRestrictedOrder(order, role, selfId)
+    })
+    .map((a) => {
     let pointOfSale: { name: string; code: string } | null = null
     if (a.type === "SALE" && a.reference) {
       pointOfSale = orderPosMap.get(a.reference) ?? null

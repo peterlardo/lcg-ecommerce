@@ -137,7 +137,7 @@ export default function RapportsPage() {
           <RefreshCw className="h-4 w-4" /> Actualiser
         </button>
         {!loading && data && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={exportPDF} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs sm:text-sm font-medium text-red-700 hover:bg-red-100 transition-colors">
               <Download className="h-4 w-4" /> PDF
             </button>
@@ -150,8 +150,8 @@ export default function RapportsPage() {
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-2 sm:px-4 sm:py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-gray-500">Période :</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="shrink-0 text-sm font-medium text-gray-500">Période :</span>
         <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
           {periods.map((p) => (
             <button key={p.id} onClick={() => handlePeriodChange(p.id)} className={`rounded-md px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-medium transition-colors ${period === p.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
@@ -159,7 +159,7 @@ export default function RapportsPage() {
             </button>
           ))}
         </div>
-        {data?.periodLabel && <span className="text-xs text-gray-400">({data.periodLabel})</span>}
+        {data?.periodLabel && <span className="min-w-0 text-xs text-gray-400">({data.periodLabel})</span>}
       </div>
 
       <div className="flex gap-1 overflow-x-auto rounded-lg border border-gray-200 bg-gray-100 p-1">
@@ -192,7 +192,7 @@ export default function RapportsPage() {
                 </section>
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><TrendingUp className="h-4 w-4" /> Ventes ({data?.periodLabel ?? "30j"})</h2>
-                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.salesByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#9ca3af" /><YAxis {...ax} /><Tooltip formatter={(v: TooltipValueType | undefined) => [formatPrice(Number(v)), "Ventes"]} {...tt} /><Bar dataKey="ventes" fill="#0f766e" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.salesByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" minTickGap={8} interval="preserveStartEnd" /><YAxis {...ax} /><Tooltip formatter={(v: TooltipValueType | undefined) => [formatPrice(Number(v)), "Ventes"]} {...tt} /><Bar dataKey="ventes" fill="#0f766e" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
                 </section>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
@@ -202,7 +202,7 @@ export default function RapportsPage() {
                 </section>
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><WalletCards className="h-4 w-4" /> Paiements ({data?.periodLabel ?? "30j"})</h2>
-                  <div className="space-y-2">{(data?.paymentBreakdown30 ?? []).map((p) => <div key={p.method} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm"><div><p className="font-medium">{PAYMENT[p.method] ?? p.method}</p><p className="text-xs text-gray-500">{p.count} tx(s)</p></div><span className="font-semibold">{formatPrice(p.total)}</span></div>)}</div>
+                  <div className="space-y-2">{(data?.paymentBreakdown30 ?? []).map((p) => <div key={p.method} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm"><div className="min-w-0"><p className="truncate font-medium">{PAYMENT[p.method] ?? p.method}</p><p className="text-xs text-gray-500">{p.count} tx(s)</p></div><span className="font-semibold">{formatPrice(p.total)}</span></div>)}</div>
                 </section>
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><WalletCards className="h-4 w-4" /> Repartition</h2>
@@ -244,11 +244,11 @@ export default function RapportsPage() {
               </div>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Approvisionnements ({data?.periodLabel ?? "Mois"})</h2>
-                <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.supplyByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#9ca3af" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="quantity" fill="#0f766e" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.supplyByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" minTickGap={8} interval="preserveStartEnd" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="quantity" fill="#0f766e" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
               </section>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Mouvements</h2>
-                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.supplyMovements ?? []).map((m) => <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div><p className="font-medium">{m.productName} ({m.format})</p><p className="text-xs text-gray-500">{m.reason || m.reference || "-"}</p></div><div className="flex items-center gap-2 sm:gap-3"><span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">{SUPPLY_LBL[m.type] ?? m.type}</span><span className="font-bold">+{m.quantity}</span><span className="text-xs text-gray-500"><Clock className="inline h-3 w-3" /> {new Date(m.createdAt).toLocaleDateString("fr-FR")}</span></div></div>)}</div>
+                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.supplyMovements ?? []).map((m) => <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div className="min-w-0"><p className="truncate font-medium">{m.productName} ({m.format})</p><p className="text-xs text-gray-500">{m.reason || m.reference || "-"}</p></div><div className="flex items-center gap-2 sm:gap-3"><span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">{SUPPLY_LBL[m.type] ?? m.type}</span><span className="font-bold">+{m.quantity}</span><span className="text-xs text-gray-500"><Clock className="inline h-3 w-3" /> {new Date(m.createdAt).toLocaleDateString("fr-FR")}</span></div></div>)}</div>
               </section>
             </div>
           )}
@@ -264,7 +264,7 @@ export default function RapportsPage() {
               <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Commandes / jour</h2>
-                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.ordersByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#9ca3af" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="commandes" fill="#1f4fa3" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.ordersByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" minTickGap={8} interval="preserveStartEnd" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="commandes" fill="#1f4fa3" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
                 </section>
                 <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                   <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Par statut</h2>
@@ -284,11 +284,11 @@ export default function RapportsPage() {
               </div>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Pré-commandes / jour</h2>
-                <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.reservationsByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#9ca3af" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="reservations" fill="#7c3aed" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.reservationsByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" minTickGap={8} interval="preserveStartEnd" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="reservations" fill="#7c3aed" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
               </section>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Dernières pré-commandes</h2>
-                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.reservations ?? []).map((r) => <div key={r.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div><p className="font-medium">{r.client}</p><p className="text-xs text-gray-500">{r.type} - {r.date} a {r.heure}</p></div><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BG[r.status] ?? "bg-gray-100"}`}>{STATUS_LBL[r.status] ?? r.status}</span></div>)}</div>
+                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.reservations ?? []).map((r) => <div key={r.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div className="min-w-0"><p className="truncate font-medium">{r.client}</p><p className="text-xs text-gray-500">{r.type} - {r.date} a {r.heure}</p></div><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BG[r.status] ?? "bg-gray-100"}`}>{STATUS_LBL[r.status] ?? r.status}</span></div>)}</div>
               </section>
             </div>
           )}
@@ -303,11 +303,11 @@ export default function RapportsPage() {
               </div>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Production / jour</h2>
-                <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.productionByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#9ca3af" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="quantity" fill="#0f766e" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.productionByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" minTickGap={8} interval="preserveStartEnd" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="quantity" fill="#0f766e" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
               </section>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Dernieres productions</h2>
-                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.productionMovements ?? []).map((m) => <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div><p className="font-medium">{m.productName} ({m.format})</p><p className="text-xs text-gray-500">{m.reason || "-"}</p></div><div className="flex items-center gap-2 sm:gap-3"><span className="font-bold">+{m.quantity}</span><span className="text-xs text-gray-500">{new Date(m.createdAt).toLocaleDateString("fr-FR")}</span></div></div>)}</div>
+                <div className="space-y-2 max-h-80 overflow-y-auto">{(data?.productionMovements ?? []).map((m) => <div key={m.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"><div className="min-w-0"><p className="truncate font-medium">{m.productName} ({m.format})</p><p className="text-xs text-gray-500">{m.reason || "-"}</p></div><div className="flex items-center gap-2 sm:gap-3"><span className="font-bold">+{m.quantity}</span><span className="text-xs text-gray-500">{new Date(m.createdAt).toLocaleDateString("fr-FR")}</span></div></div>)}</div>
               </section>
             </div>
           )}
@@ -322,7 +322,7 @@ export default function RapportsPage() {
               </div>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Tous les lots</h2>
-                <div className="overflow-x-auto max-h-96">                <table className="w-full text-xs sm:text-sm"><thead className="sticky top-0 bg-gray-50/80"><tr>
+                <div className="overflow-x-auto max-h-96">                <table className="w-full min-w-[520px] text-xs sm:text-sm"><thead className="sticky top-0 bg-gray-50/80"><tr>
                   <th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Numero</th>
                   <th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Produit</th>
                   <th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Produit (qte)</th>
@@ -355,7 +355,7 @@ export default function RapportsPage() {
               </div>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Sessions / jour</h2>
-                <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.cashSessionsByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#9ca3af" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="sessions" fill="#1f4fa3" radius={[4, 4, 0, 0]} name="Sessions" /></BarChart></ResponsiveContainer></div>
+                <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.cashSessionsByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" minTickGap={8} interval="preserveStartEnd" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="sessions" fill="#1f4fa3" radius={[4, 4, 0, 0]} name="Sessions" /></BarChart></ResponsiveContainer></div>
               </section>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Recapitulatif</h2>

@@ -146,8 +146,8 @@ export default function TracabilitePage() {
       </div>
 
       <form onSubmit={handleManualSearch} className="space-y-3">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap gap-2">
+          <div className="relative min-w-0 flex-1 basis-[200px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               value={query}
@@ -203,11 +203,11 @@ export default function TracabilitePage() {
               <div className="rounded-lg bg-purple-50 p-3 text-center"><p className="text-xs text-purple-600">Ventes</p><p className="text-lg font-bold text-purple-700">{s?.saleAllocations}</p></div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gray-500">Production :</span> <span className="font-medium">{fmtDate(data.lot.productionDate)}</span></div>
-              {data.lot.expiryDate && <div><span className="text-gray-500">Expiration :</span> <span className="font-medium">{fmtDate(data.lot.expiryDate)}</span></div>}
-              {data.lot.createdBy && <div><span className="text-gray-500">Cree par :</span> <span className="font-medium">{data.lot.createdBy.name}</span></div>}
-              {data.lot.notes && <div><span className="text-gray-500">Note :</span> <span className="font-medium">{data.lot.notes}</span></div>}
+            <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <div className="min-w-0 break-words"><span className="text-gray-500">Production :</span> <span className="font-medium">{fmtDate(data.lot.productionDate)}</span></div>
+              {data.lot.expiryDate && <div className="min-w-0 break-words"><span className="text-gray-500">Expiration :</span> <span className="font-medium">{fmtDate(data.lot.expiryDate)}</span></div>}
+              {data.lot.createdBy && <div className="min-w-0 break-words"><span className="text-gray-500">Cree par :</span> <span className="font-medium">{data.lot.createdBy.name}</span></div>}
+              {data.lot.notes && <div className="min-w-0 break-words"><span className="text-gray-500">Note :</span> <span className="font-medium">{data.lot.notes}</span></div>}
             </div>
           </div>
 

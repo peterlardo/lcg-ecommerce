@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { MessageCircle, Send, X, ChevronLeft, Paperclip, FileText, Image as ImageIcon, Download } from "lucide-react"
+import { AlertCircle, MessageCircle, Send, X, ChevronLeft, Paperclip, FileText, Image as ImageIcon, Download } from "lucide-react"
 
 interface ChatUser {
   id: string
@@ -12,6 +12,8 @@ interface ChatUser {
   lastMessage: string | null
   lastAt: string | null
   unreadCount: number
+  isOnline: boolean
+  lastSeen: string | null
 }
 
 interface ChatMessage {
@@ -53,6 +55,7 @@ export function ChatWidget() {
   const [uploading, setUploading] = useState(false)
   const [pendingFile, setPendingFile] = useState<{ url: string; name: string; type: string; size: number } | null>(null)
   const [peerTyping, setPeerTyping] = useState(false)
+  const [sendError, setSendError] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -61,6 +64,8 @@ export function ChatWidget() {
   const typingSentRef = useRef(false)
 
   const totalUnread = users.reduce((sum, u) => sum + u.unreadCount, 0)
+
+  const liveUser = selectedUser ? users.find((u) => u.id === selectedUser.id) ?? selectedUser : null
 
   const loadUsers = useCallback(async () => {
     try {
@@ -220,6 +225,7 @@ export function ChatWidget() {
         setMessages((prev) => [...prev, msg])
         setNewMessage("")
         setPendingFile(null)
+        setSendError("")
         typingSentRef.current = false
         void sendTyping(false)
         setUsers((prev) =>
@@ -229,8 +235,13 @@ export function ChatWidget() {
               : u
           )
         )
+      } else {
+        const err = await res.json().catch(() => null)
+        setSendError(err?.error || "Erreur lors de l'envoi du message")
       }
-    } catch {} finally {
+    } catch {
+      setSendError("Erreur réseau, réessayez")
+    } finally {
       setSending(false)
     }
   }
@@ -255,6 +266,15 @@ export function ChatWidget() {
     STOCK_MANAGER: "Stock",
     DELIVERY_AGENT: "Livreur",
     CUSTOMER: "Client",
+  }
+
+  const lastSeenText = (lastSeen: string | null) => {
+    if (!lastSeen) return "Hors ligne"
+    const diff = Math.floor((new Date().getTime() - new Date(lastSeen).getTime()) / 1000)
+    if (diff < 60) return "Connecté"
+    if (diff < 3600) return `En ligne il y a ${Math.floor(diff / 60)} min`
+    if (diff < 86400) return `Vu il y a ${Math.floor(diff / 3600)} h`
+    return `Vu ${formatTime(lastSeen)}`
   }
 
   const renderAttachment = (msg: ChatMessage) => {
@@ -297,14 +317,17 @@ export function ChatWidget() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{selectedUser.name}</p>
+                  <p className="text-sm font-semibold truncate">{liveUser?.name}</p>
                   {peerTyping ? (
                     <p className="text-[11px] italic opacity-80 truncate flex items-center gap-1">
                       <span className="inline-flex gap-0.5"><span className="animate-bounce" style={{animationDelay:"0ms"}}>.</span><span className="animate-bounce" style={{animationDelay:"150ms"}}>.</span><span className="animate-bounce" style={{animationDelay:"300ms"}}>.</span></span>
                       {" "}en train d&apos;écrire
                     </p>
                   ) : (
-                    <p className="text-[11px] opacity-70 truncate">{roleLabel[selectedUser.role] || selectedUser.role}</p>
+                    <p className="text-[11px] opacity-70 truncate flex items-center gap-1">
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${liveUser?.isOnline ? "bg-green-400" : "bg-gray-400"}`} />
+                      {liveUser?.isOnline ? "Connecté" : lastSeenText(liveUser?.lastSeen ?? null)}
+                    </p>
                   )}
                 </div>
               </>
@@ -340,6 +363,10 @@ export function ChatWidget() {
                         {user.unreadCount}
                       </span>
                     )}
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-[1.5px] border-white ${user.isOnline ? "bg-green-500" : "bg-gray-300"}`}
+                      title={user.isOnline ? "Connecté" : lastSeenText(user.lastSeen)}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
@@ -402,6 +429,16 @@ export function ChatWidget() {
                     className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
                   >
                     <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              {sendError && (
+                <div className="shrink-0 border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-600 flex items-center gap-2">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span className="flex-1">{sendError}</span>
+                  <button onClick={() => setSendError("")} className="text-red-400 hover:text-red-600 transition-colors">
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               )}

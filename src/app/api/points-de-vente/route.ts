@@ -22,7 +22,12 @@ export async function GET() {
       include: {
         managerUser: { select: { id: true, name: true, email: true, role: true } },
         _count: { select: { orders: true, reservations: true, stocks: true } },
-        cashSessions: { where: { status: "OPEN" }, orderBy: { openedAt: "desc" }, take: 1 },
+        cashSessions: {
+          where: { status: "OPEN" },
+          orderBy: { openedAt: "desc" },
+          take: 5,
+          include: { openedBy: { select: { id: true, name: true } } },
+        },
       },
     }),
     getPrisma().user.findMany({

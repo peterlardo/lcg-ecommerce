@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import Image from "next/image"
-import { Camera, Check, Plus, Save, ShieldCheck, UserPlus, X } from "lucide-react"
+import { Camera, Check, Eye, EyeOff, Plus, Save, ShieldCheck, UserPlus, X } from "lucide-react"
 import Link from "next/link"
 
-const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "rapports", "controle-distant", "utilisateurs"]
-const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs" }
+const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "promotions", "rapports", "controle-distant", "utilisateurs", "etat-stock"]
+const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", "etat-stock": "État de stock & caisse" }
 
 interface RoleProfile { id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean }
 interface Permission { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
@@ -31,6 +31,8 @@ export default function UtilisateursPage() {
   const [editEmail, setEditEmail] = useState("")
   const [editPhone, setEditPhone] = useState("")
   const [editPassword, setEditPassword] = useState("")
+  const [showCreatePassword, setShowCreatePassword] = useState(false)
+  const [showEditPassword, setShowEditPassword] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState("")
@@ -172,11 +174,11 @@ export default function UtilisateursPage() {
           <h1 className="mt-1 text-xl sm:text-2xl font-bold text-foreground">Utilisateurs</h1>
           <p className="mt-1 text-sm text-muted-foreground">Gérer les comptes, rôles, droits d&apos;accès et points de vente assignés.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/admin/utilisateurs/roles" className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <Link href="/admin/utilisateurs/roles" className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors">
             <ShieldCheck className="h-4 w-4" /> Profils de rôles
           </Link>
-          <button onClick={() => setShowCreate((v) => !v)} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90">
+          <button onClick={() => setShowCreate((v) => !v)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90">
             <UserPlus className="h-4 w-4" /> Nouvel utilisateur
           </button>
         </div>
@@ -208,7 +210,12 @@ export default function UtilisateursPage() {
               <input required placeholder="Nom" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground" />
               <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground" />
               <input placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground" />
-              <input required type="password" placeholder="Mot de passe (min. 6 car.)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground" />
+              <div className="relative">
+                <input required type={showCreatePassword ? "text" : "password"} placeholder="Mot de passe (min. 6 car.)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full rounded-lg border border-input bg-background px-3 py-2.5 pr-10 text-sm text-foreground" />
+                <button type="button" onClick={() => setShowCreatePassword((v) => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showCreatePassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
+                  {showCreatePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground">
                 {activeRoles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
               </select>
@@ -269,34 +276,34 @@ export default function UtilisateursPage() {
             const rp = getRoleProfile(user.role)
             return (
               <button key={user.id} onClick={() => selectUser(user)} className={`w-full rounded-xl border bg-card p-4 text-left ${selected === user.id ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     {user.image ? (
                       <Image src={user.image} alt={user.name || ""} width={36} height={36} className="h-9 w-9 rounded-full object-cover" />
                     ) : (
                       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{(user.name || user.email).charAt(0).toUpperCase()}</div>
                     )}
-                    <div>
-                      <p className="font-semibold text-foreground">{user.name || user.email}</p>
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground">{user.name || user.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
-                  <span className={`rounded-full px-2 py-1 text-[10px] font-medium ${user.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{user.isActive ? "Actif" : "Inactif"}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${user.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{user.isActive ? "Actif" : "Inactif"}</span>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   {rp ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${rp.color || "#6b7280"}20`, color: rp.color || "#6b7280" }}>
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: `${rp.color || "#6b7280"}20`, color: rp.color || "#6b7280" }}>
                       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: rp.color || "#6b7280" }} />
                       {rp.label}
                     </span>
                   ) : (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{user.role}</span>
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{user.role}</span>
                   )}
                 </div>
                 {user.managedPointOfSales.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {user.managedPointOfSales.map((pos) => (
-                      <span key={pos.id} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{pos.name}</span>
+                      <span key={pos.id} className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{pos.name}</span>
                     ))}
                   </div>
                 )}
@@ -307,8 +314,8 @@ export default function UtilisateursPage() {
 
         {selected && selectedUser && (
           <section className="rounded-xl border border-border bg-card p-3 sm:p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-4">
                 <div className="relative group">
                   {selectedUser.image ? (
                     <Image src={selectedUser.image} alt="" width={64} height={64} className="h-16 w-16 rounded-full object-cover ring-2 ring-border" />
@@ -320,12 +327,12 @@ export default function UtilisateursPage() {
                     <input ref={editFileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEditPhoto(f) }} />
                   </label>
                 </div>
-                <div>
-                  <h2 className="font-semibold text-foreground">{selectedUser.name || selectedUser.email}</h2>
-                  <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+                <div className="min-w-0">
+                  <h2 className="truncate font-semibold text-foreground">{selectedUser.name || selectedUser.email}</h2>
+                  <p className="truncate text-sm text-muted-foreground">{selectedUser.email}</p>
                 </div>
               </div>
-              <ShieldCheck className="h-6 w-6 text-primary" />
+              <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
             </div>
 
             <div className="mt-5 border-t border-border pt-4">
@@ -345,7 +352,12 @@ export default function UtilisateursPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-muted-foreground">Nouveau mot de passe (optionnel)</label>
-                  <input type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground" placeholder="Laisser vide pour garder" />
+                  <div className="relative">
+                    <input type={showEditPassword ? "text" : "password"} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2 pr-10 text-sm text-foreground" placeholder="Laisser vide pour garder" />
+                    <button type="button" onClick={() => setShowEditPassword((v) => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showEditPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
+                      {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">

@@ -30,7 +30,11 @@ const REPORT_VERSION = "1.0"
 const CURRENT_YEAR = new Date().getFullYear()
 
 function fmt(n: number) {
-  return new Intl.NumberFormat("fr-FR").format(n) + " FCFA"
+  const negative = n < 0
+  const [intPart, decPart] = Math.abs(n).toString().split(".")
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  const body = decPart ? `${grouped},${decPart}` : grouped
+  return `${negative ? "-" : ""}${body} FCFA`
 }
 
 function today() {
@@ -662,4 +666,330 @@ export function exportLotsExcel(data: LotsData) {
   const lots: (string | number)[][] = [["Numero", "Produit", "Format", "Produit (qte)", "Restant", "Statut", "Allocations", "Production", "Expiration"], ...data.lots.map((l) => [l.lotNumber, l.productName, l.format, l.initialQuantity, l.remainingQuantity, LOT_STATUS_LBL[l.status] ?? l.status, l.allocationCount, new Date(l.productionDate).toLocaleDateString("fr-FR"), l.expiryDate ? new Date(l.expiryDate).toLocaleDateString("fr-FR") : ""])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(lots), "Lots")
   XLSX.writeFile(wb, "rapport-lots-" + todayShort() + ".xlsx")
+}
+
+// ─── CLOTURE DE CAISSE (une session) ──────────────────────────
+
+export interface ClotureReport {
+  session: {
+    id: string
+    status: string
+    openedAt: string
+    closedAt: string | null
+    openingBalance: number
+    closingBalance: number | null
+    reportGeneratedAt: string | null
+    reportReference: string | null
+  }
+  pointOfSale: { id: string; name: string; code: string; address: string | null; city: string | null } | null
+  seller: { id: string; name: string | null; email: string; role: string } | null
+  reconciliation: {
+    openingBalance: number
+    revenue: number
+    expected: number
+    closingBalance: number | null
+    gap: number | null
+  }
+  totals: { orders: number; items: number; products: number; movements: number }
+  orders: {
+    id: string
+    orderNumber: string
+    createdAt: string
+    customerName: string | null
+    paymentMethod: string | null
+    paymentMethodLabel: string
+    paymentStatus: string
+    total: number
+    items: number
+  }[]
+  soldByProduct: { variantId: string; productName: string; format: string | null; quantity: number; amount: number }[]
+  paymentBreakdown: { method: string; count: number; amount: number }[]
+  movements: {
+    id: string
+    createdAt: string
+    type: string
+    typeLabel: string
+    productName: string
+    format: string | null
+    quantity: number
+    reason: string | null
+    reference: string | null
+    lotId: string | null
+  }[]
+}
+
+const MOVEMENT_LBL: Record<string, string> = {
+  SALE: "Vente comptoir",
+  ADJUSTMENT_OUT: "Sortie ajustement",
+  ADJUSTMENT_IN: "Entree ajustement",
+  PRODUCTION: "Production",
+  IN: "Entree",
+  OUT: "Sortie",
+  TRANSFER_OUT: "Transfert sortant",
+  TRANSFER_IN: "Transfert entrant",
+  RETURN: "Retour",
+  LOSS: "Perte",
+}
+
+function dt(value: string) {
+  return new Date(value).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })
+}
+
+function sectionTitle(doc: jsPDF, y: number, title: string) {
+  doc.setFontSize(13)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(31, 79, 163)
+  doc.text(title, 14, y)
+  doc.setDrawColor(31, 79, 163)
+  doc.setLineWidth(0.3)
+  doc.line(14, y + 1.5, 196, y + 1.5)
+  return y + 7
+}
+
+function kv(doc: jsPDF, y: number, label: string, value: string) {
+  doc.setFontSize(9)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(90, 90, 90)
+  doc.text(label, 14, y)
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(40, 40, 40)
+  doc.text(value, 62, y)
+  return y + 5.5
+}
+
+export function exportClotureCaissePDF(data: ClotureReport) {
+  const doc = createDoc()
+  const title = "Rapport de cloture de caisse"
+  addCoverPage(doc, title, REPORT_VERSION)
+  doc.addPage()
+  addPageHeader(doc, title)
+  let y = 30
+
+  // ── En-tete : identite de la session ──
+  y = sectionTitle(doc, y, "Identification de la session")
+  y = kv(doc, y, "Reference", data.session.reportReference ?? "-")
+  y = kv(doc, y, "Point de vente", data.pointOfSale ? `${data.pointOfSale.name} (${data.pointOfSale.code})` : "-")
+  y = kv(doc, y, "Vendeur", data.seller?.name ?? data.seller?.email ?? "-")
+  y = kv(doc, y, "Ouverture", dt(data.session.openedAt))
+  y = kv(doc, y, "Cloture", data.session.closedAt ? dt(data.session.closedAt) : "Session encore ouverte")
+  y = kv(doc, y, "Statut", data.session.status === "CLOSED" ? "Fermee" : "Ouverte")
+  y = kv(doc, y, "Rapport genere le", data.session.reportGeneratedAt ? dt(data.session.reportGeneratedAt) : "-")
+  y += 6
+
+  // ── Arras ──
+  y = sectionTitle(doc, y, "Arras de caisse")
+  autoTable(doc, {
+    startY: y,
+    head: [["Fond de caisse", "Chiffre d'affaires", "Attendu", "Compte reel", "Ecart"]],
+    body: [[
+      fmt(data.reconciliation.openingBalance),
+      fmt(data.reconciliation.revenue),
+      fmt(data.reconciliation.expected),
+      data.reconciliation.closingBalance === null ? "-" : fmt(data.reconciliation.closingBalance),
+      data.reconciliation.gap === null
+        ? "-"
+        : `${data.reconciliation.gap > 0 ? "+" : ""}${fmt(data.reconciliation.gap)}`,
+    ]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
+
+  // ── Synthese ──
+  y = sectionTitle(doc, y, "Synthese de la journee")
+  y = kv(doc, y, "Transactions", String(data.totals.orders))
+  y = kv(doc, y, "Articles vendus", String(data.totals.items))
+  y = kv(doc, y, "References produits", String(data.totals.products))
+  y = kv(doc, y, "Mouvements de stock", String(data.totals.movements))
+  y += 6
+
+  if (data.paymentBreakdown.length > 0) {
+    y = sectionTitle(doc, y, "Encaissements par mode de paiement")
+    autoTable(doc, {
+      startY: y,
+      head: [["Mode", "Transactions", "Montant"]],
+      body: data.paymentBreakdown.map((row) => [
+        PAYMENT[row.method] ?? row.method,
+        String(row.count),
+        fmt(row.amount),
+      ]),
+      styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+      headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    })
+    y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
+  }
+
+  // ── Quantites vendues ──
+  y = sectionTitle(doc, y, "Quantites vendues par produit")
+  if (data.soldByProduct.length === 0) {
+    doc.setFontSize(9)
+    doc.setTextColor(120, 120, 120)
+    doc.text("Aucune vente enregistree sur cette session.", 14, y)
+    y += 10
+  } else {
+    autoTable(doc, {
+      startY: y,
+      head: [["Produit", "Format", "Quantite vendue", "Montant"]],
+      body: data.soldByProduct.map((row) => [
+        row.productName,
+        row.format ?? "-",
+        String(row.quantity),
+        fmt(row.amount),
+      ]),
+      foot: [[
+        "Total",
+        "",
+        String(data.totals.items),
+        fmt(data.soldByProduct.reduce((sum, row) => sum + row.amount, 0)),
+      ]],
+      styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+      headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+      footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
+    })
+    y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
+  }
+
+  // ── Ventes detaillees ──
+  y = sectionTitle(doc, y, "Detail des transactions")
+  if (data.orders.length === 0) {
+    doc.setFontSize(9)
+    doc.setTextColor(120, 120, 120)
+    doc.text("Aucune transaction.", 14, y)
+    y += 10
+  } else {
+    autoTable(doc, {
+      startY: y,
+      head: [["Heure", "Piece", "Client", "Articles", "Paiement", "Statut", "Montant"]],
+      body: data.orders.map((order) => [
+        new Date(order.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+        order.orderNumber,
+        order.customerName ?? "-",
+        String(order.items),
+        order.paymentMethodLabel,
+        STATUS_LBL[order.paymentStatus] ?? order.paymentStatus,
+        fmt(order.total),
+      ]),
+      foot: [["", "", "", "", "", "Total", fmt(data.reconciliation.revenue)]],
+      styles: { fontSize: 7.5, textColor: [40, 40, 40] },
+      headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+      footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
+    })
+    y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
+  }
+
+  // ── Mouvements ──
+  y = sectionTitle(doc, y, "Mouvements de stock de la session")
+  if (data.movements.length === 0) {
+    doc.setFontSize(9)
+    doc.setTextColor(120, 120, 120)
+    doc.text("Aucun mouvement de stock.", 14, y)
+    y += 10
+  } else {
+    autoTable(doc, {
+      startY: y,
+      head: [["Heure", "Type", "Produit", "Format", "Qte", "Reference", "Motif"]],
+      body: data.movements.map((m) => [
+        new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+        MOVEMENT_LBL[m.type] ?? m.type,
+        m.productName,
+        m.format ?? "-",
+        String(m.quantity),
+        m.reference ?? "-",
+        m.reason ?? "-",
+      ]),
+      styles: { fontSize: 7, textColor: [40, 40, 40] },
+      headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    })
+    y = (doc as AutoTableDoc).lastAutoTable.finalY + 12
+  }
+
+  // ── Signatures ──
+  const pageHeight = doc.internal.pageSize.height
+  if (y > pageHeight - 55) {
+    doc.addPage()
+    addPageHeader(doc, title)
+    y = 30
+  }
+  y = sectionTitle(doc, y, "Visa")
+  doc.setFontSize(9)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(90, 90, 90)
+  doc.text("Vendeur", 14, y + 12)
+  doc.text("Responsable stock", 80, y + 12)
+  doc.text("Direction", 146, y + 12)
+  doc.setDrawColor(160, 160, 160)
+  doc.setLineWidth(0.2)
+  for (const x of [14, 80, 146]) {
+    doc.line(x, y + 14, x + 54, y + 14)
+  }
+  doc.setLineWidth(0.3)
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(140, 140, 140)
+  doc.setFontSize(7)
+  doc.text("Document genere automatiquement par le systeme LCG.", 14, y + 26)
+
+  finalizePDF(doc, title, `cloture-caisse-${(data.session.reportReference ?? todayShort()).replace(/[^\w-]/g, "")}.pdf`)
+}
+
+export function exportClotureCaisseExcel(data: ClotureReport) {
+  const wb = XLSX.utils.book_new()
+
+  const resume: (string | number | null)[][] = [
+    ["Indicateur", "Valeur"],
+    ["Reference rapport", data.session.reportReference ?? ""],
+    ["Point de vente", data.pointOfSale?.name ?? ""],
+    ["Code point de vente", data.pointOfSale?.code ?? ""],
+    ["Vendeur", data.seller?.name ?? ""],
+    ["Ouverture", data.session.openedAt],
+    ["Cloture", data.session.closedAt ?? "Session ouverte"],
+    ["Statut", data.session.status],
+    ["Transactions", data.totals.orders],
+    ["Articles vendus", data.totals.items],
+    ["References produits", data.totals.products],
+    ["Mouvements de stock", data.totals.movements],
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resume), "Resume")
+
+  const arrears: (string | number | null)[][] = [
+    ["Fond de caisse", "Chiffre d'affaires", "Attendu", "Compte reel", "Ecart"],
+    [
+      data.reconciliation.openingBalance,
+      data.reconciliation.revenue,
+      data.reconciliation.expected,
+      data.reconciliation.closingBalance,
+      data.reconciliation.gap,
+    ],
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(arrears), "Arras")
+
+  const ventes: (string | number)[][] = [
+    ["Quantite vendue", "Montant", "Produit", "Format", "Variante"],
+    ...data.soldByProduct.map((row) => [row.quantity, row.amount, row.productName, row.format ?? "", row.variantId]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ventes), "Quantites vendues")
+
+  const transactions: (string | number)[][] = [
+    ["Heure", "Piece", "Client", "Articles", "Paiement", "Statut", "Montant"],
+    ...data.orders.map((order) => [
+      order.createdAt, order.orderNumber, order.customerName ?? "", order.items,
+      order.paymentMethodLabel, order.paymentStatus, order.total,
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(transactions), "Transactions")
+
+  const mouvements: (string | number)[][] = [
+    ["Heure", "Type", "Produit", "Format", "Quantite", "Reference", "Lot", "Motif"],
+    ...data.movements.map((m) => [
+      m.createdAt, m.typeLabel, m.productName, m.format ?? "", m.quantity, m.reference ?? "", m.lotId ?? "", m.reason ?? "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mouvements), "Mouvements")
+
+  const paiements: (string | number)[][] = [
+    ["Mode", "Transactions", "Montant"],
+    ...data.paymentBreakdown.map((row) => [PAYMENT[row.method] ?? row.method, row.count, row.amount]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(paiements), "Paiements")
+
+  XLSX.writeFile(wb, `cloture-caisse-${(data.session.reportReference ?? todayShort()).replace(/[^\w-]/g, "")}.xlsx`)
 }

@@ -68,3 +68,15 @@ wlog.txt
 .agents/
 .claude/
 skills-lock.json
+
+# Deploy logs
+deploy*.log
+wrangler*.log
+
+# Sauvegardes base + exports de donnees clients (PII)
+/prisma/backup-*.json
+/prisma/*-backup-*.json
+/data/b2b-*.json
+/data/b2b-*.csv
+/scripts/tmp-*
+

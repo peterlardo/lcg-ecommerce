@@ -275,19 +275,19 @@ export default function ProductionPage() {
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4">
         <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-          <p className="text-[10px] font-medium text-gray-500 sm:text-xs">Lots actifs</p>
+          <p className=" font-medium text-gray-500 ">Lots actifs</p>
           <p className="mt-1 text-lg font-bold text-gray-900 sm:text-xl">{activeLots}</p>
         </div>
         <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 sm:p-4">
-          <p className="text-[10px] font-medium text-blue-700 sm:text-xs">Total produit</p>
+          <p className=" font-medium text-blue-700 ">Total produit</p>
           <p className="mt-1 text-lg font-bold text-blue-800 sm:text-xl">{totalProduced}</p>
         </div>
         <div className="rounded-xl border border-green-200 bg-green-50/40 p-3 sm:p-4">
-          <p className="text-[10px] font-medium text-green-700 sm:text-xs">Stock restant (lots)</p>
+          <p className=" font-medium text-green-700 ">Stock restant (lots)</p>
           <p className="mt-1 text-lg font-bold text-green-800 sm:text-xl">{totalRemaining}</p>
         </div>
         <div className="rounded-xl border border-yellow-200 bg-yellow-50/40 p-3 sm:p-4">
-          <p className="text-[10px] font-medium text-yellow-700 sm:text-xs">Alertes stock</p>
+          <p className=" font-medium text-yellow-700 ">Alertes stock</p>
           <p className="mt-1 text-lg font-bold text-yellow-800 sm:text-xl">{(reports?.stockAlerts ?? []).length}</p>
         </div>
       </div>
@@ -390,19 +390,19 @@ export default function ProductionPage() {
           </div>
 
           <div className="overflow-x-auto max-h-[400px] sm:max-h-[500px]">
-            <table className="w-full text-xs sm:text-sm">
+            <table className="w-full min-w-[760px] text-xs sm:text-sm">
               <thead className="sticky top-0 bg-gray-50/80">
                 <tr>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Numero</th>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Produit</th>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Format</th>
-                  <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Qté</th>
-                  <th className="px-2 py-1.5 text-right text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Restant</th>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Point de vente</th>
-                  <th className="px-2 py-1.5 text-center text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Statut</th>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Production</th>
-                  <th className="px-2 py-1.5 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Expiration</th>
-                  <th className="px-2 py-1.5 text-center text-[10px] font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 sm:text-xs">Actions</th>
+                  <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Numero</th>
+                  <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Produit</th>
+                  <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Format</th>
+                  <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Qté</th>
+                  <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Restant</th>
+                  <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Point de vente</th>
+                  <th className="px-2 py-1.5 text-center  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Statut</th>
+                  <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Production</th>
+                  <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Expiration</th>
+                  <th className="px-2 py-1.5 text-center  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -411,20 +411,20 @@ export default function ProductionPage() {
                   const Icon = st.icon
                   return (
                     <tr key={lot.id} className="hover:bg-gray-50/50">
-                      <td className="px-2 py-2 font-mono text-[10px] font-semibold text-primary-700 sm:px-4 sm:py-2.5 sm:text-xs">{lot.lotNumber}</td>
+                      <td className="px-2 py-2 font-mono  font-semibold text-primary-700 sm:px-4 sm:py-2.5 ">{lot.lotNumber}</td>
                       <td className="px-2 py-2 sm:px-4 sm:py-2.5">{lot.variant.product.name}</td>
                       <td className="px-2 py-2 text-gray-600 sm:px-4 sm:py-2.5">{lot.variant.format}</td>
                       <td className="px-2 py-2 text-right font-semibold sm:px-4 sm:py-2.5">{lot.initialQuantity}</td>
                       <td className={`px-2 py-2 text-right font-bold sm:px-4 sm:py-2.5 ${lot.remainingQuantity === 0 ? "text-gray-400" : "text-gray-900"}`}>{lot.remainingQuantity}</td>
                       <td className="px-2 py-2 text-left sm:px-4 sm:py-2.5">
                         {lot.destination ? (
-                          <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 sm:px-2 sm:text-[11px]">{lot.destination.name} ({lot.destination.code})</span>
+                          <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 sm:px-2">{lot.destination.name} ({lot.destination.code})</span>
                         ) : (
-                          <span className="text-gray-400 text-[10px] sm:text-xs">—</span>
+                          <span className="text-gray-400  ">—</span>
                         )}
                       </td>
                       <td className="px-2 py-2 text-center sm:px-4 sm:py-2.5">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:px-2 sm:text-xs ${st.color}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5  font-semibold sm:px-2  ${st.color}`}>
                           <Icon className="h-3 w-3" /> {st.label}
                         </span>
                       </td>
@@ -457,7 +457,7 @@ export default function ProductionPage() {
                   <AlertCircle className="h-4 w-4 text-yellow-600" />
                   <div>
                     <p className="font-medium text-gray-800">{alert.productName}</p>
-                    <p className="text-[10px] text-gray-500 sm:text-xs">{alert.format} - {alert.categoryName}</p>
+                    <p className=" text-gray-500 ">{alert.format} - {alert.categoryName}</p>
                   </div>
                 </div>
                 <span className="font-semibold text-yellow-800">{alert.stock}</span>
@@ -470,7 +470,7 @@ export default function ProductionPage() {
 
       {selectedLot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={() => setSelectedLot(null)}>
-          <div className="max-h-[90vh] w-full max-w-full rounded-2xl bg-white p-4 shadow-xl sm:max-w-2xl sm:p-6 sm:max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[90vh] w-full max-w-full overflow-y-auto overscroll-contain rounded-2xl bg-white p-4 shadow-xl sm:max-w-2xl sm:p-6 sm:max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between sm:mb-4">
               <div>
                 <h3 className="text-base font-bold text-gray-900 sm:text-lg">Lot {selectedLot.lotNumber}</h3>
@@ -480,10 +480,10 @@ export default function ProductionPage() {
             </div>
 
             <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-              <div className="rounded-lg bg-gray-50 p-2 text-center sm:p-3"><p className="text-[10px] text-gray-500 sm:text-xs">Produit</p><p className="text-sm font-bold sm:text-base">{selectedLot.initialQuantity}</p></div>
-              <div className="rounded-lg bg-gray-50 p-2 text-center sm:p-3"><p className="text-[10px] text-gray-500 sm:text-xs">Restant</p><p className="text-sm font-bold sm:text-base">{selectedLot.remainingQuantity}</p></div>
-              <div className="rounded-lg bg-gray-50 p-2 text-center sm:p-3"><p className="text-[10px] text-gray-500 sm:text-xs">Consomme</p><p className="text-sm font-bold sm:text-base">{selectedLot.initialQuantity - selectedLot.remainingQuantity}</p></div>
-              <div className="rounded-lg bg-gray-50 p-2 text-center sm:p-3"><p className="text-[10px] text-gray-500 sm:text-xs">Statut</p><p className={`text-sm font-bold sm:text-base ${selectedLot.status === "ACTIVE" ? "text-green-700" : selectedLot.status === "EXPIRED" ? "text-red-700" : "text-gray-600"}`}>{selectedLot.status}</p></div>
+              <div className="rounded-lg bg-gray-50 p-2 text-center sm:p-3"><p className=" text-gray-500 ">Produit</p><p className="text-sm font-bold sm:text-base">{selectedLot.initialQuantity}</p></div>
+              <div className="rounded-lg bg-gray-50 p-2 text-center sm:p-3"><p className=" text-gray-500 ">Restant</p><p className="text-sm font-bold sm:text-base">{selectedLot.remainingQuantity}</p></div>
+              <div className="rounded-lg bg-gray-50 p-2 text-center sm:p-3"><p className=" text-gray-500 ">Consomme</p><p className="text-sm font-bold sm:text-base">{selectedLot.initialQuantity - selectedLot.remainingQuantity}</p></div>
+              <div className="rounded-lg bg-gray-50 p-2 text-center sm:p-3"><p className=" text-gray-500 ">Statut</p><p className={`text-sm font-bold sm:text-base ${selectedLot.status === "ACTIVE" ? "text-green-700" : selectedLot.status === "EXPIRED" ? "text-red-700" : "text-gray-600"}`}>{selectedLot.status}</p></div>
             </div>
 
             <div className="mb-3 grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2 sm:gap-3 sm:text-sm">
@@ -496,7 +496,7 @@ export default function ProductionPage() {
 
             <div className="mb-2 flex items-center justify-between">
               <h4 className="text-xs font-semibold text-gray-900 sm:text-sm">Historique des allocations ({(selectedLot.allocations ?? []).length})</h4>
-              <button onClick={() => deleteLot(selectedLot.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-50 sm:px-3 sm:py-1.5 sm:text-xs">
+              <button onClick={() => deleteLot(selectedLot.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1  font-medium text-red-600 hover:bg-red-50 sm:px-3 sm:py-1.5 ">
                 <Trash2 className="h-3 w-3" /> Supprimer
               </button>
             </div>
@@ -513,11 +513,11 @@ export default function ProductionPage() {
               }
               return (
                 <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 sm:p-3">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-amber-700 sm:text-[11px]">PDV ayant reçu ce lot</p>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-amber-700">PDV ayant reçu ce lot</p>
                   <div className="space-y-1 sm:space-y-1.5">
                     {Array.from(byPos.values()).map((p) => (
                       <div key={p.code} className="flex items-center justify-between text-xs sm:text-sm">
-                        <span className="text-gray-700">{p.name} <span className="text-[10px] text-gray-400 sm:text-xs">({p.code})</span></span>
+                        <span className="text-gray-700">{p.name} <span className=" text-gray-400 ">({p.code})</span></span>
                         <span className="font-semibold text-amber-700">{p.qty} unités</span>
                       </div>
                     ))}
@@ -530,14 +530,14 @@ export default function ProductionPage() {
               {(selectedLot.allocations ?? []).length === 0 ? (
                 <p className="text-xs text-gray-500 sm:text-sm">Aucune allocation (lot non encore utilise).</p>
               ) : (
-                <table className="w-full text-xs sm:text-sm">
+                <table className="w-full min-w-[420px] text-xs sm:text-sm">
                   <thead className="sticky top-0 bg-gray-50/80">
                     <tr>
-                      <th className="px-2 py-1 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 sm:text-xs">Type</th>
-                      <th className="px-2 py-1 text-right text-[10px] font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 sm:text-xs">Qte</th>
-                      <th className="px-2 py-1 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 sm:text-xs">Reference</th>
-                      <th className="px-2 py-1 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 sm:text-xs">PDV</th>
-                      <th className="px-2 py-1 text-left text-[10px] font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 sm:text-xs">Date</th>
+                      <th className="px-2 py-1 text-left  font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 ">Type</th>
+                      <th className="px-2 py-1 text-right  font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 ">Qte</th>
+                      <th className="px-2 py-1 text-left  font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 ">Reference</th>
+                      <th className="px-2 py-1 text-left  font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 ">PDV</th>
+                      <th className="px-2 py-1 text-left  font-semibold uppercase text-gray-500 sm:px-3 sm:py-1.5 ">Date</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -545,12 +545,12 @@ export default function ProductionPage() {
                       <tr key={a.id}>
                         <td className="px-2 py-1 sm:px-3 sm:py-1.5">{ALLOC_TYPE[a.type] ?? a.type}</td>
                         <td className="px-2 py-1 text-right font-semibold sm:px-3 sm:py-1.5">{a.quantity}</td>
-                        <td className="px-2 py-1 font-mono text-[10px] sm:px-3 sm:py-1.5 sm:text-xs">{a.reference || "-"}</td>
+                        <td className="px-2 py-1 font-mono  sm:px-3 sm:py-1.5 ">{a.reference || "-"}</td>
                         <td className="px-2 py-1 sm:px-3 sm:py-1.5">
                           {a.pointOfSale ? (
-                            <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 sm:px-2 sm:text-[11px]">{a.pointOfSale.name}</span>
+                            <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 sm:px-2">{a.pointOfSale.name}</span>
                           ) : (
-                            <span className="text-gray-400 text-[9px] sm:text-[11px]">—</span>
+                            <span className="text-gray-400 text-xs">—</span>
                           )}
                         </td>
                         <td className="px-2 py-1 text-gray-500 sm:px-3 sm:py-1.5">{fmtDateTime(a.createdAt)}</td>

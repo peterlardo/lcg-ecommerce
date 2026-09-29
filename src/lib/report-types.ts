@@ -239,6 +239,8 @@ export interface ReportPayload {
   daily30: DayPoint[]
   salesByDay: SalesDayPoint[]
   topProducts: TopProduct[]
+  trendWeeks: { label: string; range?: string; commandes: number; montant: number; details: { orderNumber: string; customerName: string; total: number; paymentMethod: string }[] }[]
+  trendMonths: { label: string; commandes: number; montant: number }[]
   paymentBreakdown: PaymentBreakdownPoint[]
   paymentBreakdown30: PaymentBreakdownPoint[]
   stockAlerts: StockAlert[]

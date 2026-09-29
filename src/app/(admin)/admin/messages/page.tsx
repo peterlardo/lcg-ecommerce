@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { MessageSquare, Search, Trash2, Eye, ChevronDown } from "lucide-react"
+import { MessageSquare, Search, Trash2, Eye, ChevronDown, ChevronLeft } from "lucide-react"
 import type { ContactMessage } from "@/data/store"
 
 export default function MessagesPage() {
@@ -93,7 +93,7 @@ export default function MessagesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          <div className="lg:col-span-1 space-y-2 sm:space-y-3">
+          <div className={`${selected ? "hidden lg:block" : "block"} lg:col-span-1 space-y-2 sm:space-y-3`}>
             {filtered.map((msg) => (
               <button
                 key={msg.id}
@@ -120,7 +120,7 @@ export default function MessagesPage() {
                       <p className={`text-xs sm:text-sm truncate ${!msg.lu ? "font-semibold text-gray-900" : "font-medium text-gray-700"}`}>
                         {msg.nom}
                       </p>
-                      <span className="text-xs text-gray-400 shrink-0">{msg.createdAt}</span>
+                      <span className="shrink-0 text-xs text-gray-400">{new Date(msg.createdAt).toLocaleDateString("fr-FR")}</span>
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">{msg.objet}</p>
                     <p className="text-xs text-gray-400 mt-1 truncate">{msg.message}</p>
@@ -130,9 +130,18 @@ export default function MessagesPage() {
             ))}
           </div>
 
-          <div className="lg:col-span-2">
+          <div className={`${selected ? "block" : "hidden lg:block"} lg:col-span-2`}>
             {selected ? (
               <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
+                <div className="mb-3 lg:hidden">
+                  <button
+                    onClick={() => setSelected(null)}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Retour aux messages
+                  </button>
+                </div>
+
                 <div className="flex items-start justify-between mb-4 sm:mb-6">
                   <div>
                     <h2 className="text-base sm:text-lg font-bold text-gray-900">{selected.nom}</h2>
@@ -170,7 +179,7 @@ export default function MessagesPage() {
                   {selected.email && (
                     <div>
                       <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
-                      <p className="text-sm text-gray-900 mt-0.5">{selected.email}</p>
+                      <p className="text-sm text-gray-900 mt-0.5 break-all">{selected.email}</p>
                     </div>
                   )}
                   <div>

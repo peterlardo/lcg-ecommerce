@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 import {
   createProductionForLocationTx,
   ensurePointOfSaleStockRows,
@@ -12,6 +13,8 @@ export async function POST(request: Request) {
   if (forbidden) return forbidden
   try {
     const body = await request.json()
+    const authSession = await auth()
+    const actorId = authSession?.user?.id ?? null
     const variantId = String(body.variantId || "")
     const quantity = Math.max(1, Number(body.quantity) || 0)
     const sourceId = body.sourcePointOfSaleId ? String(body.sourcePointOfSaleId) : null
@@ -40,6 +43,7 @@ export async function POST(request: Request) {
           quantity,
           reason: body.reason || "Transfert de stock",
           reference: transferRef,
+          userId: actorId,
         })
         return
       }
@@ -52,6 +56,7 @@ export async function POST(request: Request) {
         reason: body.reason || "Approvisionnement point de vente",
         reference: transferRef,
         notes: body.reason || "Approvisionnement point de vente",
+        userId: actorId,
       })
     })
     return NextResponse.json({ success: true })

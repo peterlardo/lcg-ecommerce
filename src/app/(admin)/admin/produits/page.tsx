@@ -7,12 +7,13 @@ import { formatPrice } from "@/lib/utils"
 import { categories } from "@/data/products"
 import type { Product } from "@/data/products"
 
-const emptyVariant = { format: "", price: 0, unit: "" }
+const emptyVariant = { format: "", price: 0, unit: "", stock: 0 }
 
 export default function ProduitsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [search, setSearch] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -24,6 +25,7 @@ export default function ProduitsPage() {
     categorySlug: "",
     categoryName: "",
     isFeatured: false,
+    isActive: true,
     badge: "",
     variants: [{ ...emptyVariant }],
   })
@@ -35,7 +37,7 @@ export default function ProduitsPage() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch("/api/produits")
+      const res = await fetch("/api/produits?all=1")
       if (res.ok) {
         const data = await res.json()
         setProducts(data)
@@ -58,7 +60,7 @@ export default function ProduitsPage() {
     const controller = new AbortController()
     const init = async () => {
       try {
-        const res = await fetch("/api/produits", { signal: controller.signal })
+        const res = await fetch("/api/produits?all=1", { signal: controller.signal })
         if (res.ok) {
           const data = await res.json()
           if (controller.signal.aborted) return
@@ -120,6 +122,7 @@ export default function ProduitsPage() {
       categorySlug: "",
       categoryName: "",
       isFeatured: false,
+      isActive: true,
       badge: "",
       variants: [{ ...emptyVariant }],
     })
@@ -137,11 +140,13 @@ export default function ProduitsPage() {
       categorySlug: product.categorySlug || "",
       categoryName: product.categoryName || "",
       isFeatured: product.isFeatured,
+      isActive: product.isActive,
       badge: product.badge || "",
       variants: product.variants.map((v) => ({
         format: v.format,
         price: v.price,
         unit: v.unit || "",
+        stock: v.stock,
       })),
     })
     setShowModal(true)
@@ -166,12 +171,13 @@ export default function ProduitsPage() {
     setForm({ ...form, variants: form.variants.filter((_, i) => i !== index) })
   }
 
-  const updateVariant = (index: number, field: "format" | "price" | "unit", value: string | number) => {
+  const updateVariant = (index: number, field: "format" | "price" | "unit" | "stock", value: string | number) => {
     setForm((prev) => {
       const variants = prev.variants.map((v, i) => {
         if (i !== index) return v
         if (field === "format") return { ...v, format: String(value) }
         if (field === "price") return { ...v, price: Number(value) }
+        if (field === "stock") return { ...v, stock: Number(value) }
         return { ...v, unit: String(value) }
       })
       return { ...prev, variants }
@@ -181,17 +187,23 @@ export default function ProduitsPage() {
   const handleSave = async () => {
     if (!form.name || form.variants.some((v) => !v.format)) return
     try {
+      const payload = editingId
+        ? {
+            ...form,
+            variants: form.variants.map((v) => ({ format: v.format, price: v.price, unit: v.unit })),
+          }
+        : form
       if (editingId) {
         await fetch(`/api/produits/${editingId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         })
       } else {
         await fetch("/api/produits", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         })
       }
       await fetchProducts()
@@ -215,7 +227,11 @@ export default function ProduitsPage() {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase())
     const matchesCategory =
       selectedCategory === "all" || p.categorySlug === selectedCategory
-    return matchesSearch && matchesCategory
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "active" && p.isActive) ||
+      (statusFilter === "inactive" && !p.isActive)
+    return matchesSearch && matchesCategory && matchesStatus
   })
 
   return (
@@ -239,8 +255,8 @@ export default function ProduitsPage() {
             }`}
           >
             <DollarSign className="h-4 w-4" />
-            <span className="hidden xs:inline">Synchroniser les prix</span>
-            <span className="xs:hidden">Prix</span>
+            <span className="hidden sm:inline">Synchroniser les prix</span>
+            <span className="sm:hidden">Prix</span>
           </button>
           {activeTab === "catalogue" && (
             <button
@@ -355,6 +371,18 @@ export default function ProduitsPage() {
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
         </div>
+        <div className="relative sm:w-auto">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            className="w-full sm:w-auto pl-3 pr-8 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 appearance-none bg-white"
+          >
+            <option value="all">Tous statuts</option>
+            <option value="active">Actifs</option>
+            <option value="inactive">Inactifs</option>
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+        </div>
       </div>
 
       {loading ? (
@@ -416,11 +444,18 @@ export default function ProduitsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
-                        product.isFeatured ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
-                      }`}>
-                        {product.isFeatured ? "En vedette" : "Standard"}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                          product.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                        }`}>
+                          {product.isActive ? "Actif" : "Inactif"}
+                        </span>
+                        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                          product.isFeatured ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+                        }`}>
+                          {product.isFeatured ? "En vedette" : "Standard"}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -462,6 +497,11 @@ export default function ProduitsPage() {
                     <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
                     <p className="text-xs text-gray-500">{product.categoryName}</p>
                   </div>
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                    product.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                  }`}>
+                    {product.isActive ? "Actif" : "Inactif"}
+                  </span>
                   <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                     product.isFeatured ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
                   }`}>
@@ -554,6 +594,12 @@ export default function ProduitsPage() {
                     className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
                   <span className="text-sm font-semibold">Produit en vedette</span>
                 </label>
+                <label className="flex items-center gap-3 mt-6">
+                  <input type="checkbox" checked={form.isActive}
+                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                  <span className="text-sm font-semibold">Visible sur le site</span>
+                </label>
               </div>
 
               <div className="border-t border-gray-200 pt-4 sm:pt-5">
@@ -566,7 +612,7 @@ export default function ProduitsPage() {
                 <div className="space-y-3">
                   {form.variants.map((v, i) => (
                     <div key={i} className="flex items-start gap-2 p-2.5 sm:p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div className={`flex-1 grid grid-cols-2 gap-2 ${editingId ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
                         <input value={v.format} onChange={(e) => updateVariant(i, "format", e.target.value)}
                           className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                           placeholder="Format (ex: sac 1 kg)" />
@@ -576,6 +622,11 @@ export default function ProduitsPage() {
                         <input value={v.unit} onChange={(e) => updateVariant(i, "unit", e.target.value)}
                           className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                           placeholder="Unité (sac, boîte)" />
+                        {!editingId && (
+                          <input type="number" min={0} value={v.stock || ""} onChange={(e) => updateVariant(i, "stock", Number(e.target.value))}
+                            className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                            placeholder="Stock initial" />
+                        )}
                       </div>
                       <button onClick={() => removeVariant(i)} className="p-2 text-gray-400 hover:text-red-600 shrink-0 mt-0.5">
                         <X className="h-4 w-4" />

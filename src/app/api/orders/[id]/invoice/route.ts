@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma"
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, isRestrictedOrder } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { consumePointOfSaleStockTx } from "@/lib/stock-service"
 
@@ -36,6 +36,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       },
     })
     if (!order) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
+
+    if (isRestrictedOrder(order, session?.user?.role, session?.user?.id)) {
+      return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
+    }
 
     // Guard: déjà facturée si un mouvement SALE existe pour cette référence
     const existingSale = await getPrisma().stockMovement.findFirst({
@@ -76,19 +80,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const qty = Math.floor(Number(it.quantity))
 
         if (shouldConsume) {
-          const fifoResult = await consumePointOfSaleStockTx(tx, {
-            variantId: original.variantId,
-            pointOfSaleId,
-            quantity: qty,
-            type: "SALE",
-            reason: `Facture commande ${order.orderNumber}`,
-            reference: order.orderNumber,
-          })
-          if (fifoResult.allocations.length > 0) {
-            await tx.orderItem.update({
-              where: { id: original.id },
-              data: { lotId: fifoResult.allocations[0].lotId },
+          try {
+            const fifoResult = await consumePointOfSaleStockTx(tx, {
+              variantId: original.variantId,
+              pointOfSaleId,
+              quantity: qty,
+              type: "SALE",
+              reason: `Facture commande ${order.orderNumber}`,
+              reference: order.orderNumber,
+              userId: session?.user?.id ?? null,
             })
+            if (fifoResult.allocations.length > 0) {
+              await tx.orderItem.update({
+                where: { id: original.id },
+                data: { lotId: fifoResult.allocations[0].lotId },
+              })
+            }
+          } catch (stockError) {
+            // Vérification de stock réservée à la vente POS : la facturation ne bloque jamais.
+            console.warn(
+              `Facturation commande ${order.orderNumber} sans débit stock:`,
+              stockError instanceof Error ? stockError.message : stockError
+            )
           }
         }
 

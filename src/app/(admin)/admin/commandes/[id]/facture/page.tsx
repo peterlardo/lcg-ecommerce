@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Printer, Receipt, Trash2 } from "lucide-react"
+import { ArrowLeft, MessageCircle, Printer, Receipt, Trash2 } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml, type TicketData } from "@/lib/ticket-template"
+import { buildOrderDevisText, buildWaLink } from "@/lib/devis-text"
 
 interface OrderItem {
   id: string
@@ -61,51 +62,74 @@ export default function FacturePage() {
   const [ticket, setTicket] = useState<TicketData | null>(null)
   const [alreadyInvoiced, setAlreadyInvoiced] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError("")
-    try {
-      const [orderRes, posRes] = await Promise.all([
-        fetch(`/api/orders/${orderId}`),
-        fetch("/api/points-de-vente/list"),
-      ])
-      if (!orderRes.ok) {
-        const err = await orderRes.json().catch(() => null)
-        throw new Error(err?.error || "Commande introuvable")
-      }
-      const data: Order = await orderRes.json()
-      setOrder(data)
-      const q: Record<string, number> = {}
-      data.items.forEach((it) => {
-        q[it.id] = it.quantity
-      })
-      setQuantities(q)
-      if (data.pointOfSaleId) setSelectedPos(data.pointOfSaleId)
-
-      if (posRes.ok) {
-        const posData = await posRes.json()
-        const list: PointOfSale[] = Array.isArray(posData) ? posData : posData.points ?? []
-        setPoints(list.filter((p) => p.isActive))
-        if (!data.pointOfSaleId && list.length > 0) {
-          const active = list.filter((p) => p.isActive)
-          if (active.length === 1) setSelectedPos(active[0].id)
-        }
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur de chargement")
-    } finally {
-      setLoading(false)
-    }
-  }, [orderId])
-
   useEffect(() => {
-    void load()
-  }, [load])
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const [orderRes, posRes] = await Promise.all([
+          fetch(`/api/orders/${orderId}`, { signal: controller.signal }),
+          fetch("/api/points-de-vente/list", { signal: controller.signal }),
+        ])
+        if (controller.signal.aborted) return
+        if (!orderRes.ok) {
+          const err = await orderRes.json().catch(() => null)
+          throw new Error(err?.error || "Commande introuvable")
+        }
+        const data: Order = await orderRes.json()
+        setOrder(data)
+        const q: Record<string, number> = {}
+        data.items.forEach((it) => {
+          q[it.id] = it.quantity
+        })
+        setQuantities(q)
+        if (data.pointOfSaleId) setSelectedPos(data.pointOfSaleId)
+
+        if (posRes.ok) {
+          const posData = await posRes.json()
+          const list: PointOfSale[] = Array.isArray(posData) ? posData : posData.points ?? []
+          setPoints(list.filter((p) => p.isActive))
+          if (!data.pointOfSaleId && list.length > 0) {
+            const active = list.filter((p) => p.isActive)
+            if (active.length === 1) setSelectedPos(active[0].id)
+          }
+        }
+      } catch (e) {
+        if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Erreur de chargement")
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [orderId])
 
   const visibleItems = order ? order.items.filter((it) => quantities[it.id] !== undefined) : []
   const subtotal = visibleItems.reduce((sum, it) => sum + it.price * quantities[it.id], 0)
   const deliveryFee = order?.deliveryFee ?? 0
   const total = subtotal + deliveryFee
+
+  const waLink = order
+    ? buildWaLink(
+        order.customerPhone,
+        buildOrderDevisText({
+          orderNumber: order.orderNumber,
+          createdAt: order.createdAt,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          customerEmail: order.customerEmail,
+          address: order.delivery?.address ?? "",
+          city: order.delivery?.city ?? "",
+          district: order.delivery?.district ?? "",
+          paymentMethod: order.paymentMethod,
+          source: order.source,
+          notes: order.notes ?? "",
+          items: visibleItems.map((it) => ({ name: it.name, format: it.format, quantity: quantities[it.id], price: it.price })),
+          subtotal,
+          deliveryFee,
+          total,
+        })
+      )
+    : ""
 
   const handleQuantity = (itemId: string, value: number) => {
     const v = Math.max(1, Math.floor(Number(value) || 1))
@@ -189,16 +213,28 @@ export default function FacturePage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link href="/admin/commandes" className="p-2 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100">
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Établir la facture</h1>
-          <p className="text-sm text-gray-500">
+          <p className="break-words text-sm text-gray-500">
             {order.orderNumber} · {order.customerName} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}
           </p>
         </div>
+        {waLink && (
+          <a
+            href={waLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Envoyer le devis au client sur WhatsApp"
+            className="ml-auto inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+          >
+            <MessageCircle className="h-4 w-4" />
+            Devis WhatsApp
+          </a>
+        )}
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>}
@@ -213,10 +249,10 @@ export default function FacturePage() {
           <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 space-y-4">
             <div>
               <h2 className="text-sm font-semibold text-gray-900 mb-1">Client</h2>
-              <p className="text-sm text-gray-700">
+              <p className="break-words text-sm text-gray-700">
                 {order.customerName} · {order.customerPhone} {order.customerEmail ? `· ${order.customerEmail}` : ""}
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="break-words text-xs text-gray-500 mt-1">
                 {order.delivery ? `${order.delivery.address}${order.delivery.district ? ` — ${order.delivery.district}` : ""} (${order.delivery.city})` : "Adresse non renseignée"}
               </p>
               <p className="text-xs text-gray-500">
@@ -233,7 +269,7 @@ export default function FacturePage() {
                   visibleItems.map((item) => (
                     <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="break-words text-sm font-medium text-gray-900">
                           {item.name}
                           {item.format ? ` — ${item.format}` : ""}
                         </p>
@@ -300,7 +336,7 @@ export default function FacturePage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3">
+          <div className="flex flex-wrap justify-end gap-3">
             <button
               onClick={() => router.push("/admin/commandes")}
               className="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg"
@@ -310,7 +346,7 @@ export default function FacturePage() {
             <button
               onClick={handleInvoice}
               disabled={submitting || !selectedPos || visibleItems.length === 0}
-              className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg disabled:opacity-50 sm:px-6"
             >
               <Receipt className="h-4 w-4" />
               {submitting ? "Facturation..." : "Établir la facture"}
@@ -319,7 +355,7 @@ export default function FacturePage() {
         </>
       ) : (
         <div className="space-y-4">
-          <div className="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg flex items-center justify-between gap-3">
+          <div className="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3 rounded-lg flex flex-wrap items-center justify-between gap-3">
             <span>Facture établie avec succès — ticket généré.</span>
             <button
               onClick={handlePrint}
@@ -334,8 +370,7 @@ export default function FacturePage() {
             <iframe
               id="ticket-iframe"
               title="Ticket de vente"
-              className="w-full border-0 rounded-lg"
-              style={{ height: "560px" }}
+              className="h-[460px] w-full border-0 rounded-lg sm:h-[560px]"
               ref={(el) => {
                 if (el && ticket) {
                   try {
@@ -348,7 +383,7 @@ export default function FacturePage() {
             />
           </div>
 
-          <div className="flex justify-between gap-3">
+          <div className="flex flex-wrap justify-between gap-3">
             <Link href="/admin/commandes" className="px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
               Retour aux commandes
             </Link>

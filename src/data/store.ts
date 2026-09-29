@@ -2,6 +2,9 @@ import { getPrisma } from "@/lib/prisma";
 import { products as staticProducts, categories } from "./products"
 import type { Product, ProductVariant } from "./products"
 import type { Prisma, PaymentMethod, Reservation as PrismaReservation } from "@prisma/client"
+import { getActivePromotions, pickPromotion, computePromoPrice, evaluateCoupon } from "@/lib/promotions"
+import { resolveDeliveryChoice } from "@/lib/delivery"
+import type { ActivePromotion } from "@/lib/promotions"
 
 export interface ContactMessage {
   id: string
@@ -62,6 +65,10 @@ export interface OrderInput {
   source?: string
   notes?: string
   deliveryFee?: number
+  deliveryMode?: string
+  deliveryZoneId?: string | null
+  deliveryAgentId?: string | null
+  couponCode?: string | null
   items: OrderItemInput[]
 }
 
@@ -75,6 +82,8 @@ export interface OrderRecord {
   paymentMethod: string
   subtotal: number
   deliveryFee: number
+  discountAmount: number
+  couponCode: string | null
   total: number
   notes: string | null
   source: string
@@ -126,13 +135,17 @@ async function bootstrapProducts() {
   }
 }
 
-export async function getProducts(): Promise<Product[]> {
+export async function getProducts(options?: { includeInactive?: boolean }): Promise<Product[]> {
   await bootstrapProducts()
-  const db = await getPrisma().product.findMany({
-    include: { variants: true, category: true },
-    orderBy: { createdAt: "desc" },
-  })
-  return db.map(mapProduct)
+  const [db, promos] = await Promise.all([
+    getPrisma().product.findMany({
+      where: options?.includeInactive ? {} : { isActive: true },
+      include: { variants: true, category: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    getActivePromotions(),
+  ])
+  return db.map((p) => mapProduct(p, promos))
 }
 
 export async function getProductById(id: string): Promise<Product | undefined> {
@@ -141,12 +154,24 @@ export async function getProductById(id: string): Promise<Product | undefined> {
     where: { id },
     include: { variants: true, category: true },
   })
-  return p ? mapProduct(p) : undefined
+  if (!p) return undefined
+  const promos = await getActivePromotions()
+  return mapProduct(p, promos)
 }
 
-export async function createProduct(
-  data: Omit<Product, "id" | "variants"> & { variants: Omit<ProductVariant, "id">[] }
-): Promise<Product> {
+export interface ProductWriteInput {
+  name: string
+  subtitle?: string | null
+  description?: string | null
+  image?: string | null
+  categoryId?: string | null
+  badge?: string | null
+  isFeatured?: boolean
+  isActive?: boolean
+  variants: { format: string; price: number; stock?: number; unit?: string | null }[]
+}
+
+export async function createProduct(data: ProductWriteInput): Promise<Product> {
   const p = await getPrisma().product.create({
     data: {
       name: data.name,
@@ -156,50 +181,85 @@ export async function createProduct(
       categoryId: data.categoryId,
       badge: data.badge,
       isFeatured: data.isFeatured || false,
-      isActive: true,
-    variants: {
+      isActive: data.isActive ?? true,
+      variants: {
         create: data.variants.map((v) => ({
           format: v.format,
           price: v.price,
-          stock: 0,
+          stock: v.stock ?? 0,
           unit: v.unit,
         })),
       },
     },
     include: { variants: true, category: true },
   })
-  return mapProduct(p)
+  return mapProduct(p, await getActivePromotions())
 }
 
 export async function updateProduct(
   id: string,
-  data: Partial<Omit<Product, "id" | "variants">> & { variants?: Omit<ProductVariant, "id">[] }
+  data: Partial<Omit<ProductWriteInput, "variants">> & { variants?: ProductWriteInput["variants"] }
 ): Promise<boolean> {
-const exists = await getPrisma().product.findUnique({ where: { id } })
+  const exists = await getPrisma().product.findUnique({ where: { id } })
   if (!exists) return false
-  const updateData: Prisma.ProductUpdateInput = {}
-  if (data.name !== undefined) updateData.name = data.name
-  if (data.subtitle !== undefined) updateData.subtitle = data.subtitle
-  if (data.description !== undefined) updateData.description = data.description
-  if (data.image !== undefined) updateData.image = data.image
-  if (data.categoryId !== undefined) updateData.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true }
-  if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured
-  if (data.badge !== undefined) updateData.badge = data.badge
-  if (data.variants) {
-    const existingVariants = await getPrisma().productVariant.findMany({ where: { productId: id } })
-    const existingStockMap = new Map(existingVariants.map((v) => [v.format, v.stock]))
-    await getPrisma().productVariant.deleteMany({ where: { productId: id } })
-    await getPrisma().productVariant.createMany({
-      data: data.variants.map((v) => ({
-        productId: id,
-        format: v.format,
-        price: v.price,
-        stock: existingStockMap.get(v.format) ?? 0,
-        unit: v.unit,
-      })),
-    })
-  }
-  await getPrisma().product.update({ where: { id }, data: updateData })
+
+  await getPrisma().$transaction(async (tx) => {
+    const updateData: Prisma.ProductUpdateInput = {}
+    if (data.name !== undefined) updateData.name = data.name
+    if (data.subtitle !== undefined) updateData.subtitle = data.subtitle
+    if (data.description !== undefined) updateData.description = data.description
+    if (data.image !== undefined) updateData.image = data.image
+    if (data.categoryId !== undefined) updateData.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true }
+    if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured
+    if (data.isActive !== undefined) updateData.isActive = data.isActive
+    if (data.badge !== undefined) updateData.badge = data.badge
+
+    if (data.variants) {
+      const existingVariants = await tx.productVariant.findMany({ where: { productId: id } })
+      const matchedIds = new Set<string>()
+      for (const v of data.variants) {
+        const match = existingVariants.find((e) => e.format === v.format && !matchedIds.has(e.id))
+        if (match) {
+          matchedIds.add(match.id)
+          await tx.productVariant.update({
+            where: { id: match.id },
+            data: {
+              price: v.price,
+              unit: v.unit ?? null,
+              ...(v.stock !== undefined ? { stock: v.stock } : {}),
+            },
+          })
+        } else {
+          await tx.productVariant.create({
+            data: {
+              productId: id,
+              format: v.format,
+              price: v.price,
+              stock: v.stock ?? 0,
+              unit: v.unit ?? null,
+            },
+          })
+        }
+      }
+      const leftovers = existingVariants.filter((v) => !matchedIds.has(v.id))
+      if (leftovers.length > 0) {
+        const referenced = await tx.orderItem.findMany({
+          where: { variantId: { in: leftovers.map((l) => l.id) } },
+          select: { variantId: true },
+        })
+        const referencedIds = new Set(referenced.map((r) => r.variantId))
+        for (const leftover of leftovers) {
+          if (referencedIds.has(leftover.id)) {
+            console.warn(`updateProduct: variante ${leftover.id} (${leftover.format}) conservée, référencée par des commandes`)
+            continue
+          }
+          await tx.productVariant.delete({ where: { id: leftover.id } })
+        }
+      }
+    }
+
+    await tx.product.update({ where: { id }, data: updateData })
+  })
   return true
 }
 
@@ -214,7 +274,8 @@ export async function deleteProduct(id: string): Promise<boolean> {
 
 type ProductWithRelations = Prisma.ProductGetPayload<{ include: { variants: true; category: true } }>
 
-function mapProduct(p: ProductWithRelations): Product {
+function mapProduct(p: ProductWithRelations, promos: ActivePromotion[] = []): Product {
+  const promo = pickPromotion(promos, p.id, p.categoryId)
   return {
     id: p.id,
     name: p.name,
@@ -225,13 +286,16 @@ function mapProduct(p: ProductWithRelations): Product {
     categorySlug: p.category?.slug ?? null,
     categoryName: p.category?.name ?? null,
     isFeatured: p.isFeatured,
+    isActive: p.isActive,
     badge: p.badge ?? null,
+    promo: promo ? { name: promo.name, percent: promo.percent } : null,
     variants: (p.variants ?? []).map((v) => ({
       id: v.id,
       format: v.format,
       price: v.price,
       stock: v.stock,
       unit: v.unit,
+      promoPrice: promo ? computePromoPrice(v.price, promo.percent) : null,
     })),
   }
 }
@@ -382,8 +446,6 @@ export async function addReservation(
 export async function createOrder(input: OrderInput): Promise<OrderRecord> {
   await bootstrapProducts()
 
-  const subtotal = input.items.reduce((s, i) => s + i.price * i.quantity, 0)
-
   const order = await getPrisma().$transaction(async (tx) => {
     const variants = await tx.productVariant.findMany({
       where: { id: { in: input.items.map((i) => i.variantId) } },
@@ -391,10 +453,47 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
     })
     const variantMap = new Map(variants.map((v) => [v.id, v]))
 
-    for (const item of input.items) {
-      const variant = variantMap.get(item.variantId)
-      if (!variant) throw new Error("Produit introuvable")
+    const missing = input.items.filter((item) => !variantMap.has(item.variantId))
+    if (missing.length > 0) {
+      console.error(
+        "createOrder — variante(s) introuvable(s) :",
+        missing.map((item) => `${item.variantId} (${item.name} ${item.format})`).join(", ")
+      )
+      throw new Error(
+        `Produit introuvable : ${missing.map((item) => `${item.name} ${item.format}`).join(", ")}`
+      )
     }
+
+    const promos = await getActivePromotions(tx)
+    const priced = input.items.map((item) => {
+      const variant = variantMap.get(item.variantId)!
+      const promo = pickPromotion(promos, variant.productId, variant.product.categoryId)
+      const unitPrice = promo ? computePromoPrice(variant.price, promo.percent) : variant.price
+      return { item, unitPrice, total: unitPrice * item.quantity }
+    })
+    const subtotal = priced.reduce((s, i) => s + i.total, 0)
+
+    let discount = 0
+    let couponCode: string | null = null
+    if (input.couponCode && input.couponCode.trim()) {
+      const evaluated = await evaluateCoupon(input.couponCode, subtotal, tx)
+      if (!evaluated.ok) throw new Error(evaluated.error)
+      discount = evaluated.discount
+      couponCode = evaluated.code
+      await tx.coupon.update({
+        where: { id: evaluated.couponId },
+        data: { usedCount: { increment: 1 } },
+      })
+    }
+
+    const deliveryChoice = await resolveDeliveryChoice({
+      mode: input.deliveryMode,
+      zoneId: input.deliveryZoneId,
+      agentId: input.deliveryAgentId,
+    })
+
+    const deliveryFee = deliveryChoice.fee
+    const total = Math.max(0, subtotal - discount) + deliveryFee
 
     const created = await tx.order.create({
       data: {
@@ -406,19 +505,25 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
         paymentMethod: input.paymentMethod as PaymentMethod,
         source: input.source || "WEB",
         subtotal,
-        deliveryFee: input.deliveryFee || 0,
-        total: subtotal + (input.deliveryFee || 0),
+        deliveryFee,
+        discountAmount: discount,
+        couponCode,
+        total,
         items: {
-          create: input.items.map((i) => ({
-            productId: i.productId,
-            variantId: i.variantId,
-            quantity: i.quantity,
-            price: i.price,
-            total: i.price * i.quantity,
+          create: priced.map(({ item, unitPrice, total: lineTotal }) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: unitPrice,
+            total: lineTotal,
           })),
         },
         delivery: {
           create: {
+            mode: deliveryChoice.mode,
+            agentId: deliveryChoice.agentId,
+            zoneId: deliveryChoice.zoneId,
+            fee: deliveryChoice.fee,
             address: input.address,
             city: input.city,
             district: input.district || null,
@@ -442,6 +547,8 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
     paymentMethod: order.paymentMethod ?? "",
     subtotal: order.subtotal,
     deliveryFee: order.deliveryFee,
+    discountAmount: order.discountAmount,
+    couponCode: order.couponCode,
     total: order.total,
     notes: order.notes,
     source: order.source || "WEB",

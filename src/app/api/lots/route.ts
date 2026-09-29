@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import type { LotAllocation } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 import { generateLotNumber } from "@/lib/lot-utils"
 import { ensureOperationalStockLocations } from "@/lib/stock-service"
 
@@ -14,6 +15,9 @@ export async function GET(req: Request) {
   const variantId = url.searchParams.get("variantId")
   const status = url.searchParams.get("status")
   const withAllocations = url.searchParams.get("allocations") === "1"
+
+  const session = await auth()
+  const movementWhere = saleMovementsFilter(session?.user?.role, session?.user?.id)
 
   const where: Prisma.ProductionLotWhereInput = {}
   if (variantId) where.variantId = variantId
@@ -47,7 +51,7 @@ export async function GET(req: Request) {
     const lotIds = lotsWithAllocations.filter((l) => l.allocations?.length > 0).map((l) => l.id)
     if (lotIds.length > 0) {
       const movements = await getPrisma().stockMovement.findMany({
-        where: { lotId: { in: lotIds }, pointOfSaleId: { not: null } },
+        where: { lotId: { in: lotIds }, pointOfSaleId: { not: null }, AND: [movementWhere] },
         select: { lotId: true, reference: true, pointOfSaleId: true },
       })
 
@@ -77,14 +81,24 @@ export async function GET(req: Request) {
       const orders = orderRefs.size > 0
         ? await getPrisma().order.findMany({
             where: { orderNumber: { in: [...orderRefs] } },
-            select: { orderNumber: true, pointOfSale: { select: { name: true, code: true } } },
+            select: { orderNumber: true, notes: true, userId: true, pointOfSale: { select: { name: true, code: true } } },
           })
         : []
       const orderPosMap = new Map(orders.filter((o) => o.pointOfSale).map((o) => [o.orderNumber, o.pointOfSale!]))
+      const orderByNumber = new Map(orders.map((o) => [o.orderNumber, o]))
+      const role = session?.user?.role
+      const selfId = session?.user?.id
 
       enrichedLots = lotsWithAllocations.map((lot) => ({
         ...lot,
-        allocations: (lot.allocations ?? []).map((a) => {
+        allocations: (lot.allocations ?? [])
+          .filter((a) => {
+            if (a.type !== "SALE" || !a.reference) return true
+            const order = orderByNumber.get(a.reference)
+            if (!order) return true
+            return !isRestrictedOrder(order, role, selfId)
+          })
+          .map((a) => {
           let pointOfSale: { name: string; code: string } | null = null
           if (a.type === "SALE" && a.reference) {
             pointOfSale = orderPosMap.get(a.reference) ?? null
@@ -145,6 +159,8 @@ export async function POST(req: Request) {
     }
 
     const lotNumber = await generateLotNumber()
+    const authSession = await auth()
+    const actorId = authSession?.user?.id ?? null
 
     const lot = await getPrisma().$transaction(async (tx) => {
       const newLot = await tx.productionLot.create({
@@ -172,6 +188,7 @@ export async function POST(req: Request) {
           reason: notes || "Production",
           reference: lotNumber,
           lotId: newLot.id,
+          userId: actorId,
         },
       })
 
@@ -193,6 +210,7 @@ export async function POST(req: Request) {
             reference: lotNumber,
             pointOfSaleId: destinationId,
             lotId: newLot.id,
+            userId: actorId,
           },
         })
       } else {
@@ -218,6 +236,7 @@ export async function POST(req: Request) {
                 reference: lotNumber,
                 pointOfSaleId: locations[i].id,
                 lotId: newLot.id,
+                userId: actorId,
               },
             })
           }

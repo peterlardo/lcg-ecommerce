@@ -101,6 +101,7 @@ export function buildTicketHtml(ticket: TicketData): string {
   .sep { border-top: 1px dashed #000; margin: 4px 0; }
   .sep2 { border-top: 2px solid #000; margin: 4px 0; }
   .logo { display: block; margin: 0 auto 4px auto; max-width: 50mm; max-height: 18mm; }
+  .payed { font-size: 26px; font-weight: bold; letter-spacing: 2px; line-height: 1.1; margin: 4px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 3px 0; }
 </style>
 </head>
 <body>
@@ -133,6 +134,8 @@ ${itemsLines.map((l) => `<div class="line">${escapeHtml(l)}</div>`).join("\n")}
 <div class="line bold">${padRight("TOTAL", w - 10)}${padLeft(formatPrice(ticket.total), 10)}</div>
 
 <div class="sep2"></div>
+
+<div class="center payed">PAYE MERCI</div>
 
 <div class="center small">Merci pour votre achat !</div>
 <div class="center small">LCG - Brazzaville</div>

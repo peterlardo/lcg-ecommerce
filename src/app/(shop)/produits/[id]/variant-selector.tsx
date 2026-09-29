@@ -25,7 +25,7 @@ export function ProductVariantSelector({ product }: Props) {
       name: product.name,
       image: product.image ?? "",
       format: selectedVariant.format,
-      price: selectedVariant.price,
+      price: selectedVariant.promoPrice ?? selectedVariant.price,
     })
     setAdded(true)
     setTimeout(() => setAdded(false), 1500)
@@ -64,7 +64,19 @@ export function ProductVariantSelector({ product }: Props) {
       {selectedVariant && (
         <div>
           <p className="text-sm text-muted-foreground mb-1">Prix</p>
-          <p className="font-display text-3xl font-bold text-primary">{formatPrice(selectedVariant.price)}</p>
+          {selectedVariant.promoPrice != null ? (
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p className="font-display text-3xl font-bold text-primary">{formatPrice(selectedVariant.promoPrice)}</p>
+              <p className="text-lg text-muted-foreground line-through">{formatPrice(selectedVariant.price)}</p>
+              {product.promo && (
+                <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
+                  -{product.promo.percent}%
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className="font-display text-3xl font-bold text-primary">{formatPrice(selectedVariant.price)}</p>
+          )}
         </div>
       )}
 

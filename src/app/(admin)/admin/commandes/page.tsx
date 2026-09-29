@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import {
+  Archive,
   ShoppingCart,
   ChevronDown,
   Search,
@@ -11,7 +12,8 @@ import {
   Receipt,
 } from "lucide-react"
 import { formatPrice, getStatusLabel } from "@/lib/utils"
-import { products } from "@/data/products"
+import { isArchivedOrder } from "@/lib/archives"
+import type { Product } from "@/data/products"
 
 const statusFilters = [
   "Toutes",
@@ -82,6 +84,7 @@ function formatDate(iso: string): string {
 
 export default function CommandesPage() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("Toutes")
   const [searchName, setSearchName] = useState("")
@@ -119,6 +122,8 @@ export default function CommandesPage() {
       try {
         const ordersRes = await fetch("/api/orders", { signal: controller.signal })
         if (!controller.signal.aborted && ordersRes.ok) setOrders(await ordersRes.json())
+        const prodRes = await fetch("/api/produits?all=1", { signal: controller.signal })
+        if (!controller.signal.aborted && prodRes.ok) setProducts(await prodRes.json())
       } catch (error) {
         if (!controller.signal.aborted) console.error("Erreur chargement commandes:", error)
       } finally {
@@ -129,7 +134,9 @@ export default function CommandesPage() {
     return () => controller.abort()
   }, [])
 
-  const filtered = orders.filter((order) => {
+  const activeOrders = orders.filter((order) => !isArchivedOrder(order))
+
+  const filtered = activeOrders.filter((order) => {
     const matchesTab =
       activeTab === "Toutes" || getStatusLabel(order.status) === activeTab
     const matchesName =
@@ -239,6 +246,13 @@ export default function CommandesPage() {
               className="w-full sm:w-56 pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
           </div>
+          <Link
+            href="/admin/archives"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+          >
+            <Archive className="h-4 w-4" />
+            Archives
+          </Link>
           <button
             onClick={() => setShowModal(true)}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors"
@@ -263,7 +277,7 @@ export default function CommandesPage() {
             {tab}
             {tab !== "Toutes" && (
               <span className="ml-1.5 text-xs opacity-70">
-                ({orders.filter((o) => getStatusLabel(o.status) === tab).length})
+                ({activeOrders.filter((o) => getStatusLabel(o.status) === tab).length})
               </span>
             )}
           </button>
@@ -309,7 +323,7 @@ export default function CommandesPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
+                  <p className="break-words text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   <Link
@@ -348,7 +362,7 @@ export default function CommandesPage() {
                           key={idx}
                           className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border border-gray-100 gap-2"
                         >
-                          <span className="text-gray-700">
+                          <span className="min-w-0 break-words text-gray-700">
                             {item.name}
                             {item.format ? ` — ${item.format}` : ""}
                           </span>
@@ -371,7 +385,7 @@ export default function CommandesPage() {
                       Informations de livraison
                     </h4>
                     <div className="space-y-2 text-sm bg-white p-2.5 sm:p-3 rounded-lg border border-gray-100">
-                      <p className="text-gray-700">
+                      <p className="break-words text-gray-700">
                         <span className="font-medium text-gray-500">Adresse: </span>
                         {order.delivery
                           ? `${order.delivery.address}${order.delivery.district ? ` — ${order.delivery.district}` : ""} (${order.delivery.city})`
@@ -397,7 +411,7 @@ export default function CommandesPage() {
                           </span>
                         </p>
                       )}
-                      <p className="text-gray-700">
+                      <p className="break-words text-gray-700">
                         <span className="font-medium text-gray-500">Client: </span>
                         {order.customerEmail || "email non renseigné"} | {order.customerPhone}
                       </p>
@@ -435,7 +449,7 @@ export default function CommandesPage() {
             <p className="text-xs text-gray-500">
               {filtered.length} résultat{filtered.length > 1 ? "s" : ""} · Page {currentPage}/{totalPages}
             </p>
-            <div className="flex items-center gap-1 overflow-x-auto">
+            <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto">
               <button onClick={() => setPage(1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
               <button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []).map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1.5 text-xs text-gray-400">…</span> : <button key={p} onClick={() => setPage(p)} className={`min-w-[28px] rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${p === currentPage ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-100"}`}>{p}</button>)}
@@ -448,7 +462,7 @@ export default function CommandesPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 overflow-y-auto">
-          <div className="bg-white sm:rounded-2xl rounded-t-2xl shadow-xl w-full sm:max-w-2xl max-h-[90vh] sm:max-h-none my-0 sm:my-8">
+          <div className="bg-white sm:rounded-2xl rounded-t-2xl shadow-xl w-full sm:max-w-2xl max-w-full max-h-[90vh] sm:max-h-none my-0 sm:my-8 overflow-y-auto">
             <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100">
               <div>
                 <h2 className="text-base sm:text-lg font-bold text-gray-900">Nouvelle commande</h2>

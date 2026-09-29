@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 import { getReservations, addReservation, type ReservationItem } from "@/data/store"
-import { sendReservationEmail } from "@/lib/mailer"
+import { sendReservationEmail, sendReservationDevisEmail, buildReservationDevisText, type ReservationMailData } from "@/lib/mailer"
+import { sendWhatsAppMessage } from "@/lib/whatsapp"
 import { getPrisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -63,7 +64,8 @@ export async function POST(request: Request) {
     })
 
     const ref = `RSV-${newRes.id.slice(-6).toUpperCase()}`
-    await sendReservationEmail({
+    const total = itemList.reduce((sum, i) => sum + i.price * i.quantity, 0)
+    const mailData: ReservationMailData = {
       ref,
       createdAt: newRes.createdAt,
       client: newRes.client,
@@ -76,7 +78,11 @@ export async function POST(request: Request) {
       source: newRes.source,
       notes: newRes.notes,
       items: itemList,
-    })
+      total,
+    }
+    await sendReservationEmail(mailData)
+    await sendReservationDevisEmail(mailData)
+    sendWhatsAppMessage(newRes.telephone, buildReservationDevisText(mailData)).catch(() => {})
 
     return NextResponse.json({ ...newRes, ref }, { status: 201 })
   } catch (error) {

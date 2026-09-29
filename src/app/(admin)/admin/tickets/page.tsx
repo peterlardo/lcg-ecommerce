@@ -79,10 +79,10 @@ function TicketPreview({ ticket }: { ticket: Ticket }) {
           <p className="text-xs font-medium text-gray-500 mb-2">Articles</p>
           <div className="divide-y divide-gray-100">
             {ticket.items.map((item) => (
-              <div key={`${item.name}-${item.format}`} className="flex items-center justify-between py-2 text-sm">
-                <div>
-                  <span className="font-medium text-gray-900">{item.name}</span>
-                  <span className="ml-1 text-gray-500">{item.format}</span>
+              <div key={`${item.name}-${item.format}`} className="flex items-center justify-between gap-2 py-2 text-sm">
+                <div className="min-w-0">
+                  <span className="break-words font-medium text-gray-900">{item.name}</span>
+                  <span className="ml-1 break-words text-gray-500">{item.format}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-500">x{item.quantity}</span>
@@ -96,7 +96,7 @@ function TicketPreview({ ticket }: { ticket: Ticket }) {
 
       <div className="flex flex-col items-center gap-3 lg:w-[320px] shrink-0">
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Aperçu du ticket</p>
-        <div className="rounded-xl border border-gray-200 shadow-lg overflow-hidden bg-white" style={{ width: 280 }}>
+        <div className="max-w-full rounded-xl border border-gray-200 shadow-lg overflow-hidden bg-white" style={{ width: 280 }}>
           <iframe
             ref={iframeRef}
             title={`Ticket ${ticket.ticketNumber}`}
@@ -195,7 +195,7 @@ export default function TicketsPage() {
     ) : (
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card-soft">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[340px] sm:min-w-[600px] md:min-w-[760px] text-left text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr>
                 <th className="px-3 sm:px-5 py-3 whitespace-nowrap">Ticket</th>
@@ -251,7 +251,7 @@ export default function TicketsPage() {
         {!loading && filtered.length > 0 && (
           <div className="flex items-center justify-between border-t border-border px-3 sm:px-4 py-2.5 sm:py-3">
             <p className="text-xs text-muted-foreground">{filtered.length} résultat(s) · Page {currentPage}/{totalPages}</p>
-            <div className="flex items-center gap-0.5 sm:gap-1">
+            <div className="flex min-w-0 max-w-full items-center gap-0.5 overflow-x-auto sm:gap-1">
               <button onClick={() => setPage(1)} disabled={currentPage <= 1} className="rounded-md px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
               <button onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded-md px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []).map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1 sm:px-1.5 text-xs text-muted-foreground">…</span> : <button key={p} onClick={() => setPage(p)} className={`min-w-[24px] sm:min-w-[28px] rounded-md px-1.5 sm:px-2 py-1 sm:py-1.5 text-xs font-medium transition-colors ${p === currentPage ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{p}</button>)}

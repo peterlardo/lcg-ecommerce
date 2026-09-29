@@ -92,17 +92,17 @@ export default function CaissePage() {
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 sm:px-4 sm:py-3 sm:text-sm">{error}</div>}
 
       <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Ventes du jour</p><p className="mt-1 text-base font-bold text-gray-900 sm:text-xl">{loading ? "..." : formatPrice(data?.summary.todayRevenue ?? 0)}</p></div>
-        <div className="rounded-xl border border-green-200 bg-green-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-green-700">Espèces attendues</p><p className="mt-1 text-base font-bold text-green-800 sm:text-xl">{formatPrice(expected)}</p></div>
-        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-blue-700">Mobile Money</p><p className="mt-1 text-base font-bold text-blue-800 sm:text-xl">{formatPrice(mobileMoney)}</p></div>
-        <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-purple-700">Carte</p><p className="mt-1 text-base font-bold text-purple-800 sm:text-xl">{formatPrice(card)}</p></div>
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-3 sm:p-4"><p className="text-xs font-medium text-gray-500">Ventes du jour</p><p className="mt-1 break-words text-base font-bold text-gray-900 sm:text-xl">{loading ? "..." : formatPrice(data?.summary.todayRevenue ?? 0)}</p></div>
+        <div className="min-w-0 rounded-xl border border-green-200 bg-green-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-green-700">Espèces attendues</p><p className="mt-1 break-words text-base font-bold text-green-800 sm:text-xl">{formatPrice(expected)}</p></div>
+        <div className="min-w-0 rounded-xl border border-blue-200 bg-blue-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-blue-700">Mobile Money</p><p className="mt-1 break-words text-base font-bold text-blue-800 sm:text-xl">{formatPrice(mobileMoney)}</p></div>
+        <div className="min-w-0 rounded-xl border border-purple-200 bg-purple-50/40 p-3 sm:p-4"><p className="text-xs font-medium text-purple-700">Carte</p><p className="mt-1 break-words text-base font-bold text-purple-800 sm:text-xl">{formatPrice(card)}</p></div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
         <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5 lg:col-span-2">
           <h2 className="mb-3 text-xs font-semibold text-gray-900 sm:mb-4 sm:text-sm">Rapprochement des paiements</h2>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[320px]">
+            <table className="w-full min-w-[320px] sm:min-w-[480px]">
               <thead className="border-b border-gray-200 bg-gray-50/80">
                 <tr>
                   <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-4 sm:py-3">Mode</th>
@@ -115,7 +115,7 @@ export default function CaissePage() {
                   const Icon = paymentIcons[item.method] ?? WalletCards
                   return (
                     <tr key={item.method}>
-                      <td className="px-2 py-2 sm:px-4 sm:py-3"><div className="flex items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 sm:h-8 sm:w-8"><Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></span><span className="text-xs font-medium text-gray-800 sm:text-sm">{paymentLabels[item.method] ?? item.method}</span></div></td>
+                      <td className="px-2 py-2 sm:px-4 sm:py-3"><div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 sm:h-8 sm:w-8"><Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></span><span className="min-w-0 break-words text-xs font-medium text-gray-800 sm:text-sm">{paymentLabels[item.method] ?? item.method}</span></div></td>
                       <td className="px-2 py-2 text-right text-xs text-gray-600 sm:px-4 sm:py-3 sm:text-sm">{item.count}</td>
                       <td className="px-2 py-2 text-right text-xs font-semibold text-gray-900 sm:px-4 sm:py-3 sm:text-sm">{formatPrice(item.total)}</td>
                     </tr>

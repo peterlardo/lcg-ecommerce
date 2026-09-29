@@ -51,7 +51,7 @@ export async function GET() {
   if (forbidden) return forbidden
 
   const session = await auth()
-  const isCommercial = session?.user?.role === "COMMERCIAL"
+  const isAdmin = session?.user?.role === "ADMIN"
 
   const posFilter = await getUserPointOfSaleIds()
   const posIds = posFilter?.posIds ?? null
@@ -59,11 +59,11 @@ export async function GET() {
   const sales = await getPrisma().order.findMany({
     where: {
       notes: { startsWith: "Vente comptoir" },
-      ...(isCommercial
-        ? { userId: session!.user!.id }
-        : posIds !== null
+      ...(isAdmin
+        ? posIds !== null
           ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
-          : {}),
+          : {}
+        : { userId: session!.user!.id }),
     },
     include: {
       pointOfSale: { select: { id: true, name: true, code: true } },
@@ -155,6 +155,7 @@ export async function POST(request: Request) {
           total: subtotal,
           notes: ["Vente comptoir", body.notes?.trim()].filter(Boolean).join(" - "),
           pointOfSaleId,
+          source: "CAISSE",
           items: {
             create: items.map((item) => {
               const variant = variantMap.get(item.variantId)
@@ -173,6 +174,8 @@ export async function POST(request: Request) {
       })
 
       for (const item of items) {
+        // Stock physiquement au point de vente : c'est la seule source. Le
+        // vendeur ne detient aucun stock reserve, tout est preleve ici.
         const fifoResult = await consumePointOfSaleStockTx(tx, {
           variantId: item.variantId,
           pointOfSaleId,
@@ -180,12 +183,14 @@ export async function POST(request: Request) {
           type: "SALE",
           reason: "Vente comptoir",
           reference: orderNumber,
+          userId: sellerId,
         })
-        const orderItem = createdOrder.items.find((oi) => oi.variantId === item.variantId)
-        if (orderItem && fifoResult.allocations.length > 0) {
-          await tx.orderItem.update({
-            where: { id: orderItem.id },
-            data: { lotId: fifoResult.allocations[0].lotId },
+        const lotId = fifoResult.allocations[0]?.lotId ?? null
+
+        if (lotId) {
+          await tx.orderItem.updateMany({
+            where: { orderId: createdOrder.id, variantId: item.variantId },
+            data: { lotId },
           })
         }
       }

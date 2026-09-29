@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
+import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, saleMovementsFilter } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 import { ensurePointOfSaleStockRows } from "@/lib/stock-service"
 
 export async function GET(_request: Request, context: { params: Promise<unknown> }) {
@@ -8,6 +10,26 @@ export async function GET(_request: Request, context: { params: Promise<unknown>
   if (forbidden) return forbidden
   const { id } = (await context.params) as { id: string }
   await ensurePointOfSaleStockRows([id])
+
+  const authSession = await auth()
+  const actorId = authSession?.user?.id ?? ""
+  const actorRole = authSession?.user?.role
+  const actorSelfId = authSession?.user?.id
+  const movementWhere = saleMovementsFilter(actorRole, actorSelfId)
+  const orderWhere: Prisma.OrderWhereInput =
+    actorRole === "ADMIN" || !actorRole
+      ? { pointOfSaleId: id }
+      : {
+          pointOfSaleId: id,
+          AND: [
+            {
+              OR: [
+                { NOT: { notes: { startsWith: "Vente comptoir" } } },
+                { userId: actorSelfId },
+              ],
+            },
+          ],
+        }
 
   const now = new Date()
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -19,13 +41,22 @@ export async function GET(_request: Request, context: { params: Promise<unknown>
     weeks.push({ start: weekStart, end: new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate(), 23, 59, 59), label: `${weekStart.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} – ${weekEnd.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}` })
   }
 
-  const [point, orders, reservations, stocks, movements, openCash, sales, todaySales, weeklySales, weeklyCashRaw] = await Promise.all([
+  const [point, orders, reservations, stocks, movements, openCash, otherOpenCash, sales, todaySales, weeklySales, weeklyCashRaw] = await Promise.all([
     getPrisma().pointOfSale.findUnique({ where: { id }, include: { managerUser: { select: { id: true, name: true, email: true } }, cashSessions: { orderBy: { openedAt: "desc" }, take: 50 } } }),
-    getPrisma().order.findMany({ where: { pointOfSaleId: id }, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, orderNumber: true, customerName: true, total: true, status: true, paymentStatus: true, createdAt: true } }),
+    getPrisma().order.findMany({ where: orderWhere, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, orderNumber: true, customerName: true, total: true, status: true, paymentStatus: true, createdAt: true } }),
     getPrisma().reservation.findMany({ where: { pointOfSaleId: id }, orderBy: { createdAt: "desc" }, take: 30 }),
     getPrisma().pointOfSaleStock.findMany({ where: { pointOfSaleId: id }, include: { variant: { include: { product: true } } }, orderBy: { updatedAt: "desc" } }),
-    getPrisma().stockMovement.findMany({ where: { pointOfSaleId: id }, include: { variant: { include: { product: true } } }, orderBy: { createdAt: "desc" }, take: 30 }),
-    getPrisma().cashSession.findFirst({ where: { pointOfSaleId: id, status: "OPEN" }, orderBy: { openedAt: "desc" } }),
+    getPrisma().stockMovement.findMany({ where: { pointOfSaleId: id, ...movementWhere }, include: { variant: { include: { product: true } } }, orderBy: { createdAt: "desc" }, take: 30 }),
+    // Caisse ouverte du-demandeur : chaque vendeur possede sa propre session.
+    actorId
+      ? getPrisma().cashSession.findFirst({ where: { pointOfSaleId: id, openedById: actorId, status: "OPEN" }, orderBy: { openedAt: "desc" } })
+      : Promise.resolve(null),
+    getPrisma().cashSession.findMany({
+      where: { pointOfSaleId: id, status: "OPEN", ...(actorId ? { NOT: { openedById: actorId } } : {}) },
+      orderBy: { openedAt: "desc" },
+      take: 10,
+      select: { id: true, openedAt: true, openingBalance: true, openedBy: { select: { id: true, name: true } } },
+    }),
     getPrisma().order.aggregate({ where: { pointOfSaleId: id, status: { not: "CANCELLED" } }, _sum: { total: true }, _count: { id: true } }),
     getPrisma().order.aggregate({ where: { pointOfSaleId: id, status: { not: "CANCELLED" }, createdAt: { gte: startOfDay } }, _sum: { total: true }, _count: { id: true } }),
     getPrisma().$queryRaw<{ "week_start": Date; "revenue": bigint; "cnt": bigint }[]>`
@@ -61,7 +92,7 @@ export async function GET(_request: Request, context: { params: Promise<unknown>
   })
 
   return NextResponse.json({
-    point, orders, reservations, stocks, movements, openCash,
+    point, orders, reservations, stocks, movements, openCash, otherOpenCash,
     summary: { revenue: sales._sum.total ?? 0, orders: sales._count.id },
     today: { revenue: todaySales._sum.total ?? 0, orders: todaySales._count.id },
     weeklyHistory: weeklySalesMapped,

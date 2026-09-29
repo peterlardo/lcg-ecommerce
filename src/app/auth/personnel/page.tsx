@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -40,92 +41,117 @@ export default function PersonnelLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-[#0a1d3a] via-[#1a2744] to-[#0f2d5c] p-4 sm:p-8">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(26,39,68,0.4)_0%,transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(10,29,58,0.5)_0%,transparent_60%)]" />
+    <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-[linear-gradient(170deg,#1F4FA3_0%,#17418A_55%,#123B82_100%)] px-4 py-10 sm:px-6">
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
+        style={{
+          background:
+            "radial-gradient(60% 45% at 50% 0%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 70%)",
+        }}
+      />
 
-      <div className="relative flex h-full min-h-[calc(100vh-2rem)] w-full flex-col justify-center sm:min-h-[calc(100vh-4rem)]">
-        <div className="flex flex-1 flex-col justify-center rounded-3xl bg-white/95 backdrop-blur-sm p-8 shadow-2xl shadow-black/20 sm:p-12 lg:p-16">
-          <div className="mb-10 flex flex-col items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element -- Logo statique simple (fichier public), next/image non requis */}
-            <img
-              src="/logo-lcg.jpeg"
+      <div className="relative w-full max-w-3xl">
+        <div className="flex flex-col items-center text-center">
+          <div className="rounded-full bg-white p-4 shadow-xl shadow-[#0b2c63]/35 ring-1 ring-white/60 sm:p-5">
+            <Image
+              src="/logo-lcg-transparent.png"
               alt="LCG — La Congolaise des Glaçons"
-              className="h-28 w-28 rounded-full object-cover ring-4 ring-gray-800/20 shadow-lg sm:h-36 sm:w-36"
+              width={104}
+              height={101}
+              priority
+              className="h-20 w-auto object-contain sm:h-24"
             />
-            <h1 className="mt-5 text-4xl font-bold text-gray-800 sm:text-5xl">
-              Staff LCG
-            </h1>
-            <p className="mt-2 text-lg text-gray-500 sm:text-xl">
-              Espace staff & administration
-            </p>
           </div>
-
-          <form onSubmit={handleSubmit} className="mx-auto w-full max-w-xl space-y-6">
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-base text-red-600">
-                {error}
-              </div>
-            )}
-
-            <div>
-              <label htmlFor="email" className="mb-2 block text-base font-medium text-gray-700">
-                Email professionnel
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-                className="w-full rounded-xl border border-gray-300 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-gray-600 focus:ring-2 focus:ring-gray-600/30"
-                placeholder="nom@lcg.cg"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="mb-2 block text-base font-medium text-gray-700">
-                Mot de passe
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full rounded-xl border border-gray-300 px-5 py-4 text-lg text-gray-900 outline-none transition-colors focus:border-gray-600 focus:ring-2 focus:ring-gray-600/30"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-4 text-lg font-semibold text-white shadow-md shadow-gray-900/25 transition-all hover:from-gray-900 hover:to-black hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? (
-                <span className="inline-flex items-center gap-2">
-                  <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                  Connexion...
-                </span>
-              ) : (
-                "Accéder au tableau de bord"
-              )}
-            </button>
-
-            <div className="text-center">
-              <Link
-                href="/auth/forgot-password"
-                className="text-base text-gray-500 underline underline-offset-4 transition-colors hover:text-gray-700"
-              >
-                Mot de passe oublié ?
-              </Link>
-            </div>
-          </form>
+          <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            Gestion des Ventes
+          </h1>
+          <p className="mt-2 text-base text-white/70 sm:text-lg">Espace staff &amp; administration</p>
         </div>
 
-        <p className="mt-6 text-center text-sm text-white/40">
+        <form onSubmit={handleSubmit} className="mt-10 space-y-5">
+          {error && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-200/40 bg-red-500/15 px-4 py-3 text-base text-red-50"
+            >
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="email" className="mb-2 block text-sm font-semibold text-white/80">
+              Email professionnel
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoFocus
+              placeholder="nom@lcg.cg"
+              className="w-full rounded-xl border border-transparent bg-white px-5 py-3.5 text-base text-gray-900 shadow-lg shadow-[#0b2c63]/25 outline-none transition placeholder:text-gray-400 focus:ring-4 focus:ring-white/40"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="mb-2 block text-sm font-semibold text-white/80">
+              Mot de passe
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="••••••••"
+              className="w-full rounded-xl border border-transparent bg-white px-5 py-3.5 text-base text-gray-900 shadow-lg shadow-[#0b2c63]/25 outline-none transition placeholder:text-gray-400 focus:ring-4 focus:ring-white/40"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl border border-white/35 bg-white/15 px-6 py-3.5 text-base font-bold text-white backdrop-blur-sm transition hover:bg-white/25 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <svg
+                  className="h-5 w-5 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle className="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path
+                    className="opacity-90"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+                Connexion…
+              </span>
+            ) : (
+              "Accéder au tableau de bord"
+            )}
+          </button>
+
+          <div className="text-center">
+            <Link
+              href="/auth/forgot-password"
+              className="text-sm font-medium text-white/70 underline underline-offset-4 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            >
+              Mot de passe oublié ?
+            </Link>
+          </div>
+        </form>
+
+        <p className="mt-10 text-center text-xs text-white/45">
           © {new Date().getFullYear()} La Congolaise des Glaçons — Espace réservé au personnel
         </p>
       </div>

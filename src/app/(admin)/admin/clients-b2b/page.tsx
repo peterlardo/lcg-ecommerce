@@ -310,14 +310,14 @@ export default function ClientsB2BPage() {
             {role === "COMMERCIAL" ? "Mes clients professionnels et leur zone" : "Clients B2B par commercial"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {role === "ADMIN" && (
-            <div className="relative">
+            <div className="relative w-full sm:w-[220px] min-w-0 max-w-full">
               <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <select
                 value={selectedId}
                 onChange={(e) => setSelectedId(e.target.value)}
-                className={`${inputCls} pl-9 pr-8 appearance-none bg-white min-w-[200px]`}
+                className={`${inputCls} pl-9 pr-8 appearance-none bg-white w-full sm:w-[220px] min-w-0 max-w-full`}
               >
                 <option value="">Sélectionner un commercial…</option>
                 {commerciaux.map((c) => (
@@ -349,19 +349,19 @@ export default function ClientsB2BPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-          <p className="text-[11px] font-medium text-gray-500 uppercase">Total B2B</p>
+          <p className="text-xs font-medium text-gray-500 uppercase">Total B2B</p>
           <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">{totalB2B}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-          <p className="text-[11px] font-medium text-gray-500 uppercase">Actifs</p>
+          <p className="text-xs font-medium text-gray-500 uppercase">Actifs</p>
           <p className="text-xl sm:text-2xl font-bold text-green-600 mt-1">{activeB2B}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-          <p className="text-[11px] font-medium text-gray-500 uppercase">Géolocalisés</p>
+          <p className="text-xs font-medium text-gray-500 uppercase">Géolocalisés</p>
           <p className="text-xl sm:text-2xl font-bold text-blue-600 mt-1">{withGeo}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-          <p className="text-[11px] font-medium text-gray-500 uppercase">Rayon zone</p>
+          <p className="text-xs font-medium text-gray-500 uppercase">Rayon zone</p>
           <p className="text-xl sm:text-2xl font-bold text-primary mt-1">{zoneData?.zone.radiusKm ?? "—"}<span className="text-sm font-normal"> km</span></p>
         </div>
       </div>
@@ -369,10 +369,10 @@ export default function ClientsB2BPage() {
       {/* Zone info */}
       {zoneData && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-gray-800 flex flex-wrap items-center gap-2">
             <Navigation className="h-4 w-4 text-primary" />
             {zoneData.zone.name || "Zone d'opération"}
-            <span className="text-xs font-normal text-gray-400">
+            <span className="min-w-0 break-words text-xs font-normal text-gray-400">
               — {zoneData.clients.length} client(s) B2B dans un rayon de {zoneData.zone.radiusKm} km
             </span>
           </h2>
@@ -434,20 +434,20 @@ export default function ClientsB2BPage() {
                     className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
                           <Building2 className="h-4 w-4" />
                         </div>
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="min-w-0 truncate text-sm font-medium text-gray-900">
                           {displayName(c)}
                         </p>
                         {!c.isActive && (
-                          <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 text-gray-500">
+                          <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-500">
                             Inactif
                           </span>
                         )}
                         {c.distanceKm != null && (
-                          <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary-50 text-primary-700">
+                          <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary-50 text-primary-700">
                             {c.distanceKm} km
                           </span>
                         )}
@@ -459,7 +459,7 @@ export default function ClientsB2BPage() {
                           </span>
                         )}
                         {c.email && (
-                          <span className="flex items-center gap-1">
+                          <span className="flex min-w-0 items-center gap-1 break-words">
                             <Mail className="h-3 w-3" /> {c.email}
                           </span>
                         )}
@@ -512,7 +512,7 @@ export default function ClientsB2BPage() {
       {/* Detail Modal */}
       {detailOpen && detailClient && (
         <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/50 p-3 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl my-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl my-4">
             <div className="flex items-center justify-between border-b border-gray-100 px-4 sm:px-6 py-4">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-blue-600" />
@@ -524,12 +524,12 @@ export default function ClientsB2BPage() {
             </div>
             <div className="px-4 sm:px-6 py-4 space-y-3">
               <div>
-                <p className="text-lg font-semibold text-gray-900">{displayName(detailClient)}</p>
+                <p className="text-lg font-semibold text-gray-900 break-words">{displayName(detailClient)}</p>
                 {detailClient.tradeName && <p className="text-sm text-gray-500">Enseigne : {detailClient.tradeName}</p>}
               </div>
               {detailClient.contactName && (
                 <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <Briefcase className="h-4 w-4 text-gray-400" /> {detailClient.contactName}
+                  <Briefcase className="h-4 w-4 shrink-0 text-gray-400" /> <span className="min-w-0 break-words">{detailClient.contactName}</span>
                 </div>
               )}
               {detailClient.taxId && (
@@ -539,12 +539,12 @@ export default function ClientsB2BPage() {
               )}
               {detailClient.email && (
                 <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <Mail className="h-4 w-4 text-gray-400" /> {detailClient.email}
+                  <Mail className="h-4 w-4 shrink-0 text-gray-400" /> <span className="min-w-0 break-all">{detailClient.email}</span>
                 </div>
               )}
               {detailClient.phone && (
                 <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <Phone className="h-4 w-4 text-gray-400" /> {detailClient.phone}
+                  <Phone className="h-4 w-4 shrink-0 text-gray-400" /> <span className="min-w-0 break-words">{detailClient.phone}</span>
                 </div>
               )}
               {detailClient.city && (

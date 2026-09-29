@@ -10,11 +10,26 @@ export async function GET() {
 
   const userId = session.user.id
 
+  // Le polling du widget (10s) fait office de heartbeat : on remonte la
+  // dernière activité du visiteur pour alimenter l'indicateur de connexion.
+  await getPrisma().chatPresence.upsert({
+    where: { userId },
+    update: { lastSeen: new Date() },
+    create: { userId, lastSeen: new Date() },
+  })
+
   const users = await getPrisma().user.findMany({
     where: { isActive: true, id: { not: userId } },
     select: { id: true, name: true, email: true, role: true, image: true },
     orderBy: { name: "asc" },
   })
+
+  const presences = await getPrisma().chatPresence.findMany({
+    where: { userId: { in: users.map((u) => u.id) } },
+    select: { userId: true, lastSeen: true },
+  })
+  const presenceMap = new Map(presences.map((p) => [p.userId, p.lastSeen]))
+  const ONLINE_THRESHOLD_MS = 60_000
 
   const unreadCounts = await getPrisma().chatMessage.groupBy({
     by: ["senderId"],
@@ -55,6 +70,8 @@ export async function GET() {
   return NextResponse.json(
     users.map((user) => {
       const last = lastMsgMap.get(user.id)
+      const lastSeen = presenceMap.get(user.id) ?? null
+      const isOnline = !!lastSeen && Date.now() - lastSeen.getTime() < ONLINE_THRESHOLD_MS
       return {
         id: user.id,
         name: user.name || user.email,
@@ -64,6 +81,8 @@ export async function GET() {
         lastMessage: last?.content || null,
         lastAt: last?.at?.toISOString() || null,
         unreadCount: unreadMap.get(user.id) || 0,
+        isOnline,
+        lastSeen: lastSeen?.toISOString() || null,
       }
     })
   )

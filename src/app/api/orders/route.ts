@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
+import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { createOrder, type OrderInput } from "@/data/store"
-import { sendOrderEmail } from "@/lib/mailer"
+import { sendOrderEmail, sendOrderDevisEmail, buildOrderDevisText, type OrderMailData } from "@/lib/mailer"
+import { sendWhatsAppMessage } from "@/lib/whatsapp"
 import { generateOrderNumber } from "@/lib/utils"
 import { pushNotification } from "@/lib/notifications"
+import { DeliveryChoiceError } from "@/lib/delivery"
 
 const PAYMENT_METHODS = ["CARD", "MOBILE_MONEY", "CASH_ON_DELIVERY"]
 
@@ -18,27 +21,49 @@ interface OrderItemBody {
   price?: unknown
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"])
   if (forbidden) return forbidden
 
   try {
     const session = await auth()
-    const isCommercial = session?.user?.role === "COMMERCIAL"
+    const role = session?.user?.role
+    const selfId = session!.user!.id
 
     const posFilter = await getUserPointOfSaleIds()
     const posIds = posFilter?.posIds ?? null
 
-    const where = isCommercial
-      ? { userId: session!.user!.id }
-      : posIds !== null
-        ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
-        : undefined
+    const { searchParams } = new URL(request.url)
+    const userIdParam = searchParams.get("userId")?.trim() || ""
+    const dateParam = searchParams.get("date")?.trim() || ""
+
+    const posClause: Prisma.OrderWhereInput | null =
+      posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : null
+
+    const ownScope: Prisma.OrderWhereInput = {
+      OR: [{ NOT: { notes: { startsWith: "Vente comptoir" } } }, { userId: selfId }],
+    }
+
+    const where: Prisma.OrderWhereInput =
+      role === "ADMIN"
+        ? (posClause ?? {})
+        : role === "COMMERCIAL"
+          ? { userId: selfId }
+          : { AND: [...(posClause ? [posClause] : []), ownScope] }
+
+    if (session?.user?.role === "ADMIN" && userIdParam) where.userId = userIdParam
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const start = new Date(`${dateParam}T00:00:00`)
+      const end = new Date(`${dateParam}T23:59:59.999`)
+      where.createdAt = { gte: start, lte: end }
+    }
 
     const orders = await getPrisma().order.findMany({
       where,
       select: {
         id: true,
+        userId: true,
+        user: { select: { name: true } },
         orderNumber: true,
         customerName: true,
         customerEmail: true,
@@ -51,6 +76,7 @@ export async function GET() {
         total: true,
         notes: true,
         source: true,
+        ticketGenerated: true,
         pointOfSaleId: true,
         createdAt: true,
         items: {
@@ -74,7 +100,11 @@ export async function GET() {
             scheduledDate: true,
             deliveredAt: true,
             notes: true,
-            deliveryAgent: { select: { name: true } },
+            mode: true,
+            fee: true,
+            agentId: true,
+            agent: { select: { id: true, name: true, kind: true } },
+            zone: { select: { id: true, name: true } },
           },
         },
         pointOfSale: { select: { id: true, name: true } },
@@ -85,6 +115,8 @@ export async function GET() {
     return NextResponse.json(
       orders.map((o) => ({
         id: o.id,
+        userId: o.userId ?? null,
+        userName: o.user?.name ?? null,
         orderNumber: o.orderNumber,
         customerName: o.customerName ?? "",
         customerEmail: o.customerEmail ?? "",
@@ -97,6 +129,7 @@ export async function GET() {
         total: o.total,
         notes: o.notes,
         source: o.source || "WEB",
+        ticketGenerated: o.ticketGenerated,
         createdAt: o.createdAt.toISOString(),
         items: o.items.map((i) => ({
           id: i.id,
@@ -118,7 +151,11 @@ export async function GET() {
               scheduledDate: o.delivery.scheduledDate?.toISOString() ?? null,
               deliveredAt: o.delivery.deliveredAt?.toISOString() ?? null,
               notes: o.delivery.notes,
-              agent: o.delivery.deliveryAgent?.name ?? null,
+              mode: o.delivery.mode,
+              fee: o.delivery.fee,
+              agent: o.delivery.agent?.name ?? null,
+              agentId: o.delivery.agentId,
+              zone: o.delivery.zone?.name ?? null,
             }
           : null,
         pointOfSaleId: o.pointOfSaleId ?? null,
@@ -135,12 +172,21 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const items = Array.isArray(body.items) ? body.items : []
+    const deliveryMode = String(body.deliveryMode || "DELIVERY").toUpperCase() === "PICKUP" ? "PICKUP" : "DELIVERY"
 
-    if (!body.customerName || !body.customerPhone || !body.address || items.length === 0) {
+    if (!body.customerName || !body.customerPhone || items.length === 0) {
       return NextResponse.json(
-        { error: "Client, téléphone, adresse et articles sont requis" },
+        { error: "Client, téléphone et articles sont requis" },
         { status: 400 }
       )
+    }
+
+    if (deliveryMode === "DELIVERY" && !body.address) {
+      return NextResponse.json({ error: "Adresse de livraison requise" }, { status: 400 })
+    }
+
+    if (deliveryMode === "DELIVERY" && !body.deliveryZoneId) {
+      return NextResponse.json({ error: "Choisissez une zone de livraison" }, { status: 400 })
     }
 
     const paymentMethod = PAYMENT_METHODS.includes(body.paymentMethod)
@@ -153,13 +199,16 @@ export async function POST(request: Request) {
       customerName: String(body.customerName),
       customerEmail: String(body.customerEmail || ""),
       customerPhone: String(body.customerPhone),
-      address: String(body.address),
+      address: String(body.address || "Retrait sur place"),
       city: String(body.city || "Brazzaville"),
       district: body.district ? String(body.district) : undefined,
       paymentMethod,
       source: body.source === "OPERATOR" ? "OPERATOR" : "WEB",
       notes: body.notes ? String(body.notes) : undefined,
-      deliveryFee: Number(body.deliveryFee) || 0,
+      deliveryMode,
+      deliveryZoneId: deliveryMode === "DELIVERY" ? String(body.deliveryZoneId) : null,
+      deliveryAgentId: deliveryMode === "DELIVERY" && body.deliveryAgentId ? String(body.deliveryAgentId) : null,
+      couponCode: body.couponCode ? String(body.couponCode).trim().toUpperCase() : null,
       items: items.map((item: OrderItemBody) => ({
         productId: String(item.productId || ""),
         variantId: String(item.variantId || ""),
@@ -176,7 +225,7 @@ export async function POST(request: Request) {
 
     const order = await createOrder(input)
 
-    await sendOrderEmail({
+    const mailData: OrderMailData = {
       orderNumber: order.orderNumber,
       createdAt: order.createdAt,
       customerName: order.customerName,
@@ -192,12 +241,18 @@ export async function POST(request: Request) {
         name: i.name,
         format: i.format,
         quantity: i.quantity,
-        price: i.price,
+        price: order.items.find((oi) => oi.variantId === i.variantId)?.price ?? i.price,
       })),
       subtotal: order.subtotal,
       deliveryFee: order.deliveryFee,
+      discountAmount: order.discountAmount,
+      couponCode: order.couponCode,
       total: order.total,
-    })
+    }
+
+    await sendOrderEmail(mailData)
+    await sendOrderDevisEmail(mailData)
+    sendWhatsAppMessage(order.customerPhone, buildOrderDevisText(mailData)).catch(() => {})
 
     pushNotification({
       type: "new_order",
@@ -209,7 +264,12 @@ export async function POST(request: Request) {
     return NextResponse.json(order, { status: 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erreur interne du serveur"
-    const status = message.includes("Stock") || message.includes("introuvable") ? 400 : 500
+    const deliveryError = error instanceof DeliveryChoiceError
+    const status =
+      deliveryError ||
+      message.includes("Stock") || message.includes("introuvable") || message.includes("Code promo") || message.includes("Montant minimum")
+        ? 400
+        : 500
     console.error("POST order error:", error)
     return NextResponse.json({ error: message }, { status })
   }

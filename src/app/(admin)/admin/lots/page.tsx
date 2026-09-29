@@ -294,12 +294,12 @@ export default function LotsPage() {
         <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5 lg:col-span-2">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-semibold text-gray-900">Tous les lots ({filtered.length})</h2>
-            <div className="flex gap-2">
-              <div className="relative">
+            <div className="flex flex-wrap gap-2">
+              <div className="relative w-full sm:w-56">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-56 rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:border-primary-500 focus:outline-none" placeholder="Rechercher..." />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:border-primary-500 focus:outline-none" placeholder="Rechercher..." />
               </div>
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="max-w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white">
                 <option value="">Tous les statuts</option>
                 <option value="ACTIVE">Actif</option>
                 <option value="EXHAUSTED">Epuise</option>
@@ -418,7 +418,7 @@ export default function LotsPage() {
                   }
                   return (
                     <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-2">PDV ayant reçu ce lot</p>
+                      <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">PDV ayant reçu ce lot</p>
                       <div className="space-y-1.5">
                         {Array.from(byPos.values()).map((p) => (
                           <div key={p.code} className="flex items-center justify-between text-sm">
@@ -431,7 +431,7 @@ export default function LotsPage() {
                   )
                 })()}
 
-                <div className="max-h-60 overflow-y-auto">
+                <div className="max-h-60 overflow-auto">
                   {(selectedLot.allocations ?? []).length === 0 ? (
                     <p className="text-sm text-gray-500">Aucune allocation (lot non encore utilise).</p>
                   ) : (
@@ -457,9 +457,9 @@ export default function LotsPage() {
                             <td className="px-2 py-1 sm:px-3 sm:py-1.5 font-mono text-xs hidden sm:table-cell">{a.reference || "-"}</td>
                             <td className="px-2 py-1 sm:px-3 sm:py-1.5 hidden sm:table-cell">
                               {a.pointOfSale ? (
-                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">{a.pointOfSale.name}</span>
+                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">{a.pointOfSale.name}</span>
                               ) : (
-                                <span className="text-gray-400 text-[11px]">—</span>
+                                <span className="text-gray-400 text-xs">—</span>
                               )}
                             </td>
                             <td className="px-2 py-1 sm:px-3 sm:py-1.5 text-gray-500 text-xs">{fmtDateTime(a.createdAt)}</td>

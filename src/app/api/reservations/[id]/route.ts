@@ -4,12 +4,7 @@ import { getPrisma } from "@/lib/prisma";
 import { getReservationById, updateReservationStatus } from "@/data/store"
 import { sendReservationConfirmedEmail } from "@/lib/mailer"
 import { generateOrderNumber } from "@/lib/utils"
-import {
-  consumePointOfSaleStockTx,
-  getOrCreateStockMobile,
-  restoreLotAllocationsByReferenceTx,
-  restockPointOfSaleStockTx,
-} from "@/lib/stock-service"
+import { getOrCreateStockMobile } from "@/lib/stock-service"
 
 interface ReservationItem {
   name: string
@@ -33,7 +28,9 @@ async function confirmReservation(id: string) {
   const stockMobile = await getOrCreateStockMobile()
   const pointOfSaleId = reservation.pointOfSaleId || stockMobile.id
 
-  // Find matching variants by name + format
+  // Find matching variants by name + format — uniquement pour relier les
+  // articles de la commande. Aucun prélevement de stock ici : le stock est
+  // verifie et debit au moment de la facturation de la commande.
   const variantLookups = await Promise.all(
     items.map(async (item) => {
       const variant = await getPrisma().productVariant.findFirst({
@@ -41,22 +38,18 @@ async function confirmReservation(id: string) {
           format: item.format,
           product: { name: item.name },
         },
-        select: { id: true, stock: true, productId: true },
+        select: { id: true, productId: true },
       })
       return { ...item, variant }
     })
   )
 
-  // Check global stock before the transaction. The selected storage is checked
-  // again atomically when consumed below.
   for (const v of variantLookups) {
     if (!v.variant) throw new Error(`Variante introuvable pour ${v.name} (${v.format})`)
-    if (v.variant.stock < v.quantity) {
-      throw new Error(`Stock insuffisant pour ${v.name} ${v.format} (disponible: ${v.variant.stock}, demandé: ${v.quantity})`)
-    }
   }
 
-  // Create order + delivery + decrement stock + allocate lots in a transaction
+  // Create order + delivery + link reservation (sans condition de stock : la
+  // confirmation d'une pre-commande ne depend pas du stock disponible)
   const order = await getPrisma().$transaction(async (tx) => {
     const created = await tx.order.create({
       data: {
@@ -66,7 +59,7 @@ async function confirmReservation(id: string) {
         customerEmail: reservation.email,
         customerPhone: reservation.telephone,
         paymentMethod: "CASH_ON_DELIVERY",
-        status: "PENDING",
+        status: "CONFIRMED",
         source: "RESERVATION",
         pointOfSaleId,
         subtotal,
@@ -84,6 +77,7 @@ async function confirmReservation(id: string) {
         },
         delivery: {
           create: {
+            mode: "DELIVERY",
             address: reservation.address || "À définir",
             city: "Brazzaville",
             notes: `Livraison prévue le ${reservation.date}${reservation.heure ? ` à ${reservation.heure}` : ""}`,
@@ -93,26 +87,6 @@ async function confirmReservation(id: string) {
       },
       include: { items: true, delivery: true },
     })
-
-    // Decrement stock + create stock movements + allocate lots
-    for (const v of variantLookups) {
-      const fifoResult = await consumePointOfSaleStockTx(tx, {
-        variantId: v.variant!.id,
-        pointOfSaleId,
-        quantity: v.quantity,
-        type: "RESERVATION",
-        reason: "Réservation confirmée",
-        reference: orderNumber,
-      })
-
-      const orderItem = created.items.find((item) => item.variantId === v.variant!.id)
-      if (orderItem && fifoResult.allocations.length > 0) {
-        await tx.orderItem.update({
-          where: { id: orderItem.id },
-          data: { lotId: fifoResult.allocations[0].lotId },
-        })
-      }
-    }
 
     // Link order to reservation
     await tx.reservation.update({
@@ -150,45 +124,22 @@ async function cancelReservation(id: string) {
   if (reservation.orderId) {
     const order = await getPrisma().order.findUnique({
       where: { id: reservation.orderId },
-      include: { items: true },
+      select: { id: true, status: true, orderNumber: true },
     })
 
+    // La confirmation ne prélevant plus de stock, rien n'est à restituer ici :
+    // seule la commande liée (non encore facturée) est annulée.
     if (order && order.status !== "CANCELLED") {
-      await getPrisma().$transaction(async (tx) => {
-        for (const item of order.items) {
-          if (order.pointOfSaleId) {
-            await restockPointOfSaleStockTx(tx, {
-              variantId: item.variantId,
-              pointOfSaleId: order.pointOfSaleId,
-              quantity: item.quantity,
-              type: "CANCELLATION",
-              reason: "Annulation pré-commande",
-              reference: order.orderNumber,
-            })
-          } else {
-            await tx.productVariant.update({
-              where: { id: item.variantId },
-              data: { stock: { increment: item.quantity } },
-            })
-            await tx.stockMovement.create({
-              data: {
-                variantId: item.variantId,
-                type: "CANCELLATION",
-                quantity: item.quantity,
-                reason: "Annulation pré-commande",
-                reference: order.orderNumber,
-              },
-            })
-          }
-        }
-
-        await restoreLotAllocationsByReferenceTx(tx, order.orderNumber)
-
-        await tx.order.update({
+      const sale = await getPrisma().stockMovement.findFirst({
+        where: { reference: order.orderNumber, type: "SALE" },
+        select: { id: true },
+      })
+      if (!sale) {
+        await getPrisma().order.update({
           where: { id: order.id },
           data: { status: "CANCELLED" },
         })
-      })
+      }
     }
   }
 }
@@ -227,8 +178,10 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/reservations/[
 
     const previous = await getPrisma().reservation.findUnique({ where: { id }, select: { status: true } })
 
+    let createdOrder: Awaited<ReturnType<typeof confirmReservation>> | null = null
+
     if (status === "CONFIRMED" && previous?.status === "PENDING") {
-      await confirmReservation(id)
+      createdOrder = await confirmReservation(id)
     } else if (status === "CANCELLED" && previous?.status === "CONFIRMED") {
       await cancelReservation(id)
     }
@@ -238,7 +191,11 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/reservations/[
       return NextResponse.json({ error: "Réservation introuvable" }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      orderId: createdOrder?.id,
+      orderNumber: createdOrder?.orderNumber,
+    })
   } catch (error) {
     console.error("Reservation update error:", error)
     const message = error instanceof Error ? error.message : "Erreur interne du serveur"

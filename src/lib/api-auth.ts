@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import type { Prisma } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { getPrisma } from "@/lib/prisma";
 
@@ -22,6 +23,44 @@ export async function requireManagementAccess(roles: Role[] = MANAGEMENT_ROLES) 
 }
 
 export type PermissionAction = "view" | "create" | "edit" | "delete"
+
+/**
+ * Règle de visibilité des commandes/ventes :
+ * - ADMIN : tout
+ * - COMMERCIAL : uniquement ses propres commandes
+ * - autres rôles (STOCK_MANAGER, DELIVERY_AGENT) : tout SAUF les ventes comptoir
+ *   réalisées par un autre vendeur (ownership sur `userId`).
+ * Retourne true si l'accès à cette commande doit être refusé (404).
+ */
+export function isRestrictedOrder(
+  order: { notes: string | null; userId: string | null },
+  role: string | undefined,
+  selfId: string | undefined
+): boolean {
+  if (role === "ADMIN") return false
+  if (!role || !selfId) return true
+  if (order.userId && order.userId === selfId) return false
+  if (role === "COMMERCIAL") return true
+  return (order.notes ?? "").startsWith("Vente comptoir")
+}
+
+/**
+ * Filtre de visibilité des mouvements de stock pour les listes/historiques :
+ * les non-ADMIN ne voient pas les mouvements SALE « Vente comptoir » des
+ * autres vendeurs (leur `reference` = numéro de commande d'autrui).
+ * À combiner en AND dans le `where` de `stockMovement.findMany`.
+ */
+export function saleMovementsFilter(
+  role: string | undefined,
+  selfId: string | undefined
+): Prisma.StockMovementWhereInput {
+  if (!role || role === "ADMIN") return {}
+  const notForeignCounterSale: Prisma.StockMovementWhereInput = {
+    NOT: { AND: [{ type: "SALE" }, { reason: { startsWith: "Vente comptoir" } }] },
+  }
+  if (!selfId) return notForeignCounterSale
+  return { OR: [notForeignCounterSale, { userId: selfId }] }
+}
 
 type PermissionKey = "canView" | "canCreate" | "canEdit" | "canDelete"
 

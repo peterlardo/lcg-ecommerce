@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
@@ -10,7 +10,8 @@ import {
   ShoppingCart, Truck, CalendarClock, Plus, Minus, Trash2,
   ArrowRight, CircleCheck,
 } from "lucide-react"
-import { useDeliveryFee } from "@/hooks/use-delivery-fee"
+import { useCartValidation } from "@/hooks/use-cart-validation"
+import DeliveryChoiceBlock, { PICKUP_PLACE, type DeliveryChoice } from "@/components/shop/delivery-choice"
 
 const modes = [
   { id: "commande", label: "Commande", icon: Truck },
@@ -26,11 +27,84 @@ export default function CartPage() {
   const [error, setError] = useState("")
   const [nom, setNom] = useState("")
   const [telephone, setTelephone] = useState("")
+  const [email, setEmail] = useState("")
   const [date, setDate] = useState("")
   const [heure, setHeure] = useState("")
   const [adresse, setAdresse] = useState("")
   const [notes, setNotes] = useState("")
-  const { deliveryFee, isFreeDelivery } = useDeliveryFee(subtotal)
+  const [couponInput, setCouponInput] = useState("")
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null)
+  const [couponMsg, setCouponMsg] = useState<{ type: "ok" | "error"; text: string } | null>(null)
+  const [checkingCoupon, setCheckingCoupon] = useState(false)
+  const [delivery, setDelivery] = useState<DeliveryChoice>({ mode: "DELIVERY", zoneId: null, agentId: null, fee: 0 })
+
+  useCartValidation((names) => {
+    showToast(
+      "error",
+      "Panier mis à jour",
+      `Article(s) plus disponible(s) retiré(s) : ${names.join(", ")}. Merci de recommencer votre sélection.`
+    )
+  })
+
+  const appliedCode = appliedCoupon?.code ?? ""
+  const discount = mode === "commande" ? appliedCoupon?.discount ?? 0 : 0
+  const deliveryFee = mode === "commande" ? delivery.fee : 0
+  const orderTotal = Math.max(0, subtotal - discount) + deliveryFee
+
+  useEffect(() => {
+    if (!appliedCode) return
+    const init = async () => {
+      try {
+        const res = await fetch("/api/coupons/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: appliedCode, subtotal }),
+        })
+        const data = await res.json().catch(() => null)
+        if (res.ok && data?.ok) {
+          setAppliedCoupon({ code: data.code, discount: data.discount })
+        } else {
+          setAppliedCoupon(null)
+          setCouponMsg({ type: "error", text: data?.error || "Code promo invalide." })
+        }
+      } catch {
+        // réseau indisponible : on garde le dernier état connu
+      }
+    }
+    void init()
+  }, [subtotal, appliedCode])
+
+  async function applyCoupon() {
+    const code = couponInput.trim().toUpperCase()
+    if (!code) return
+    setCheckingCoupon(true)
+    setCouponMsg(null)
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, subtotal }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.ok) {
+        setAppliedCoupon({ code: data.code, discount: data.discount })
+        setCouponMsg({ type: "ok", text: `Code ${data.code} appliqué : − ${formatPrice(data.discount)}` })
+      } else {
+        setAppliedCoupon(null)
+        setCouponMsg({ type: "error", text: data?.error || "Code promo invalide." })
+      }
+    } catch {
+      setCouponMsg({ type: "error", text: "Erreur réseau, réessayez." })
+    } finally {
+      setCheckingCoupon(false)
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null)
+    setCouponMsg(null)
+    setCouponInput("")
+  }
 
   if (items.length === 0 && !success) {
     return (
@@ -81,6 +155,18 @@ export default function CartPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+
+    if (mode === "commande" && delivery.mode === "DELIVERY") {
+      if (!delivery.zoneId) {
+        setError("Choisissez une zone de livraison.")
+        return
+      }
+      if (!adresse.trim()) {
+        setError("Adresse de livraison requise.")
+        return
+      }
+    }
+
     setSubmitting(true)
     setError("")
 
@@ -105,6 +191,7 @@ export default function CartPage() {
             ...payload,
             client: nom,
             telephone,
+            email: email.trim(),
             type: "Pré-commande de glaçons",
             date,
             heure,
@@ -127,11 +214,14 @@ export default function CartPage() {
             orderNumber: `LCG-${Date.now().toString(36).toUpperCase().slice(-6)}`,
             customerName: nom,
             customerPhone: telephone,
-            customerEmail: "",
-            address: adresse,
+            customerEmail: email.trim(),
+            address: delivery.mode === "PICKUP" ? PICKUP_PLACE : adresse,
             city: "Brazzaville",
             paymentMethod: "CASH_ON_DELIVERY",
-            deliveryFee,
+            deliveryMode: delivery.mode,
+            deliveryZoneId: delivery.mode === "DELIVERY" ? delivery.zoneId : null,
+            deliveryAgentId: delivery.mode === "DELIVERY" ? delivery.agentId : null,
+            couponCode: appliedCoupon?.code || undefined,
             notes,
           }),
         })
@@ -225,15 +315,70 @@ export default function CartPage() {
             </div>
           ))}
 
+          {mode === "commande" && (
+            <div className="rounded-2xl border border-border bg-card p-4 shadow-card-soft">
+              <p className="text-sm font-semibold mb-2">Code promo</p>
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-bold text-green-600">
+                    {appliedCoupon.code} — − {formatPrice(appliedCoupon.discount)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={removeCoupon}
+                    className="text-xs font-semibold text-muted-foreground underline hover:text-foreground"
+                  >
+                    Retirer
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyCoupon() } }}
+                    className="min-w-0 flex-1 rounded-xl border border-input bg-background px-3 py-2 text-sm uppercase outline-none ring-ring transition-shadow focus:ring-2"
+                    placeholder="EX : BIENVENUE10"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyCoupon}
+                    disabled={checkingCoupon}
+                    className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-transform hover:scale-[1.03] disabled:opacity-50"
+                  >
+                    {checkingCoupon ? "…" : "Appliquer"}
+                  </button>
+                </div>
+              )}
+              {couponMsg && !appliedCoupon && (
+                <p className={`mt-2 text-xs font-medium ${couponMsg.type === "ok" ? "text-green-600" : "text-destructive"}`}>
+                  {couponMsg.text}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2 rounded-2xl bg-ice-gradient px-6 py-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Sous-total</span>
               <span className="font-semibold">{formatPrice(subtotal)}</span>
             </div>
+            {discount > 0 && (
+              <div className="flex items-center justify-between text-sm text-green-600">
+                <span>Remise ({appliedCoupon?.code})</span>
+                <span className="font-semibold">− {formatPrice(discount)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Livraison</span>
-              <span className={`font-semibold ${isFreeDelivery ? "text-green-600" : ""}`}>
-                {isFreeDelivery ? "Gratuite" : deliveryFee > 0 ? formatPrice(deliveryFee) : "Gratuite"}
+              <span className="text-muted-foreground">
+                {mode === "reservation"
+                  ? "Livraison"
+                  : delivery.mode === "PICKUP"
+                    ? "Retrait sur place"
+                    : "Livraison"}
+              </span>
+              <span className={`font-semibold ${deliveryFee === 0 ? "text-green-600" : ""}`}>
+                {deliveryFee > 0 ? formatPrice(deliveryFee) : "Gratuite"}
               </span>
             </div>
             <hr className="border-border" />
@@ -242,7 +387,7 @@ export default function CartPage() {
                 Total
               </span>
               <span className="font-display text-2xl font-extrabold text-primary">
-                {formatPrice(subtotal + deliveryFee)}
+                {formatPrice(orderTotal)}
               </span>
             </div>
           </div>
@@ -300,6 +445,18 @@ export default function CartPage() {
                 />
               </label>
 
+              <label className="block text-sm font-semibold">
+                Email <span className="font-normal text-muted-foreground">(pour recevoir le devis)</span>
+                <input
+                  name="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                  placeholder="vous@exemple.com"
+                />
+              </label>
+
               {mode === "reservation" && (
                 <div className="grid grid-cols-2 gap-3">
                   <label className="block text-sm font-semibold">
@@ -327,17 +484,36 @@ export default function CartPage() {
                 </div>
               )}
 
-              <label className="block text-sm font-semibold">
-                {mode === "reservation" ? "Lieu de livraison / retrait *" : "Adresse de livraison *"}
-                <input
-                  required
-                  name="adresse"
-                  value={adresse}
-                  onChange={(e) => setAdresse(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                  placeholder="Quartier, rue, repère…"
-                />
-              </label>
+              {mode === "commande" ? (
+                <>
+                  <DeliveryChoiceBlock value={delivery} onChange={setDelivery} />
+                  {delivery.mode === "DELIVERY" && (
+                    <label className="block text-sm font-semibold">
+                      Adresse de livraison *
+                      <input
+                        required
+                        name="adresse"
+                        value={adresse}
+                        onChange={(e) => setAdresse(e.target.value)}
+                        className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                        placeholder="Quartier, rue, repère…"
+                      />
+                    </label>
+                  )}
+                </>
+              ) : (
+                <label className="block text-sm font-semibold">
+                  Lieu de livraison / retrait *
+                  <input
+                    required
+                    name="adresse"
+                    value={adresse}
+                    onChange={(e) => setAdresse(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
+                    placeholder="Quartier, rue, repère…"
+                  />
+                </label>
+              )}
 
               <label className="block text-sm font-semibold">
                 Notes
@@ -359,7 +535,7 @@ export default function CartPage() {
             >
               {submitting
                 ? "Traitement..."
-                : `${mode === "reservation" ? "Confirmer la pré-commande" : "Valider la commande"} — ${formatPrice(subtotal + deliveryFee)}`
+                : `${mode === "reservation" ? "Confirmer la pré-commande" : "Valider la commande"} — ${formatPrice(mode === "reservation" ? subtotal + deliveryFee : orderTotal)}`
               }
             </button>
 

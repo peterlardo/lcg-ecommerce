@@ -49,13 +49,17 @@ export default async function ProductDetailPage({
     notFound()
   }
 
+  if (!product.isActive) {
+    notFound()
+  }
+
   const allProducts = await getProducts()
   const related = allProducts
     .filter((p) => p.categorySlug === product.categorySlug && p.id !== product.id)
     .slice(0, 4)
 
   const minPrice = product.variants.length
-    ? Math.min(...product.variants.map((v) => v.price))
+    ? Math.min(...product.variants.map((v) => v.promoPrice ?? v.price))
     : undefined
 
   const productJsonLd = {
