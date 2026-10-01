@@ -20,7 +20,7 @@ const modes = [
 ]
 
 export default function CartPage() {
-  const { items, subtotal, itemCount, removeItem, updateQuantity, clearCart } = useCart()
+  const { items, subtotal, itemCount, removeItem, updateQuantity, clearCart, hydrated } = useCart()
   const { showToast } = useToast()
   const [mode, setMode] = useState("commande")
   const [success, setSuccess] = useState<{ mode: string; ref: string; trackingUrl?: string } | null>(null)
@@ -107,6 +107,9 @@ export default function CartPage() {
     setCouponMsg(null)
     setCouponInput("")
   }
+
+  // Panier enregistré pas encore relu : ne pas afficher « panier vide » par erreur.
+  if (!hydrated) return <div className="mx-auto max-w-6xl px-4 py-24" />
 
   if (items.length === 0 && !success) {
     return (

@@ -222,9 +222,42 @@ function buildReservationHtml(data: ReservationMailData): string {
   return shell("Nouvelle réservation LCG", "Réservation", inner)
 }
 
-function getTransporter(): Transporter {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
+type OutgoingMail = { from: string; to: string; subject: string; html: string }
+
+/** Adresse d'expéditeur : doit être vérifiée chez Brevo (jamais l'identifiant SMTP). */
+function senderAddress(): string {
+  return process.env.MAIL_FROM || "noreply@lcg.cg"
+}
+
+/** « "LCG Site" <x@y> » -> { name, email } */
+function parseAddress(value: string): { name?: string; email: string } {
+  const m = value.match(/^\s*"?([^"<]*)"?\s*<([^>]+)>\s*$/)
+  return m ? { name: m[1].trim() || undefined, email: m[2].trim() } : { email: value.trim() }
+}
+
+/**
+ * Envoi via l'API HTTP de Brevo (fiable sur Cloudflare Workers : simple fetch) si
+ * BREVO_API_KEY est défini ; sinon repli SMTP (nodemailer). Lève une erreur en cas d'échec.
+ */
+async function deliver(mail: OutgoingMail): Promise<void> {
+  const apiKey = process.env.BREVO_API_KEY
+  if (apiKey) {
+    const sender = parseAddress(mail.from)
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        sender: { name: sender.name ?? "LCG", email: senderAddress() },
+        to: [{ email: mail.to }],
+        subject: mail.subject,
+        htmlContent: mail.html,
+      }),
+    })
+    if (!res.ok) throw new Error(`Brevo ${res.status} : ${(await res.text()).slice(0, 300)}`)
+    return
+  }
+  const transporter: Transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp-relay.brevo.com",
     port: Number(process.env.SMTP_PORT) || 587,
     secure: false,
     auth: {
@@ -232,12 +265,17 @@ function getTransporter(): Transporter {
       pass: process.env.SMTP_PASS || "",
     },
   })
+  await transporter.sendMail({ ...mail, from: { name: parseAddress(mail.from).name ?? "LCG", address: senderAddress() } })
+}
+
+function getTransporter() {
+  return { sendMail: deliver }
 }
 
 export async function sendOrderEmail(data: OrderMailData): Promise<boolean> {
   try {
     await getTransporter().sendMail({
-      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      from: `"LCG Site" <${senderAddress()}>`,
       to: MAIL_TO,
       subject: `Nouvelle commande ${data.orderNumber} — ${data.customerName}`,
       html: buildOrderHtml(data),
@@ -252,7 +290,7 @@ export async function sendOrderEmail(data: OrderMailData): Promise<boolean> {
 export async function sendReservationEmail(data: ReservationMailData): Promise<boolean> {
   try {
     await getTransporter().sendMail({
-      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      from: `"LCG Site" <${senderAddress()}>`,
       to: MAIL_TO,
       subject: `Nouvelle réservation ${data.ref} — ${data.client} (${data.date} ${data.heure})`,
       html: buildReservationHtml(data),
@@ -362,7 +400,7 @@ export async function sendOrderDevisEmail(data: OrderMailData): Promise<boolean>
   if (!data.customerEmail) return false
   try {
     await getTransporter().sendMail({
-      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      from: `"LCG Site" <${senderAddress()}>`,
       to: data.customerEmail,
       subject: `Votre commande ${data.orderNumber} — devis LCG`,
       html: buildOrderDevisHtml(data),
@@ -378,7 +416,7 @@ export async function sendReservationDevisEmail(data: ReservationMailData): Prom
   if (!data.email) return false
   try {
     await getTransporter().sendMail({
-      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      from: `"LCG Site" <${senderAddress()}>`,
       to: data.email,
       subject: `Votre pré-commande ${data.ref} — devis LCG`,
       html: buildReservationDevisHtml(data),
@@ -462,7 +500,7 @@ export async function sendReservationConfirmedEmail(data: ReservationConfirmedMa
   if (!data.email) return false
   try {
     await getTransporter().sendMail({
-      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      from: `"LCG Site" <${senderAddress()}>`,
       to: data.email,
       subject: `Pré-commande confirmée ${data.ref} — ${data.client}`,
       html: buildReservationConfirmedHtml(data),
@@ -498,7 +536,7 @@ export async function sendReservationStepEmail(data: ReservationStepMailData): P
   `
   try {
     await getTransporter().sendMail({
-      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      from: `"LCG Site" <${senderAddress()}>`,
       to: data.email,
       subject: `${data.title} — ${data.ref}`,
       html: shell(data.title, "Suivi pré-commande", inner),
@@ -534,7 +572,7 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
   try {
     const verifyUrl = `${baseUrl}/auth/verification?token=${token}`
     await getTransporter().sendMail({
-      from: `"LCG Clients" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      from: `"LCG Clients" <${senderAddress()}>`,
       to: email,
       subject: "Vérifiez votre adresse email — LCG Clients",
       html: buildVerificationHtml(verifyUrl),
@@ -612,7 +650,7 @@ export async function sendStatusChangeEmail(data: StatusChangeMailData): Promise
   if (!data.customerEmail) return false
   try {
     await getTransporter().sendMail({
-      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      from: `"LCG Site" <${senderAddress()}>`,
       to: data.customerEmail,
       subject: `Commande ${data.orderNumber} — ${getStatusLabelFr(data.newStatus)}`,
       html: buildStatusChangeHtml(data),
@@ -648,7 +686,7 @@ export async function sendPasswordResetEmail(email: string, token: string, baseU
   try {
     const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`
     await getTransporter().sendMail({
-      from: `"LCG Clients" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      from: `"LCG Clients" <${senderAddress()}>`,
       to: email,
       subject: "Réinitialisation du mot de passe — LCG Clients",
       html: buildPasswordResetHtml(resetUrl),
