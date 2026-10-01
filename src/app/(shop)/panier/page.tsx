@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { useCartValidation } from "@/hooks/use-cart-validation"
 import DeliveryChoiceBlock, { PICKUP_PLACE, type DeliveryChoice } from "@/components/shop/delivery-choice"
+import { DELIVERY_SLOTS, todayInBrazzaville } from "@/lib/delivery-slots"
 
 const modes = [
   { id: "commande", label: "Commande", icon: Truck },
@@ -22,14 +23,14 @@ export default function CartPage() {
   const { items, subtotal, itemCount, removeItem, updateQuantity, clearCart } = useCart()
   const { showToast } = useToast()
   const [mode, setMode] = useState("commande")
-  const [success, setSuccess] = useState<{ mode: string; ref: string } | null>(null)
+  const [success, setSuccess] = useState<{ mode: string; ref: string; trackingUrl?: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [nom, setNom] = useState("")
   const [telephone, setTelephone] = useState("")
   const [email, setEmail] = useState("")
   const [date, setDate] = useState("")
-  const [heure, setHeure] = useState("")
+  const [slot, setSlot] = useState("")
   const [adresse, setAdresse] = useState("")
   const [notes, setNotes] = useState("")
   const [couponInput, setCouponInput] = useState("")
@@ -48,7 +49,8 @@ export default function CartPage() {
 
   const appliedCode = appliedCoupon?.code ?? ""
   const discount = mode === "commande" ? appliedCoupon?.discount ?? 0 : 0
-  const deliveryFee = mode === "commande" ? delivery.fee : 0
+  // Commande comme pré-commande : frais selon la zone, retrait gratuit.
+  const deliveryFee = delivery.fee
   const orderTotal = Math.max(0, subtotal - discount) + deliveryFee
 
   useEffect(() => {
@@ -142,6 +144,14 @@ export default function CartPage() {
           Référence <strong className="text-foreground">{success.ref}</strong>. Notre équipe vous contactera très rapidement pour confirmer{" "}
           {success.mode === "reservation" ? "votre pré-commande" : "la livraison"} et le paiement (espèces ou Mobile Money).
         </p>
+        {success.trackingUrl && (
+          <a
+            href={success.trackingUrl}
+            className="mt-6 inline-flex items-center gap-2 rounded-full border border-primary px-7 py-3 font-display text-sm font-bold text-primary transition-colors hover:bg-primary/5"
+          >
+            Suivre ma pré-commande
+          </a>
+        )}
         <Link
           href="/produits"
           className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 font-display text-sm font-bold text-primary-foreground shadow-frost transition-transform hover:scale-[1.03]"
@@ -156,7 +166,12 @@ export default function CartPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    if (mode === "commande" && delivery.mode === "DELIVERY") {
+    if (mode === "reservation" && (!date || !slot)) {
+      setError("Choisissez une date et un créneau.")
+      return
+    }
+
+    if (delivery.mode === "DELIVERY") {
       if (!delivery.zoneId) {
         setError("Choisissez une zone de livraison.")
         return
@@ -183,6 +198,7 @@ export default function CartPage() {
 
     try {
       let ref: string
+      let trackingUrl: string | undefined
       if (mode === "reservation") {
         const res = await fetch("/api/reservations", {
           method: "POST",
@@ -194,8 +210,10 @@ export default function CartPage() {
             email: email.trim(),
             type: "Pré-commande de glaçons",
             date,
-            heure,
-            address: adresse,
+            slot,
+            deliveryMode: delivery.mode,
+            zoneId: delivery.mode === "DELIVERY" ? delivery.zoneId : null,
+            address: delivery.mode === "PICKUP" ? PICKUP_PLACE : adresse,
             notes,
           }),
         })
@@ -205,6 +223,7 @@ export default function CartPage() {
         }
         const data = await res.json()
         ref = data.ref || `LCG-${Date.now().toString(36).toUpperCase().slice(-6)}`
+        trackingUrl = data.trackingUrl
       } else {
         const res = await fetch("/api/orders", {
           method: "POST",
@@ -233,7 +252,7 @@ export default function CartPage() {
         ref = data.orderNumber
       }
       clearCart()
-      setSuccess({ mode, ref })
+      setSuccess({ mode, ref, trackingUrl })
       showToast(
         "success",
         mode === "reservation" ? "Pré-commande enregistrée !" : "Commande enregistrée !",
@@ -465,45 +484,34 @@ export default function CartPage() {
                       required
                       name="date"
                       type="date"
+                      min={todayInBrazzaville()}
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
                       className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
                     />
                   </label>
                   <label className="block text-sm font-semibold">
-                    Heure *
-                    <input
+                    Créneau *
+                    <select
                       required
-                      name="heure"
-                      type="time"
-                      value={heure}
-                      onChange={(e) => setHeure(e.target.value)}
+                      name="slot"
+                      value={slot}
+                      onChange={(e) => setSlot(e.target.value)}
                       className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                    />
+                    >
+                      <option value="">Choisir…</option>
+                      {DELIVERY_SLOTS.map((s) => (
+                        <option key={s.id} value={s.id}>{s.label}</option>
+                      ))}
+                    </select>
                   </label>
                 </div>
               )}
 
-              {mode === "commande" ? (
-                <>
-                  <DeliveryChoiceBlock value={delivery} onChange={setDelivery} />
-                  {delivery.mode === "DELIVERY" && (
-                    <label className="block text-sm font-semibold">
-                      Adresse de livraison *
-                      <input
-                        required
-                        name="adresse"
-                        value={adresse}
-                        onChange={(e) => setAdresse(e.target.value)}
-                        className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
-                        placeholder="Quartier, rue, repère…"
-                      />
-                    </label>
-                  )}
-                </>
-              ) : (
+              <DeliveryChoiceBlock value={delivery} onChange={setDelivery} hideAgents={mode === "reservation"} />
+              {delivery.mode === "DELIVERY" && (
                 <label className="block text-sm font-semibold">
-                  Lieu de livraison / retrait *
+                  Adresse de livraison *
                   <input
                     required
                     name="adresse"

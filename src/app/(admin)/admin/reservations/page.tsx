@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { CalendarRange, Search, ChevronDown, Check, X, Plus, ShoppingCart, Archive, MessageCircle } from "lucide-react"
-import type { Reservation } from "@/data/store"
+import { CalendarRange, Search, ChevronDown, Check, X, Plus, ShoppingCart, Archive, MessageCircle, Store, Truck, ExternalLink } from "lucide-react"
+import type { Reservation as StoredReservation } from "@/data/store"
+import { DELIVERY_SLOTS, slotLabel, todayInBrazzaville } from "@/lib/delivery-slots"
+import { ReservationPlanning, type PlanningAgent } from "./planning"
 import type { Product } from "@/data/products"
 import { formatPrice } from "@/lib/utils"
 import { buildReservationDevisText, buildWaLink } from "@/lib/devis-text"
@@ -27,6 +29,11 @@ const sourceLabels: Record<string, { label: string; className: string }> = {
   OPERATOR: { label: "Opérateur", className: "bg-violet-100 text-violet-700" },
 }
 
+// Pré-commande telle que renvoyée par l'API (avec zone, créneau et commande liée).
+type Reservation = StoredReservation & { ref?: string; zoneName?: string | null }
+
+const reservationTotal = (res: Reservation) => res.items.reduce((sum, i) => sum + i.price * i.quantity, 0) + (res.deliveryFee || 0)
+
 interface DraftItem {
   productId: string
   variantId: string
@@ -34,7 +41,7 @@ interface DraftItem {
 }
 
 function reservationWaLink(res: Reservation): string {
-  const total = res.items.reduce((sum, i) => sum + i.price * i.quantity, 0)
+  const total = reservationTotal(res)
   return buildWaLink(
     res.telephone,
     buildReservationDevisText({
@@ -50,7 +57,9 @@ function reservationWaLink(res: Reservation): string {
       source: res.source || "WEB",
       notes: res.notes || "",
       items: res.items,
+      deliveryFee: res.deliveryFee,
       total,
+      trackingUrl: typeof window !== "undefined" ? `${window.location.origin}/suivi/${res.id}` : undefined,
     })
   )
 }
@@ -63,16 +72,24 @@ export default function ReservationsPage() {
   const [activeTab, setActiveTab] = useState("Toutes")
   const [expanded, setExpanded] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({
+  const emptyForm = {
     client: "",
     telephone: "",
     email: "",
     type: "Pré-commande événement",
     date: "",
-    heure: "",
+    slot: "",
+    deliveryMode: "DELIVERY" as "DELIVERY" | "PICKUP",
+    zoneId: "",
     address: "",
     notes: "",
-  })
+  }
+  const [form, setForm] = useState(emptyForm)
+  const [view, setView] = useState<"liste" | "planning">("liste")
+  const [agents, setAgents] = useState<PlanningAgent[]>([])
+  const [zones, setZones] = useState<{ id: string; name: string; baseFee: number; isActive: boolean }[]>([])
+  // Livreur choisi à la confirmation, par pré-commande.
+  const [confirmAgent, setConfirmAgent] = useState<Record<string, string>>({})
   const [draftItems, setDraftItems] = useState<DraftItem[]>([{ productId: "", variantId: "", quantity: 1 }])
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState("")
@@ -102,6 +119,12 @@ export default function ReservationsPage() {
         if (res.ok) setReservations(await res.json())
         const prodRes = await fetch("/api/produits?all=1", { signal: controller.signal })
         if (!controller.signal.aborted && prodRes.ok) setProducts(await prodRes.json())
+        const agentsRes = await fetch("/api/delivery-agents", { signal: controller.signal })
+        if (!controller.signal.aborted && agentsRes.ok) {
+          const data = await agentsRes.json()
+          setAgents(Array.isArray(data.agents) ? data.agents : [])
+          setZones(Array.isArray(data.zones) ? data.zones : [])
+        }
       } catch (err) {
         if (!controller.signal.aborted) console.error("Erreur:", err)
       } finally {
@@ -119,7 +142,7 @@ export default function ReservationsPage() {
       const res = await fetch(`/api/reservations/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...(status === "CONFIRMED" && confirmAgent[id] ? { agentId: confirmAgent[id] } : {}) }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
@@ -198,6 +221,8 @@ export default function ReservationsPage() {
           const product = products.find((p) => p.id === item.productId)
           const variant = product?.variants.find((v) => v.id === item.variantId)
           return {
+            productId: item.productId,
+            variantId: item.variantId,
             name: product?.name || "Produit",
             format: variant?.format || "",
             quantity: item.quantity,
@@ -205,8 +230,13 @@ export default function ReservationsPage() {
           }
         })
 
-      if (!form.client || !form.telephone || !form.date) {
-        setFormError("Client, téléphone et date sont requis")
+      if (!form.client || !form.telephone || !form.date || !form.slot) {
+        setFormError("Client, téléphone, date et créneau sont requis")
+        setSubmitting(false)
+        return
+      }
+      if (form.deliveryMode === "DELIVERY" && (!form.zoneId || !form.address.trim())) {
+        setFormError("Zone et adresse de livraison requises (ou choisissez le retrait sur place)")
         setSubmitting(false)
         return
       }
@@ -228,7 +258,7 @@ export default function ReservationsPage() {
         return
       }
       setShowModal(false)
-      setForm({ client: "", telephone: "", email: "", type: "Pré-commande événement", date: "", heure: "", address: "", notes: "" })
+      setForm(emptyForm)
       setDraftItems([{ productId: "", variantId: "", quantity: 1 }])
       await fetchReservations()
     } catch (error) {
@@ -264,6 +294,19 @@ export default function ReservationsPage() {
         </div>
       </div>
 
+      <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1 w-fit">
+        {([["liste", "À confirmer"], ["planning", "Planning"]] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setView(id)}
+            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${view === id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "planning" ? <ReservationPlanning agents={agents} /> : (<>
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -352,9 +395,16 @@ export default function ReservationsPage() {
                       </span>
                     </div>
                     <p className="break-words text-sm text-gray-500">
-                      {res.type} · {res.date} à {res.heure}
-                      {res.address ? ` · ${res.address}` : ""}
-                      {res.inviteCount > 0 ? ` · ${res.inviteCount} invités` : ""}
+                      {res.ref ? <span className="font-mono">{res.ref} · </span> : null}
+                      {res.date}{res.slot ? `, ${slotLabel(res.slot)}` : res.heure ? ` à ${res.heure}` : ""}
+                      {" · "}
+                      {res.deliveryMode === "PICKUP" ? (
+                        <span className="inline-flex items-center gap-1"><Store className="h-3.5 w-3.5" />Retrait sur place</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1"><Truck className="h-3.5 w-3.5" />{res.zoneName ?? "Zone à définir"}{res.address ? ` · ${res.address}` : ""}</span>
+                      )}
+                      {" · "}<span className="font-semibold text-gray-700">{formatPrice(reservationTotal(res))}</span>
+                      {res.deliveryFee > 0 ? <span className="text-xs"> (dont livraison {formatPrice(res.deliveryFee)})</span> : null}
                     </p>
                   </div>
                   <ChevronDown
@@ -447,6 +497,27 @@ export default function ReservationsPage() {
                             </a>
                           ) : null
                         })()}
+                        <a
+                          href={`/suivi/${res.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" /> Page de suivi client
+                        </a>
+                        {res.status === "PENDING" && res.deliveryMode === "DELIVERY" && (
+                          <select
+                            value={confirmAgent[res.id] ?? ""}
+                            onChange={(e) => setConfirmAgent((prev) => ({ ...prev, [res.id]: e.target.value }))}
+                            className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                            aria-label="Livreur à assigner à la confirmation"
+                          >
+                            <option value="">Livreur : à assigner plus tard</option>
+                            {agents.filter((a) => a.isActive && a.isAvailable).map((a) => (
+                              <option key={a.id} value={a.id}>{a.name}</option>
+                            ))}
+                          </select>
+                        )}
                         {res.status !== "CONFIRMED" && (
                           <button
                             onClick={() => handleStatusChange(res.id, "CONFIRMED")}
@@ -493,6 +564,8 @@ export default function ReservationsPage() {
           )}
         </div>
       )}
+
+      </>)}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/40 p-2 sm:p-4 overflow-y-auto">
@@ -558,30 +631,64 @@ export default function ReservationsPage() {
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date *</label>
                   <input
                     type="date"
+                    min={todayInBrazzaville()}
                     value={form.date}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
                     className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Heure</label>
-                  <input
-                    type="time"
-                    value={form.heure}
-                    onChange={(e) => setForm({ ...form, heure: e.target.value })}
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Créneau *</label>
+                  <select
+                    value={form.slot}
+                    onChange={(e) => setForm({ ...form, slot: e.target.value })}
                     className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
-                  />
+                  >
+                    <option value="">Choisir…</option>
+                    {DELIVERY_SLOTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
                 </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Lieu de livraison / retrait</label>
-                  <input
-                    type="text"
-                    value={form.address}
-                    onChange={(e) => setForm({ ...form, address: e.target.value })}
-                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
-                    placeholder="Adresse de l'événement"
-                  />
+                <div className="sm:col-span-2 grid grid-cols-2 gap-2">
+                  {([["DELIVERY", "Livraison"], ["PICKUP", "Retrait sur place"]] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setForm({ ...form, deliveryMode: mode })}
+                      className={`min-h-11 rounded-lg border-2 px-3 text-sm font-semibold transition-colors ${
+                        form.deliveryMode === mode ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
+                {form.deliveryMode === "DELIVERY" && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Zone de livraison *</label>
+                      <select
+                        value={form.zoneId}
+                        onChange={(e) => setForm({ ...form, zoneId: e.target.value })}
+                        className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                      >
+                        <option value="">Choisir une zone…</option>
+                        {zones.filter((z) => z.isActive).map((z) => (
+                          <option key={z.id} value={z.id}>{z.name} — {formatPrice(z.baseFee)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Adresse *</label>
+                      <input
+                        type="text"
+                        value={form.address}
+                        onChange={(e) => setForm({ ...form, address: e.target.value })}
+                        className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                        placeholder="Quartier, rue, repère…"
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Notes</label>
                   <input

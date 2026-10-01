@@ -38,10 +38,13 @@ export default function DeliveryChoiceBlock({
   value,
   onChange,
   requireAgent = false,
+  hideAgents = false,
 }: {
   value: DeliveryChoice
   onChange: (next: DeliveryChoice) => void
   requireAgent?: boolean
+  /** Pré-commande : le livreur est choisi par l'équipe à la planification, pas par le client. */
+  hideAgents?: boolean
 }) {
   const [zones, setZones] = useState<DeliveryOptionZone[]>([])
   const [agents, setAgents] = useState<DeliveryOptionAgent[]>([])
@@ -66,6 +69,12 @@ export default function DeliveryChoiceBlock({
   }, [])
 
   const zone = useMemo(() => zones.find((z) => z.id === value.zoneId) ?? null, [zones, value.zoneId])
+
+  // Choix du livreur masqué (pré-commande) : on oublie un livreur choisi avant et on revient
+  // au tarif de la zone, celui que le serveur appliquera.
+  useEffect(() => {
+    if (hideAgents && value.agentId) onChange({ ...value, agentId: null, fee: zone?.baseFee ?? 0 })
+  }, [hideAgents, value, zone, onChange])
   const maison = agents.filter((a) => a.kind === "MAISON")
   const partenaires = agents.filter((a) => a.kind === "PARTNER")
 
@@ -197,7 +206,11 @@ export default function DeliveryChoiceBlock({
         <div className="space-y-4">
           {zoneSelect}
 
-          {loading ? (
+          {hideAgents ? (
+            <p className="text-xs text-muted-foreground">
+              Le livreur est attribué par notre équipe lors de la planification de votre créneau.
+            </p>
+          ) : loading ? (
             <p className="text-xs text-muted-foreground">Chargement des livreurs…</p>
           ) : agents.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border p-4 text-xs text-muted-foreground">

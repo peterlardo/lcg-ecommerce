@@ -39,13 +39,15 @@ export function buildReservationDevisText(data: ReservationMailData): string {
     "",
     "Devis de votre opération :",
     ...data.items.map((i) => `• ${i.name}${i.format ? ` (${i.format})` : ""} x${i.quantity} — ${formatPrice(i.price * i.quantity)}`),
+    ...(data.deliveryFee !== undefined ? [`Livraison : ${data.deliveryFee > 0 ? formatPrice(data.deliveryFee) : "Gratuite"}`] : []),
     "",
     `TOTAL : ${formatPrice(data.total)}`,
-    `Date : ${data.date}${data.heure ? ` à ${data.heure}` : ""}`,
+    `Date : ${data.date}${data.heure ? `, créneau ${data.heure}` : ""}`,
   ]
   if (data.address) lines.push(`Lieu : ${data.address}`)
   if (data.notes) lines.push(`Notes : ${data.notes}`)
   lines.push("", "Notre équipe vous contactera pour confirmer le créneau et le paiement.")
+  if (data.trackingUrl) lines.push(`Suivi : ${data.trackingUrl}`)
   return lines.join("\n")
 }
 

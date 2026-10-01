@@ -18,6 +18,9 @@ export interface ContactMessage {
 }
 
 export interface ReservationItem {
+  // Identifiants de la variante : présents pour les pré-commandes récentes (repli sur nom + format sinon).
+  productId?: string
+  variantId?: string
   name: string
   format: string
   quantity: number
@@ -40,6 +43,10 @@ export interface Reservation {
   notes: string
   status: "PENDING" | "CONFIRMED" | "CANCELLED"
   source: string
+  deliveryMode: "DELIVERY" | "PICKUP"
+  zoneId: string | null
+  deliveryFee: number
+  slot: string
   createdAt: string
 }
 
@@ -439,6 +446,10 @@ function mapReservation(r: PrismaReservation): Reservation {
     notes: r.notes,
     status: r.status as "PENDING" | "CONFIRMED" | "CANCELLED",
     source: r.source || "WEB",
+    deliveryMode: r.deliveryMode === "PICKUP" ? "PICKUP" : "DELIVERY",
+    zoneId: r.zoneId ?? null,
+    deliveryFee: r.deliveryFee ?? 0,
+    slot: r.slot ?? "",
     createdAt: r.createdAt.toISOString(),
   }
 }
@@ -472,6 +483,10 @@ export async function addReservation(
       itemsJson: JSON.stringify(res.items || []),
       notes: res.notes,
       source: res.source || "WEB",
+      deliveryMode: res.deliveryMode,
+      zoneId: res.zoneId,
+      deliveryFee: res.deliveryFee,
+      slot: res.slot,
     },
   })
   return mapReservation(r)

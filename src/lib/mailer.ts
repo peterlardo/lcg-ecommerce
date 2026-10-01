@@ -42,6 +42,10 @@ export interface ReservationMailData {
   notes: string
   items: OrderMailItem[]
   total: number
+  /** Frais de livraison inclus dans total (0 = retrait ou gratuit). */
+  deliveryFee?: number
+  /** Lien public de suivi de la pré-commande. */
+  trackingUrl?: string
 }
 
 const MAIL_TO = process.env.MAIL_TO || "fred.bialard@gmail.com"
@@ -399,6 +403,18 @@ export interface ReservationConfirmedMailData {
   address: string
   items: OrderMailItem[]
   total: number
+  deliveryFee?: number
+  trackingUrl?: string
+}
+
+function trackingButton(url?: string): string {
+  if (!url) return ""
+  return `
+    <div style="text-align: center; margin: 24px 0 4px;">
+      <a href="${url}" style="display: inline-block; background: linear-gradient(135deg, #0f766e, #059669); color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 12px 30px; border-radius: 10px;">
+        Suivre ma pré-commande
+      </a>
+    </div>`
 }
 
 function buildReservationConfirmedHtml(data: ReservationConfirmedMailData): string {
@@ -418,9 +434,10 @@ function buildReservationConfirmedHtml(data: ReservationConfirmedMailData): stri
 
     <h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Détails</h2>
     <table style="width: 100%; border-collapse: collapse;">
-      ${infoRow("Date de livraison", data.date)}
-      ${infoRow("Heure souhaitée", data.heure || "—")}
+      ${infoRow("Date", data.date)}
+      ${infoRow("Créneau", data.heure || "—")}
       ${infoRow("Lieu", data.address)}
+      ${data.deliveryFee ? infoRow("Livraison", formatPrice(data.deliveryFee)) : ""}
     </table>
 
     <h2 style="margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #059669;">Articles</h2>
@@ -434,8 +451,9 @@ function buildReservationConfirmedHtml(data: ReservationConfirmedMailData): stri
     </table>
 
     <p style="margin-top: 20px; font-size: 14px; color: #374151;">
-      Notre équipe vous contactera très vite pour confirmer le créneau de livraison et le mode de paiement.
+      Paiement à la livraison ou au retrait : espèces ou Mobile Money. Vous serez prévenu au départ du livreur.
     </p>
+    ${trackingButton(data.trackingUrl)}
   `
   return shell("Pré-commande confirmée LCG", "Pré-commande confirmée", inner)
 }
@@ -452,6 +470,42 @@ export async function sendReservationConfirmedEmail(data: ReservationConfirmedMa
     return true
   } catch (error) {
     console.error("Échec envoi email confirmation réservation:", error)
+    return false
+  }
+}
+
+export interface ReservationStepMailData {
+  email: string
+  client: string
+  ref: string
+  title: string
+  message: string
+  trackingUrl?: string
+}
+
+/** Étape de suivi d'une pré-commande (départ du livreur, livrée, échec, replanifiée). */
+export async function sendReservationStepEmail(data: ReservationStepMailData): Promise<boolean> {
+  if (!data.email) return false
+  const inner = `
+    <h1 style="margin: 0; font-size: 22px; color: #111827;">${data.title}</h1>
+    <p style="margin: 6px 0 0; font-size: 14px; color: #6b7280;">Bonjour ${data.client},</p>
+    <p style="margin: 12px 0 0; font-size: 15px; color: #374151; white-space: pre-wrap;">${data.message}</p>
+    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 18px; margin-top: 18px;">
+      <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #059669; font-weight: 700;">Référence</div>
+      <div style="font-size: 18px; font-weight: 800; color: #047857; margin-top: 2px;">${data.ref}</div>
+    </div>
+    ${trackingButton(data.trackingUrl)}
+  `
+  try {
+    await getTransporter().sendMail({
+      from: `"LCG Site" <${process.env.SMTP_USER || "noreply@lcg.cg"}>`,
+      to: data.email,
+      subject: `${data.title} — ${data.ref}`,
+      html: shell(data.title, "Suivi pré-commande", inner),
+    })
+    return true
+  } catch (error) {
+    console.error("Échec envoi email suivi réservation:", error)
     return false
   }
 }

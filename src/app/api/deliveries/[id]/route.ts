@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { Prisma, DeliveryStatus } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { notifyReservationStep } from "@/lib/reservation-notify"
 
 const VALID_STATUS = ["PENDING", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "FAILED"]
 // Statuts d'une livraison à domicile qui supposent un livreur.
@@ -128,6 +129,12 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
       }
       return updated
     })
+
+    // Pré-commande : le client est prévenu (WhatsApp + e-mail) à chaque étape de la livraison.
+    if (current.order.source === "RESERVATION" && delivery.status !== current.status) {
+      const step = ({ IN_TRANSIT: "IN_TRANSIT", DELIVERED: "DELIVERED", FAILED: "FAILED" } as const)[delivery.status as "IN_TRANSIT" | "DELIVERED" | "FAILED"]
+      if (step) await notifyReservationStep({ orderId: current.orderId }, step, { failedReason: delivery.failedReason ?? undefined })
+    }
 
     return NextResponse.json({
       id: delivery.id,
