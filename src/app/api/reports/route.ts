@@ -149,16 +149,29 @@ export async function GET(request: Request) {
     const userIdParam = searchParams.get("userId") || ""
 
     const posFilter = await getUserPointOfSaleIds()
-    const posIds = posFilter?.posIds ?? null
+    const allowedPosIds = posFilter?.posIds ?? null
 
     const session = await auth()
     const role = session?.user?.role
     const selfId = session!.user!.id
 
+    // Points de vente actifs (Comptoir LCG, Stock Mobile…) visibles par l'utilisateur.
+    const pointsOfSale = await getPrisma().pointOfSale.findMany({
+      where: { isActive: true, ...(allowedPosIds !== null ? { id: { in: allowedPosIds } } : {}) },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    })
+    // ?pos=<id> : rapport d'un seul point de vente ; absent ou "all" : tous.
+    const posParam = searchParams.get("pos") || "all"
+    const selectedPos = pointsOfSale.find((p) => p.id === posParam) ?? null
+    const posIds = selectedPos ? [selectedPos.id] : allowedPosIds
+
     const posClause =
       posIds !== null
         ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
         : null
+    // Emplacements dont on additionne le stock réel (PointOfSaleStock).
+    const stockPosIds = selectedPos ? [selectedPos.id] : pointsOfSale.map((p) => p.id)
 
     const ownScope: Prisma.OrderWhereInput = {
       OR: [{ NOT: { notes: { startsWith: "Vente comptoir" } } }, { userId: selfId }],
@@ -173,7 +186,10 @@ export async function GET(request: Request) {
 
     // Mouvements de stock : masque aux non-ADMIN les ventes comptoir des autres
     // vendeurs (leur reference = numero de commande d'autrui).
-    const movementFilter: Prisma.StockMovementWhereInput = saleMovementsFilter(role, selfId)
+    const movementFilter: Prisma.StockMovementWhereInput = {
+      ...saleMovementsFilter(role, selfId),
+      ...(selectedPos ? { pointOfSaleId: selectedPos.id } : {}),
+    }
 
     const now = new Date()
     const todayStart = startOfDay(now)
@@ -215,7 +231,17 @@ export async function GET(request: Request) {
     if (clientParam) trendFilter.customerName = { contains: clientParam, mode: "insensitive" }
     if (session?.user?.role === "ADMIN" && userIdParam) trendFilter.userId = userIdParam
 
-    const [recentOrders, allOrders, variants, movements, reservations, deliveries, cashSessions, lots, weekOrders, weekReservations, weekDeliveries, trendOrders] = await Promise.all([
+    const deliveryPosFilter: Prisma.DeliveryWhereInput = selectedPos ? { order: { pointOfSaleId: selectedPos.id } } : {}
+
+    // Comparaison entre points de vente : toujours tous les PDV visibles, quel que soit le filtre.
+    const comparisonOrderFilter: Prisma.OrderWhereInput =
+      role === "ADMIN"
+        ? {}
+        : role === "COMMERCIAL"
+          ? { userId: selfId }
+          : { AND: [...(allowedPosIds !== null ? [{ pointOfSaleId: { in: allowedPosIds } }] : []), ownScope] }
+
+    const [recentOrders, allOrders, variantsRaw, movements, reservations, deliveries, cashSessions, lots, weekOrders, weekReservations, weekDeliveries, trendOrders, posStocks, revenueByPos] = await Promise.all([
       getPrisma().order.findMany({
         where: { createdAt: { gte: sevenDaysAgo }, ...orderPosFilter },
         select: orderSelect,
@@ -233,7 +259,7 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
       }),
       getPrisma().reservation.findMany({ where: posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}, select: reservationSelect, orderBy: { createdAt: "desc" }, take: 100 }),
-      getPrisma().delivery.findMany({ select: deliverySelect, orderBy: { createdAt: "desc" }, take: 100 }),
+      getPrisma().delivery.findMany({ where: deliveryPosFilter, select: deliverySelect, orderBy: { createdAt: "desc" }, take: 100 }),
       getPrisma().cashSession.findMany({
         where: { openedAt: { gte: periodFrom }, ...(posIds !== null ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } } : {}) },
         select: cashSessionSelect,
@@ -255,7 +281,7 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "asc" },
       }),
       getPrisma().delivery.findMany({
-        where: { createdAt: { gte: livraisonWeekStart, lte: livraisonWeekEnd } },
+        where: { createdAt: { gte: livraisonWeekStart, lte: livraisonWeekEnd }, ...deliveryPosFilter },
         select: deliverySelect,
         orderBy: { createdAt: "asc" },
       }),
@@ -264,7 +290,38 @@ export async function GET(request: Request) {
         select: { createdAt: true, total: true, status: true, orderNumber: true, customerName: true, paymentMethod: true },
         orderBy: { createdAt: "asc" },
       }),
+      getPrisma().pointOfSaleStock.findMany({
+        where: { pointOfSaleId: { in: pointsOfSale.map((p) => p.id) } },
+        select: { variantId: true, pointOfSaleId: true, quantity: true },
+      }),
+      getPrisma().order.groupBy({
+        by: ["pointOfSaleId"],
+        where: { createdAt: { gte: periodFrom }, status: { in: ["OUT_FOR_DELIVERY", "DELIVERED"] }, ...comparisonOrderFilter },
+        _sum: { total: true },
+        _count: { _all: true },
+      }),
     ])
+
+    // Stock réel = somme des emplacements retenus (et non l'ancien champ global ProductVariant.stock).
+    const stockOf = (variantId: string, ids: string[]) =>
+      posStocks.filter((s) => s.variantId === variantId && ids.includes(s.pointOfSaleId)).reduce((sum, s) => sum + s.quantity, 0)
+    const variants = variantsRaw.map((v) => ({
+      ...v,
+      stock: stockOf(v.id, stockPosIds),
+      stockByPos: Object.fromEntries(pointsOfSale.map((p) => [p.id, stockOf(v.id, [p.id])])),
+    }))
+
+    const byPointOfSale = pointsOfSale.map((p) => {
+      const row = revenueByPos.find((r) => r.pointOfSaleId === p.id)
+      return {
+        id: p.id,
+        name: p.name,
+        code: p.code,
+        revenue: row?._sum.total ?? 0,
+        orders: row?._count._all ?? 0,
+        stockUnits: posStocks.filter((s) => s.pointOfSaleId === p.id).reduce((sum, s) => sum + s.quantity, 0),
+      }
+    })
 
     const activeRecent = recentOrders.filter((o) => o.status !== "CANCELLED")
     const activeRecentDelivered = activeRecent.filter((o) => ["OUT_FOR_DELIVERY", "DELIVERED"].includes(o.status))
@@ -420,7 +477,7 @@ export async function GET(request: Request) {
     ).map(([, v]) => v)
 
     const allStockVariants = variants.map((v) => ({
-      productName: v.product.name, format: v.format, stock: v.stock, price: v.price, categoryName: v.product.category?.name ?? "Sans categorie",
+      productName: v.product.name, format: v.format, stock: v.stock, stockByPos: v.stockByPos, price: v.price, categoryName: v.product.category?.name ?? "Sans categorie",
     })).sort((a, b) => a.stock - b.stock)
 
     const salesByDay = daily30.map((d) => ({ ...d, ventes: activeAllDelivered.filter((o) => dayKey(o.createdAt) === d.date).reduce((s, o) => s + o.total, 0) }))
@@ -498,6 +555,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       period,
       periodLabel: getPeriodRange(period, now).label,
+      pointsOfSale: pointsOfSale.map((p) => ({ id: p.id, name: p.name })),
+      selectedPos: selectedPos ? { id: selectedPos.id, name: selectedPos.name } : null,
+      byPointOfSale,
       weekOffset,
       weekStart: weekStart.toISOString(),
       weekEnd: weekEnd.toISOString(),
