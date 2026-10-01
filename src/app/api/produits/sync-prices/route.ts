@@ -12,6 +12,9 @@ export async function PUT(request: Request) {
     if (!prices || !Array.isArray(prices) || prices.length === 0) {
       return NextResponse.json({ error: "Aucun prix fourni" }, { status: 400 })
     }
+    if (prices.some((p) => typeof p?.variantId !== "string" || !Number.isFinite(Number(p.price)) || Number(p.price) < 0)) {
+      return NextResponse.json({ error: "Prix invalide (nombre positif attendu)" }, { status: 400 })
+    }
 
     const updates = prices.map((p) =>
       getPrisma().productVariant.update({

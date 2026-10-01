@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { getProducts, createProduct } from "@/data/store"
 import { ensureOperationalStockLocations, ensurePointOfSaleStockRows } from "@/lib/stock-service"
+import { parseVariants } from "@/lib/product-validation"
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -22,18 +23,14 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { name, subtitle, description, image, categoryId, isFeatured, isActive, badge, variants } = body
 
-    if (!name || !variants || !Array.isArray(variants) || variants.length === 0) {
-      return NextResponse.json({ error: "Nom et au moins une variante sont requis" }, { status: 400 })
+    if (typeof name !== "string" || !name.trim()) {
+      return NextResponse.json({ error: "Le nom du produit est requis" }, { status: 400 })
     }
-    const invalidVariant = variants.find(
-      (v) => !v?.format || !Number.isFinite(Number(v?.price)) || Number(v?.price) < 0
-    )
-    if (invalidVariant) {
-      return NextResponse.json({ error: "Chaque variante doit avoir un format et un prix valide" }, { status: 400 })
-    }
+    const parsed = parseVariants(variants)
+    if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
     const product = await createProduct({
-      name,
+      name: name.trim(),
       subtitle: subtitle || null,
       description: description || null,
       image: image || null,
@@ -41,12 +38,7 @@ export async function POST(request: Request) {
       isFeatured: isFeatured || false,
       isActive: isActive !== false,
       badge: badge || null,
-      variants: variants.map((v) => ({
-        format: v.format,
-        price: Number(v.price),
-        stock: v.stock === undefined || v.stock === null || v.stock === "" ? 0 : Math.max(0, Math.floor(Number(v.stock))),
-        unit: v.unit || null,
-      })),
+      variants: parsed.variants.map((v) => ({ ...v, stock: v.stock ?? 0 })),
     })
     const locations = await ensureOperationalStockLocations()
     await ensurePointOfSaleStockRows(locations.map((l) => l.id))

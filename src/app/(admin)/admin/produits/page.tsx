@@ -7,7 +7,13 @@ import { formatPrice } from "@/lib/utils"
 import { categories } from "@/data/products"
 import type { Product } from "@/data/products"
 
-const emptyVariant = { format: "", price: 0, unit: "", stock: 0 }
+// id : variante existante (édition) — permet de renommer un format sans perdre stock et historique.
+const emptyVariant: { id?: string; format: string; price: number; unit: string; stock: number } = { format: "", price: 0, unit: "", stock: 0 }
+
+async function errorOf(res: Response): Promise<string> {
+  const data = await res.json().catch(() => null)
+  return data?.error || "Erreur lors de l'enregistrement"
+}
 
 export default function ProduitsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -34,6 +40,9 @@ export default function ProduitsPage() {
   const [priceEdits, setPriceEdits] = useState<Record<string, number>>({})
   const [priceSaving, setPriceSaving] = useState(false)
   const [priceSaved, setPriceSaved] = useState(false)
+  const [formError, setFormError] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState("")
 
   const fetchProducts = async () => {
     try {
@@ -96,6 +105,8 @@ export default function ProduitsPage() {
         setPriceSaved(true)
         await fetchProducts()
         setTimeout(() => setPriceSaved(false), 2000)
+      } else {
+        setNotice(await errorOf(res))
       }
     } catch (err) {
       console.error("Erreur sync:", err)
@@ -126,11 +137,13 @@ export default function ProduitsPage() {
       badge: "",
       variants: [{ ...emptyVariant }],
     })
+    setFormError("")
     setShowModal(true)
   }
 
   const openEdit = (product: Product) => {
     setEditingId(product.id)
+    setFormError("")
     setForm({
       name: product.name,
       subtitle: product.subtitle || "",
@@ -143,6 +156,7 @@ export default function ProduitsPage() {
       isActive: product.isActive,
       badge: product.badge || "",
       variants: product.variants.map((v) => ({
+        id: v.id,
         format: v.format,
         price: v.price,
         unit: v.unit || "",
@@ -185,41 +199,49 @@ export default function ProduitsPage() {
   }
 
   const handleSave = async () => {
-    if (!form.name || form.variants.some((v) => !v.format)) return
+    if (!form.name.trim()) return setFormError("Le nom du produit est requis")
+    if (form.variants.some((v) => !v.format.trim())) return setFormError("Chaque variante doit avoir un format")
+    setFormError("")
+    setSaving(true)
     try {
       const payload = editingId
         ? {
             ...form,
-            variants: form.variants.map((v) => ({ format: v.format, price: v.price, unit: v.unit })),
+            // Le stock se gère dans Stock : en édition on n'envoie pas de stock.
+            variants: form.variants.map((v) => ({ id: v.id, format: v.format, price: v.price, unit: v.unit })),
           }
         : form
-      if (editingId) {
-        await fetch(`/api/produits/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-      } else {
-        await fetch("/api/produits", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-      }
+      const res = await fetch(editingId ? `/api/produits/${editingId}` : "/api/produits", {
+        method: editingId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) return setFormError(await errorOf(res))
       await fetchProducts()
       setShowModal(false)
     } catch (err) {
       console.error("Erreur:", err)
+      setFormError("Connexion impossible, réessayez")
+    } finally {
+      setSaving(false)
     }
   }
 
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`Supprimer "${name}" ?`)) return
     try {
-      await fetch(`/api/produits/${id}`, { method: "DELETE" })
+      const res = await fetch(`/api/produits/${id}`, { method: "DELETE" })
+      if (!res.ok) return setNotice(await errorOf(res))
+      const data = await res.json()
+      setNotice(
+        data.result === "archived"
+          ? `« ${name} » a déjà été vendu ou stocké : il ne peut pas être supprimé. Il a été masqué du site (statut Inactif).`
+          : `« ${name} » a été supprimé.`
+      )
       await fetchProducts()
     } catch (err) {
       console.error("Erreur:", err)
+      setNotice("Connexion impossible, réessayez")
     }
   }
 
@@ -236,6 +258,14 @@ export default function ProduitsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {notice && (
+        <div role="status" className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span>{notice}</span>
+          <button onClick={() => setNotice("")} aria-label="Fermer" className="shrink-0 text-amber-700 hover:text-amber-900">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Produits</h1>
         <div className="flex flex-1 sm:flex-none gap-2">
@@ -636,14 +666,17 @@ export default function ProduitsPage() {
                 </div>
               </div>
             </div>
+            {formError && (
+              <p role="alert" className="mx-4 sm:mx-6 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</p>
+            )}
             <div className="flex items-center justify-end gap-3 p-4 sm:p-6 border-t border-gray-200">
               <button onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                 Annuler
               </button>
-              <button onClick={handleSave}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:opacity-90 transition-colors">
-                {editingId ? "Enregistrer" : "Ajouter"}
+              <button onClick={handleSave} disabled={saving}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:opacity-90 transition-colors disabled:opacity-50">
+                {saving ? "Enregistrement…" : editingId ? "Enregistrer" : "Ajouter"}
               </button>
             </div>
           </div>
