@@ -82,6 +82,8 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString("fr-FR")
 }
 
+const EMPTY_ORDER_FORM = { customerName: "", customerPhone: "", customerEmail: "", address: "", district: "", paymentMethod: "CASH_ON_DELIVERY", notes: "", deliveryMode: "DELIVERY", deliveryZoneId: "" }
+
 export default function CommandesPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -91,15 +93,8 @@ export default function CommandesPage() {
   const [searchCode, setSearchCode] = useState("")
   const [expanded, setExpanded] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({
-    customerName: "",
-    customerPhone: "",
-    customerEmail: "",
-    address: "",
-    district: "",
-    paymentMethod: "CASH_ON_DELIVERY",
-    notes: "",
-  })
+  const [form, setForm] = useState(EMPTY_ORDER_FORM)
+  const [zones, setZones] = useState<{ id: string; name: string; baseFee: number }[]>([])
   const [draftItems, setDraftItems] = useState<DraftItem[]>([{ productId: "", variantId: "", quantity: 1 }])
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState("")
@@ -124,6 +119,8 @@ export default function CommandesPage() {
         if (!controller.signal.aborted && ordersRes.ok) setOrders(await ordersRes.json())
         const prodRes = await fetch("/api/produits?all=1", { signal: controller.signal })
         if (!controller.signal.aborted && prodRes.ok) setProducts(await prodRes.json())
+        const optionsRes = await fetch("/api/delivery-options", { signal: controller.signal })
+        if (!controller.signal.aborted && optionsRes.ok) setZones((await optionsRes.json()).zones ?? [])
       } catch (error) {
         if (!controller.signal.aborted) console.error("Erreur chargement commandes:", error)
       } finally {
@@ -188,8 +185,14 @@ export default function CommandesPage() {
           }
         })
 
-      if (!form.customerName || !form.customerPhone || !form.address || items.length === 0) {
+      const pickup = form.deliveryMode === "PICKUP"
+      if (!form.customerName || !form.customerPhone || (!pickup && !form.address) || items.length === 0) {
         setFormError("Client, téléphone, adresse et au moins un article sont requis")
+        setSubmitting(false)
+        return
+      }
+      if (!pickup && !form.deliveryZoneId) {
+        setFormError("Choisissez une zone de livraison")
         setSubmitting(false)
         return
       }
@@ -199,6 +202,8 @@ export default function CommandesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          address: pickup ? "Retrait sur place" : form.address,
+          deliveryZoneId: pickup ? null : form.deliveryZoneId,
           source: "OPERATOR",
           items,
         }),
@@ -210,7 +215,7 @@ export default function CommandesPage() {
         return
       }
       setShowModal(false)
-      setForm({ customerName: "", customerPhone: "", customerEmail: "", address: "", district: "", paymentMethod: "CASH_ON_DELIVERY", notes: "" })
+      setForm(EMPTY_ORDER_FORM)
       setDraftItems([{ productId: "", variantId: "", quantity: 1 }])
       await load()
     } catch (error) {
@@ -520,6 +525,39 @@ export default function CommandesPage() {
                     <option value="CARD">Carte bancaire</option>
                   </select>
                 </div>
+                <div className="sm:col-span-2 grid grid-cols-2 gap-2">
+                  {([["DELIVERY", "Livraison à domicile"], ["PICKUP", "Retrait sur place"]] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setForm({ ...form, deliveryMode: mode })}
+                      className={`min-h-11 rounded-lg border-2 px-3 text-sm font-semibold transition-colors ${
+                        form.deliveryMode === mode ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {form.deliveryMode === "DELIVERY" && (
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Zone de livraison *</label>
+                  <select
+                    required
+                    value={form.deliveryZoneId}
+                    onChange={(e) => setForm({ ...form, deliveryZoneId: e.target.value })}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                  >
+                    <option value="">Choisir une zone...</option>
+                    {zones.map((zone) => (
+                      <option key={zone.id} value={zone.id}>
+                        {zone.name} — {formatPrice(zone.baseFee)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                )}
+                {form.deliveryMode === "DELIVERY" && (
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Adresse de livraison *</label>
                   <input
@@ -530,6 +568,7 @@ export default function CommandesPage() {
                     placeholder="Quartier, rue..."
                   />
                 </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quartier / District</label>
                   <input
