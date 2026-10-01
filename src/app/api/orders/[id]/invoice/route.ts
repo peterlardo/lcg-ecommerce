@@ -139,6 +139,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const ticketItems = result.updatedOrder.items.map((item) => ({
       name: item.variant?.product?.name ?? "Produit",
       format: item.variant?.format ?? "",
+      unit: item.variant?.unit ?? null,
       quantity: item.quantity,
       price: item.price,
       total: item.total,
