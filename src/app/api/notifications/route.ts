@@ -24,9 +24,12 @@ const reservationTotal = (itemsJson: string) => {
   }
 }
 
-// Cloche : commandes et pré-commandes des dernières 24 h. Chacun ne voit que ses
-// propres enregistrements ; l'administrateur voit tout. Les ventes de caisse
-// (source "CAISSE" ou notes "Vente comptoir…") n'y apparaissent pas.
+// Cloche : commandes et pré-commandes des dernières 24 h passées depuis le site vitrine
+// (source "WEB", visibles par toute l'équipe) ou saisies depuis un poste de
+// l'application (source "OPERATOR", visibles par leur auteur et l'administrateur).
+// Exclues : ventes de caisse ("CAISSE") et commandes générées par la confirmation
+// d'une pré-commande ("RESERVATION", déjà notifiée comme pré-commande).
+const NOTIFIED_SOURCES = ["WEB", "OPERATOR"]
 export async function GET() {
   const forbidden = await requireManagementAccess([
     "ADMIN",
@@ -37,7 +40,12 @@ export async function GET() {
   if (forbidden) return forbidden
 
   const session = await auth()
-  const mine = session?.user?.role === "ADMIN" ? {} : { userId: (session?.user?.id as string | undefined) ?? "" }
+  const isAdmin = session?.user?.role === "ADMIN"
+  const selfId = (session?.user?.id as string | undefined) ?? ""
+  // Site vitrine : tout le monde ; poste de l'application : l'auteur (et l'admin).
+  const visible = isAdmin
+    ? { source: { in: NOTIFIED_SOURCES } }
+    : { OR: [{ source: "WEB" }, { source: "OPERATOR", userId: selfId }] }
   const since = new Date(Date.now() - DAY_MS)
   const prisma = getPrisma()
 
@@ -45,8 +53,8 @@ export async function GET() {
     prisma.order.findMany({
       where: {
         createdAt: { gte: since },
-        ...mine,
-        NOT: [{ source: "CAISSE" }, { notes: { startsWith: "Vente comptoir" } }],
+        ...visible,
+        NOT: { notes: { startsWith: "Vente comptoir" } },
       },
       select: {
         id: true,
@@ -61,7 +69,7 @@ export async function GET() {
       take: 20,
     }),
     prisma.reservation.findMany({
-      where: { createdAt: { gte: since }, ...mine },
+      where: { createdAt: { gte: since }, ...visible },
       select: {
         id: true,
         client: true,
