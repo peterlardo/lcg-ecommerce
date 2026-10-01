@@ -57,6 +57,10 @@ export function useNotifications(pollInterval = 8000) {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [recent, setRecent] = useState<AppNotification[]>([])
   const seenIds = useRef(new Set<string>())
+  // Premier chargement : l'existant est mémorisé sans être affiché. Ne pas se fier à
+  // seenIds.size : si la liste initiale est vide, la première commande arrivée ne
+  // s'afficherait jamais.
+  const primed = useRef(false)
   const [newCount, setNewCount] = useState(0)
 
   useEffect(() => {
@@ -71,12 +75,13 @@ export function useNotifications(pollInterval = 8000) {
 
         setRecent(data)
         const fresh = data.filter((n) => !seenIds.current.has(n.id))
-        if (fresh.length > 0 && seenIds.current.size > 0) {
+        if (fresh.length > 0 && primed.current) {
           setNotifications((prev) => [...fresh, ...prev].slice(0, 10))
           setNewCount((c) => c + fresh.length)
           fresh.forEach(showDesktopNotification)
         }
         data.forEach((n) => seenIds.current.add(n.id))
+        primed.current = true
       } catch {}
     }
 
