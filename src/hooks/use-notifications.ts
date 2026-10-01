@@ -65,8 +65,12 @@ export function useNotifications(pollInterval = 8000) {
 
   useEffect(() => {
     let active = true
+    let inFlight = false
 
     const check = async () => {
+      // Une seule vérification à la fois : sinon la même commande serait notifiée deux fois.
+      if (inFlight) return
+      inFlight = true
       try {
         const res = await fetch("/api/notifications")
         if (!res.ok) return
@@ -82,12 +86,25 @@ export function useNotifications(pollInterval = 8000) {
         }
         data.forEach((n) => seenIds.current.add(n.id))
         primed.current = true
-      } catch {}
+      } catch {
+      } finally {
+        inFlight = false
+      }
     }
 
     check()
     const timer = setInterval(check, pollInterval)
-    return () => { active = false; clearInterval(timer) }
+    // Edge/Chrome ralentissent ou suspendent les onglets en arrière-plan : au retour
+    // sur l'onglet, on vérifie tout de suite pour afficher les commandes arrivées entre-temps.
+    const onVisible = () => { if (document.visibilityState === "visible") check() }
+    document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("focus", onVisible)
+    return () => {
+      active = false
+      clearInterval(timer)
+      document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("focus", onVisible)
+    }
   }, [pollInterval])
 
   useEffect(() => {
