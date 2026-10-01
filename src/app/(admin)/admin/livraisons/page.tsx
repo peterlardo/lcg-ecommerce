@@ -144,6 +144,8 @@ export default function LivraisonsPage() {
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mise a jour impossible")
+      // Le message s'affiche en haut de page : on y remonte pour qu'il soit vu.
+      window.scrollTo({ top: 0, behavior: "smooth" })
       return false
     } finally {
       setBusyId("")

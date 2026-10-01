@@ -4,6 +4,17 @@ import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 
 const VALID_STATUS = ["PENDING", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "FAILED"]
+// Statuts d'une livraison à domicile qui supposent un livreur.
+const NEEDS_AGENT = ["ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"]
+// Statuts qui font sortir la marchandise : la commande doit avoir été confirmée
+// (point de vente choisi, stock débité) avant.
+const SHIPPING = ["PICKED_UP", "IN_TRANSIT", "DELIVERED"]
+
+class DeliveryRuleError extends Error {
+  constructor(message: string, public status = 409) {
+    super(message)
+  }
+}
 
 export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id]">) {
   const forbidden = await requireManagementAccess()
@@ -16,7 +27,10 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
 
     const current = await prisma.delivery.findUnique({
       where: { id },
-      select: { id: true, orderId: true, agentId: true, status: true, mode: true },
+      select: {
+        id: true, orderId: true, agentId: true, status: true, mode: true,
+        order: { select: { status: true, source: true, paymentStatus: true } },
+      },
     })
     if (!current) return NextResponse.json({ error: "Livraison introuvable" }, { status: 404 })
 
@@ -28,24 +42,37 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
       }
     }
 
+    const changesFlow = body.status !== undefined || body.agentId !== undefined
+    if (changesFlow && current.order.status === "CANCELLED") {
+      throw new DeliveryRuleError("La commande est annulée : cette livraison ne peut plus être modifiée")
+    }
+    if (changesFlow && current.status === "DELIVERED") {
+      throw new DeliveryRuleError("Livraison déjà effectuée : elle ne peut plus être modifiée")
+    }
+
     const data: Prisma.DeliveryUpdateInput = {}
+    let agentAfter = current.agentId
 
     if (body.agentId !== undefined) {
       const agentId = body.agentId ? String(body.agentId) : null
       if (agentId) {
         const agent = await prisma.deliveryAgent.findFirst({ where: { id: agentId, isActive: true } })
         if (!agent) return NextResponse.json({ error: "Livreur introuvable ou desactive" }, { status: 404 })
-        if (!agent.isAvailable) {
+        if (!agent.isAvailable && agentId !== current.agentId) {
           return NextResponse.json({ error: `Le livreur « ${agent.name} » n'est pas disponible` }, { status: 400 })
         }
         data.agent = { connect: { id: agentId } }
         data.assignedAt = new Date()
-        if (current.status === "PENDING") data.status = "ASSIGNED"
+        if (current.status === "PENDING" || current.status === "FAILED") data.status = "ASSIGNED"
       } else {
+        if (["PICKED_UP", "IN_TRANSIT"].includes(current.status)) {
+          throw new DeliveryRuleError("Livraison en route : impossible de retirer le livreur")
+        }
         data.agent = { disconnect: true }
         data.assignedAt = null
         if (current.status === "ASSIGNED") data.status = "PENDING"
       }
+      agentAfter = agentId
     }
 
     if (body.status !== undefined) {
@@ -53,9 +80,11 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
       if (!VALID_STATUS.includes(status)) {
         return NextResponse.json({ error: "Statut invalide" }, { status: 400 })
       }
-      const needsAgent = current.mode === "DELIVERY" && current.agentId == null && body.agentId === undefined
-      if (needsAgent && posFilter?.role === "DELIVERY_AGENT") {
-        return NextResponse.json({ error: "Livraison non assignee : demandez un livreur" }, { status: 403 })
+      if (current.mode === "DELIVERY" && NEEDS_AGENT.includes(status) && !agentAfter) {
+        throw new DeliveryRuleError("Assignez d'abord un livreur à cette livraison", posFilter?.role === "DELIVERY_AGENT" ? 403 : 409)
+      }
+      if (SHIPPING.includes(status) && current.order.status === "PENDING") {
+        throw new DeliveryRuleError("Confirmez d'abord la commande (choix du point de vente) avant de la livrer")
       }
       data.status = status as DeliveryStatus
       if (status === "DELIVERED") {
@@ -74,23 +103,31 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
     }
 
     if (body.scheduledDate !== undefined) {
-      data.scheduledDate = body.scheduledDate ? new Date(body.scheduledDate) : null
+      const date = body.scheduledDate ? new Date(body.scheduledDate) : null
+      if (date && Number.isNaN(date.getTime())) {
+        return NextResponse.json({ error: "Date de livraison invalide" }, { status: 400 })
+      }
+      data.scheduledDate = date
     }
 
     if (body.notes !== undefined) data.notes = String(body.notes || "")
 
-    const delivery = await prisma.delivery.update({ where: { id }, data })
-
-    if (delivery.status === "IN_TRANSIT") {
-      await prisma.order.update({ where: { id: delivery.orderId }, data: { status: "OUT_FOR_DELIVERY" } })
-    }
-    if (delivery.status === "DELIVERED") {
-      const order = await prisma.order.findUnique({ where: { id: delivery.orderId }, select: { source: true } })
-      await prisma.order.update({
-        where: { id: delivery.orderId },
-        data: { status: "DELIVERED", ...(order?.source === "WEB" ? { ticketGenerated: true } : {}) },
-      })
-    }
+    // Livraison et commande mises à jour ensemble : jamais l'une sans l'autre.
+    const delivery = await prisma.$transaction(async (tx) => {
+      const updated = await tx.delivery.update({ where: { id }, data })
+      const orderSync: Prisma.OrderUpdateInput = {}
+      if (updated.status === "IN_TRANSIT" && current.status !== "IN_TRANSIT") orderSync.status = "OUT_FOR_DELIVERY"
+      if (updated.status === "DELIVERED") {
+        orderSync.status = "DELIVERED"
+        if (current.order.source === "WEB") orderSync.ticketGenerated = true
+      }
+      // Même règle que le changement de statut d'une commande : en livraison ou livrée = payée.
+      if (orderSync.status && current.order.paymentStatus !== "PAID") orderSync.paymentStatus = "PAID"
+      if (Object.keys(orderSync).length > 0) {
+        await tx.order.update({ where: { id: current.orderId }, data: orderSync })
+      }
+      return updated
+    })
 
     return NextResponse.json({
       id: delivery.id,
@@ -100,6 +137,9 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
       failedReason: delivery.failedReason,
     })
   } catch (error) {
+    if (error instanceof DeliveryRuleError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
     console.error("PATCH delivery error:", error)
     return NextResponse.json({ error: "Livraison introuvable ou erreur serveur" }, { status: 500 })
   }
