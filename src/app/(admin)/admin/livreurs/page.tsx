@@ -59,6 +59,15 @@ const inputClass =
   "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#16489f] focus:ring-2 focus:ring-[#16489f]/20"
 const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500"
 
+function FormError({ message }: { message: string }) {
+  return (
+    <p role="alert" className="mr-auto flex w-full items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:w-auto sm:flex-1">
+      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+      {message}
+    </p>
+  )
+}
+
 function displayName(agent: Agent) {
   return agent.kind === "PARTNER" && agent.companyName ? agent.companyName : agent.name
 }
@@ -237,7 +246,11 @@ export default function LivreursPage() {
       const res = await fetch(`/api/delivery-agents/${agent.id}`, { method: "DELETE" })
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error || "Suppression impossible")
-      setNotice("Livreur supprimé.")
+      setNotice(
+        data?.result === "archived"
+          ? `« ${displayName(agent)} » a déjà effectué des livraisons : il a été désactivé (historique conservé) au lieu d'être supprimé.`
+          : "Livreur supprimé."
+      )
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Suppression impossible")
@@ -897,6 +910,8 @@ export default function LivreursPage() {
             </div>
 
             <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 bg-white px-5 py-3">
+              {/* L'erreur doit être visible dans la fenêtre : le bandeau de la page est masqué par la superposition. */}
+              {error && <FormError message={error} />}
               <button
                 type="button"
                 onClick={() => {
@@ -914,7 +929,7 @@ export default function LivreursPage() {
                 className="inline-flex items-center gap-2 rounded-lg bg-[#16489f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#123b82] disabled:opacity-50"
               >
                 <Check className="h-4 w-4" />
-                {editingAgentId ? "Enregistrer" : "Créer le livreur"}
+                {busy === "agent" ? "Enregistrement…" : editingAgentId ? "Enregistrer" : "Créer le livreur"}
               </button>
             </div>
           </div>
@@ -992,6 +1007,7 @@ export default function LivreursPage() {
               </label>
             </div>
             <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 bg-white px-5 py-3">
+              {error && <FormError message={error} />}
               <button
                 type="button"
                 onClick={() => {
@@ -1009,7 +1025,7 @@ export default function LivreursPage() {
                 className="inline-flex items-center gap-2 rounded-lg bg-[#16489f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#123b82] disabled:opacity-50"
               >
                 <Check className="h-4 w-4" />
-                {editingZoneId ? "Enregistrer" : "Créer la zone"}
+                {busy === "zone" ? "Enregistrement…" : editingZoneId ? "Enregistrer" : "Créer la zone"}
               </button>
             </div>
           </div>

@@ -96,14 +96,20 @@ export async function DELETE(_req: Request, ctx: RouteContext<"/api/delivery-age
       include: { _count: { select: { deliveries: true } } },
     })
     if (!agent) return NextResponse.json({ error: "Livreur introuvable" }, { status: 404 })
-    if (agent._count.deliveries > 0) {
+    const inProgress = await prisma.delivery.count({ where: { agentId: id, status: { in: ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"] } } })
+    if (inProgress > 0) {
       return NextResponse.json(
-        { error: `Impossible : ${agent._count.deliveries} livraison(s) assignées à ce livreur. Réassignez-les avant suppression.` },
+        { error: `Impossible : ${inProgress} livraison(s) en cours pour ce livreur. Réassignez-les avant suppression.` },
         { status: 409 }
       )
     }
+    // Livraisons passées : on garde l'historique (qui a livré quoi) et on désactive le livreur.
+    if (agent._count.deliveries > 0) {
+      await prisma.deliveryAgent.update({ where: { id }, data: { isActive: false, isAvailable: false } })
+      return NextResponse.json({ ok: true, result: "archived" })
+    }
     await prisma.deliveryAgent.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, result: "deleted" })
   } catch (error) {
     console.error("DELETE delivery-agent error:", error)
     return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
