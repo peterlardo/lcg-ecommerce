@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { CalendarClock, ChevronLeft, ChevronRight, Phone, Store, Truck } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
-import { DELIVERY_SLOTS, todayInBrazzaville } from "@/lib/delivery-slots"
+import { DELIVERY_SLOTS, isSlotAvailable, noSlotLeft, todayInBrazzaville } from "@/lib/delivery-slots"
 
 export type PlanningAgent = { id: string; name: string; isAvailable: boolean; isActive: boolean }
 
@@ -176,10 +176,25 @@ export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
                         {!locked && (
                           moving?.id === r.id ? (
                             <span className="flex flex-wrap items-center gap-1">
-                              <input type="date" min={todayInBrazzaville()} value={moving.date} onChange={(e) => setMoving({ ...moving, date: e.target.value })} className="rounded-lg border border-gray-300 px-2 py-1 text-xs" />
+                              <input
+                                type="date"
+                                min={todayInBrazzaville()}
+                                value={moving.date}
+                                onChange={(e) => {
+                                  const date = e.target.value
+                                  const slot = isSlotAvailable(date, moving.slot) ? moving.slot : DELIVERY_SLOTS.find((s) => isSlotAvailable(date, s.id))?.id ?? ""
+                                  setMoving({ ...moving, date, slot })
+                                }}
+                                className="rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                              />
                               <select value={moving.slot} onChange={(e) => setMoving({ ...moving, slot: e.target.value })} className="rounded-lg border border-gray-300 px-2 py-1 text-xs">
-                                {DELIVERY_SLOTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                                <option value="" disabled>Créneau…</option>
+                                {DELIVERY_SLOTS.map((s) => {
+                                  const available = isSlotAvailable(moving.date, s.id)
+                                  return <option key={s.id} value={s.id} disabled={!available}>{s.label}{available ? "" : " — indisponible"}</option>
+                                })}
                               </select>
+                              {noSlotLeft(moving.date) && <span className="text-xs text-red-600">Plus de créneau ce jour-là</span>}
                               <button onClick={() => void reschedule()} disabled={busy === r.id} className="rounded-lg bg-primary px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">OK</button>
                               <button onClick={() => setMoving(null)} className="rounded-lg px-2 py-1 text-xs text-gray-500 hover:bg-gray-100">Annuler</button>
                             </span>

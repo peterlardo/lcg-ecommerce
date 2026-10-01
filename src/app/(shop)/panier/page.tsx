@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import { useCartValidation } from "@/hooks/use-cart-validation"
 import DeliveryChoiceBlock, { PICKUP_PLACE, type DeliveryChoice } from "@/components/shop/delivery-choice"
-import { DELIVERY_SLOTS, todayInBrazzaville } from "@/lib/delivery-slots"
+import { DELIVERY_SLOTS, isSlotAvailable, noSlotLeft, todayInBrazzaville } from "@/lib/delivery-slots"
 
 const modes = [
   { id: "commande", label: "Commande", icon: Truck },
@@ -489,7 +489,11 @@ export default function CartPage() {
                       type="date"
                       min={todayInBrazzaville()}
                       value={date}
-                      onChange={(e) => setDate(e.target.value)}
+                      onChange={(e) => {
+                        setDate(e.target.value)
+                        // Créneau devenu impossible pour la nouvelle date : on l'efface.
+                        if (slot && !isSlotAvailable(e.target.value, slot)) setSlot("")
+                      }}
                       className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
                     />
                   </label>
@@ -503,11 +507,21 @@ export default function CartPage() {
                       className="mt-1.5 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none ring-ring transition-shadow focus:ring-2"
                     >
                       <option value="">Choisir…</option>
-                      {DELIVERY_SLOTS.map((s) => (
-                        <option key={s.id} value={s.id}>{s.label}</option>
-                      ))}
+                      {DELIVERY_SLOTS.map((s) => {
+                        const available = isSlotAvailable(date, s.id)
+                        return (
+                          <option key={s.id} value={s.id} disabled={!available}>
+                            {s.label}{available ? "" : " — indisponible"}
+                          </option>
+                        )
+                      })}
                     </select>
                   </label>
+                  {noSlotLeft(date) && (
+                    <p className="col-span-2 text-xs font-semibold text-destructive">
+                      Plus aucun créneau disponible ce jour-là (réservation 2 h à l&apos;avance minimum) : choisissez une autre date.
+                    </p>
+                  )}
                 </div>
               )}
 

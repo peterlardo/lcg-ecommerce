@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { CalendarRange, Search, ChevronDown, Check, X, Plus, ShoppingCart, Archive, MessageCircle, Store, Truck, ExternalLink } from "lucide-react"
 import type { Reservation as StoredReservation } from "@/data/store"
-import { DELIVERY_SLOTS, slotLabel, todayInBrazzaville } from "@/lib/delivery-slots"
+import { DELIVERY_SLOTS, isSlotAvailable, noSlotLeft, slotLabel, todayInBrazzaville } from "@/lib/delivery-slots"
 import { ReservationPlanning, type PlanningAgent } from "./planning"
 import type { Product } from "@/data/products"
 import { formatPrice } from "@/lib/utils"
@@ -633,7 +633,9 @@ export default function ReservationsPage() {
                     type="date"
                     min={todayInBrazzaville()}
                     value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, date: e.target.value, slot: form.slot && !isSlotAvailable(e.target.value, form.slot) ? "" : form.slot })
+                    }
                     className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
                   />
                 </div>
@@ -645,9 +647,17 @@ export default function ReservationsPage() {
                     className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
                   >
                     <option value="">Choisir…</option>
-                    {DELIVERY_SLOTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    {DELIVERY_SLOTS.map((s) => {
+                      const available = isSlotAvailable(form.date, s.id)
+                      return <option key={s.id} value={s.id} disabled={!available}>{s.label}{available ? "" : " — indisponible"}</option>
+                    })}
                   </select>
                 </div>
+                {noSlotLeft(form.date) && (
+                  <p className="sm:col-span-2 text-xs font-semibold text-red-600">
+                    Plus aucun créneau disponible ce jour-là (2 h à l&apos;avance minimum) : choisissez une autre date.
+                  </p>
+                )}
                 <div className="sm:col-span-2 grid grid-cols-2 gap-2">
                   {([["DELIVERY", "Livraison"], ["PICKUP", "Retrait sur place"]] as const).map(([mode, label]) => (
                     <button

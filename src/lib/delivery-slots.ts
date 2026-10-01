@@ -42,6 +42,16 @@ export function slotError(date: string, slot: string, now = new Date()): string 
   return null
 }
 
+/** Le créneau peut-il encore être réservé à cette date ? (date vide = pas encore choisie) */
+export function isSlotAvailable(date: string, slot: string, now = new Date()): boolean {
+  return !date || slotError(date, slot, now) === null
+}
+
+/** Aucun créneau encore réservable à cette date (ex. aujourd'hui en fin de journée). */
+export function noSlotLeft(date: string, now = new Date()): boolean {
+  return !!date && DELIVERY_SLOTS.every((s) => !isSlotAvailable(date, s.id, now))
+}
+
 /** Date du jour à Brazzaville, au format YYYY-MM-DD (valeur min des champs date). */
 export function todayInBrazzaville(now = new Date()): string {
   return new Date(now.getTime() + 3600_000).toISOString().slice(0, 10)
