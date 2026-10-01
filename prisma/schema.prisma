@@ -338,6 +338,8 @@ model Delivery {
   district      String?
   scheduledDate DateTime?
   assignedAt    DateTime?
+  // Le livreur a vu et accepté la livraison (remis à zéro à chaque réattribution).
+  acceptedAt    DateTime?
   deliveredAt   DateTime?
   failedReason  String?
   notes         String?

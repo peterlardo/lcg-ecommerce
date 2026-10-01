@@ -43,6 +43,21 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
       }
     }
 
+    const isAgent = posFilter?.role === "DELIVERY_AGENT"
+    // Un livreur ne choisit pas qui livre : seule l'équipe attribue les livraisons.
+    if (isAgent && body.agentId !== undefined) {
+      return NextResponse.json({ error: "Seule l'équipe peut attribuer une livraison" }, { status: 403 })
+    }
+
+    // Le livreur confirme avoir vu et accepté la livraison qui lui est attribuée.
+    if (body.accept === true) {
+      if (!isAgent) return NextResponse.json({ error: "Seul le livreur attribué peut accepter la livraison" }, { status: 403 })
+      if (current.order.status === "CANCELLED") throw new DeliveryRuleError("La commande est annulée")
+      if (current.status === "DELIVERED") throw new DeliveryRuleError("Livraison déjà effectuée")
+      const accepted = await prisma.delivery.update({ where: { id }, data: { acceptedAt: new Date() } })
+      return NextResponse.json({ id: accepted.id, status: accepted.status, acceptedAt: accepted.acceptedAt })
+    }
+
     const changesFlow = body.status !== undefined || body.agentId !== undefined
     if (changesFlow && current.order.status === "CANCELLED") {
       throw new DeliveryRuleError("La commande est annulée : cette livraison ne peut plus être modifiée")
@@ -64,6 +79,8 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
         }
         data.agent = { connect: { id: agentId } }
         data.assignedAt = new Date()
+        // Nouveau livreur (ou réattribution) : il doit accepter à nouveau.
+        if (agentId !== current.agentId) data.acceptedAt = null
         if (current.status === "PENDING" || current.status === "FAILED") data.status = "ASSIGNED"
       } else {
         if (["PICKED_UP", "IN_TRANSIT"].includes(current.status)) {
@@ -71,6 +88,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
         }
         data.agent = { disconnect: true }
         data.assignedAt = null
+        data.acceptedAt = null
         if (current.status === "ASSIGNED") data.status = "PENDING"
       }
       agentAfter = agentId

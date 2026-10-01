@@ -33,6 +33,7 @@ function mapDelivery(delivery: DeliveryWithRelations) {
     zone: delivery.zone?.name ?? "",
     scheduledDate: delivery.scheduledDate?.toISOString() ?? null,
     assignedAt: delivery.assignedAt?.toISOString() ?? null,
+    acceptedAt: delivery.acceptedAt?.toISOString() ?? null,
     deliveredAt: delivery.deliveredAt?.toISOString() ?? null,
     failedReason: delivery.failedReason ?? "",
     agentId: delivery.agentId,
@@ -143,6 +144,8 @@ export async function GET(req: Request) {
       zones,
       counts,
       pendingPickups: pickupCount,
+      // Rôle de la personne connectée : le livreur voit « J'accepte », pas la réattribution.
+      viewerRole: role ?? null,
     })
   } catch (error) {
     console.error("GET deliveries error:", error)

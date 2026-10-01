@@ -18,7 +18,7 @@ const listInclude = {
     select: {
       orderNumber: true,
       status: true,
-      delivery: { select: { id: true, status: true, agentId: true, failedReason: true, agent: { select: { name: true } } } },
+      delivery: { select: { id: true, status: true, agentId: true, acceptedAt: true, failedReason: true, agent: { select: { name: true } } } },
     },
   },
 } satisfies Prisma.ReservationInclude
@@ -39,7 +39,7 @@ function mapRow(r: ReservationRow) {
           orderNumber: r.order.orderNumber,
           status: r.order.status,
           delivery: r.order.delivery
-            ? { id: r.order.delivery.id, status: r.order.delivery.status, agentId: r.order.delivery.agentId, agent: r.order.delivery.agent?.name ?? null, failedReason: r.order.delivery.failedReason }
+            ? { id: r.order.delivery.id, status: r.order.delivery.status, agentId: r.order.delivery.agentId, agent: r.order.delivery.agent?.name ?? null, acceptedAt: r.order.delivery.acceptedAt?.toISOString() ?? null, failedReason: r.order.delivery.failedReason }
             : null,
         }
       : null,

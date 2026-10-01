@@ -26,7 +26,7 @@ type PlanningRow = {
   order: {
     orderNumber: string
     status: string
-    delivery: { id: string; status: string; agentId: string | null; agent: string | null; failedReason: string | null } | null
+    delivery: { id: string; status: string; agentId: string | null; agent: string | null; acceptedAt: string | null; failedReason: string | null } | null
   } | null
 }
 
@@ -164,6 +164,13 @@ export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
                           <span>{r.items.map((i) => `${i.name} ${i.format} ×${i.quantity}`).join(", ")}</span>
                           <span className="font-semibold text-gray-700">{formatPrice(total)}</span>
                         </p>
+                        {delivery?.agent && delivery.status !== "DELIVERED" && (
+                          <p className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${delivery.acceptedAt ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                            {delivery.acceptedAt
+                              ? `Acceptée par ${delivery.agent} le ${new Date(delivery.acceptedAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+                              : `En attente de ${delivery.agent}`}
+                          </p>
+                        )}
                         {delivery?.failedReason && <p className="mt-0.5 text-xs text-red-600">Échec : {delivery.failedReason}</p>}
                       </div>
 
