@@ -4,6 +4,7 @@ import { getReservations, addReservation, type ReservationItem } from "@/data/st
 import { sendReservationEmail, sendReservationDevisEmail, buildReservationDevisText, type ReservationMailData } from "@/lib/mailer"
 import { sendWhatsAppMessage } from "@/lib/whatsapp"
 import { getPrisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth"
 
 export async function GET() {
   const forbidden = await requireManagementAccess()
@@ -48,8 +49,10 @@ export async function POST(request: Request) {
 
     const source = body.source === "OPERATOR" ? "OPERATOR" : "WEB"
 
+    const operatorId = source === "OPERATOR" ? ((await auth())?.user?.id as string | undefined) ?? null : null
+
     const newRes = await addReservation({
-      userId: null,
+      userId: operatorId,
       client,
       telephone,
       email: email || "",
