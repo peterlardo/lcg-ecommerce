@@ -7,7 +7,7 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp"
 import { getPrisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth"
 import { resolveDeliveryChoice, DeliveryChoiceError } from "@/lib/delivery"
-import { DELIVERY_SLOTS, slotError, slotLabel } from "@/lib/delivery-slots"
+import { DELIVERY_SLOTS, slotError, slotLabel, todayInBrazzaville } from "@/lib/delivery-slots"
 import { reservationRef, reservationTrackingUrl } from "@/lib/reservation-notify"
 
 const PICKUP_PLACE = "97 Rue EWO — site LCG, Brazzaville"
@@ -56,11 +56,13 @@ export async function GET(request: Request) {
   const where: Prisma.ReservationWhereInput =
     posIds !== null ? { pointOfSaleId: { in: posIds } } : {}
 
-  // ?planning=YYYY-MM-DD : pré-commandes à livrer / retirer ce jour-là, triées par créneau.
-  const day = new URL(request.url).searchParams.get("planning")
-  if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+  // ?planning=upcoming : toutes les pré-commandes à partir d'aujourd'hui ;
+  // ?planning=YYYY-MM-DD : celles d'un jour. Triées par date puis par créneau.
+  const planning = new URL(request.url).searchParams.get("planning")
+  const day = planning === "upcoming" ? null : planning
+  if (planning === "upcoming" || (day && /^\d{4}-\d{2}-\d{2}$/.test(day))) {
     const rows = await getPrisma().reservation.findMany({
-      where: { ...where, date: day, status: { in: ["PENDING", "CONFIRMED"] } },
+      where: { ...where, ...(day ? { date: day } : { date: { gte: todayInBrazzaville() } }), status: { in: ["PENDING", "CONFIRMED"] } },
       include: listInclude,
       orderBy: { createdAt: "asc" },
     })
@@ -68,7 +70,7 @@ export async function GET(request: Request) {
       const i = DELIVERY_SLOTS.findIndex((s) => s.id === slot)
       return i === -1 ? DELIVERY_SLOTS.length : i
     }
-    return NextResponse.json(rows.map(mapRow).sort((a, b) => order(a.slot) - order(b.slot)))
+    return NextResponse.json(rows.map(mapRow).sort((a, b) => a.date.localeCompare(b.date) || order(a.slot) - order(b.slot)))
   }
 
   const rows = await getPrisma().reservation.findMany({ where, include: listInclude, orderBy: { createdAt: "desc" } })

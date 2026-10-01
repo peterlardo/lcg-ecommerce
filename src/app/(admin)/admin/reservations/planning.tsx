@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { CalendarClock, ChevronLeft, ChevronRight, Phone, Store, Truck } from "lucide-react"
+import { CalendarClock, Phone, Store, Truck } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { DELIVERY_SLOTS, isSlotAvailable, noSlotLeft, todayInBrazzaville } from "@/lib/delivery-slots"
 
@@ -20,6 +20,7 @@ type PlanningRow = {
   zoneName: string | null
   deliveryFee: number
   slot: string
+  date: string
   heure: string
   items: { name: string; format: string; quantity: number; price: number }[]
   order: {
@@ -38,14 +39,14 @@ const DELIVERY_STATUS: Record<string, { label: string; className: string }> = {
   FAILED: { label: "Échec", className: "bg-red-100 text-red-800" },
 }
 
-function shiftDay(date: string, days: number): string {
-  const d = new Date(`${date}T12:00:00+01:00`)
-  d.setDate(d.getDate() + days)
-  return new Date(d.getTime() + 3600_000).toISOString().slice(0, 10)
+function dayLabel(date: string): string {
+  const today = todayInBrazzaville()
+  const tomorrow = new Date(new Date(`${today}T12:00:00+01:00`).getTime() + 86400_000 + 3600_000).toISOString().slice(0, 10)
+  const label = new Date(`${date}T12:00:00+01:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
+  return date === today ? `Aujourd'hui — ${label}` : date === tomorrow ? `Demain — ${label}` : label
 }
 
 export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
-  const [day, setDay] = useState(todayInBrazzaville())
   const [rows, setRows] = useState<PlanningRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -53,10 +54,10 @@ export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
   const [busy, setBusy] = useState("")
   const [moving, setMoving] = useState<{ id: string; date: string; slot: string } | null>(null)
 
-  const load = useCallback(async (d: string) => {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/reservations?planning=${d}`)
+      const res = await fetch("/api/reservations?planning=upcoming")
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error || "Chargement impossible")
       setRows(Array.isArray(data) ? data : [])
@@ -68,9 +69,9 @@ export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
   }, [])
 
   useEffect(() => {
-    const init = async () => { await load(day) }
+    const init = async () => { await load() }
     void init()
-  }, [day, load])
+  }, [load])
 
   async function call(key: string, url: string, body: Record<string, unknown>, ok: string) {
     setBusy(key)
@@ -81,7 +82,7 @@ export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error || "Action impossible")
       setNotice(ok)
-      await load(day)
+      await load()
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action impossible")
@@ -101,20 +102,23 @@ export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
     if (done) setMoving(null)
   }
 
-  const bySlot = [...DELIVERY_SLOTS.map((s) => ({ id: s.id as string, label: s.label })), { id: "", label: "Sans créneau" }]
-    .map((s) => ({ ...s, rows: rows.filter((r) => (DELIVERY_SLOTS.some((d) => d.id === r.slot) ? r.slot : "") === s.id) }))
-    .filter((s) => s.rows.length > 0 || s.id !== "")
-
-  const label = new Date(`${day}T12:00:00+01:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
+  const days = [...new Set(rows.map((r) => r.date))].map((date) => {
+    const ofDay = rows.filter((r) => r.date === date)
+    const slots = [...DELIVERY_SLOTS.map((sl) => ({ id: sl.id as string, label: sl.label })), { id: "", label: "Sans créneau" }]
+      .map((sl) => ({ ...sl, rows: ofDay.filter((r) => (DELIVERY_SLOTS.some((d) => d.id === r.slot) ? r.slot : "") === sl.id) }))
+      .filter((sl) => sl.rows.length > 0)
+    return { date, count: ofDay.length, slots }
+  })
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <button onClick={() => setDay(shiftDay(day, -1))} className="rounded-lg border border-gray-200 bg-white p-2 text-gray-600 hover:bg-gray-50" aria-label="Jour précédent"><ChevronLeft className="h-4 w-4" /></button>
-        <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        <button onClick={() => setDay(shiftDay(day, 1))} className="rounded-lg border border-gray-200 bg-white p-2 text-gray-600 hover:bg-gray-50" aria-label="Jour suivant"><ChevronRight className="h-4 w-4" /></button>
-        <button onClick={() => setDay(todayInBrazzaville())} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">Aujourd&apos;hui</button>
-        <span className="text-sm font-semibold capitalize text-gray-700">{label} · {rows.length} pré-commande{rows.length > 1 ? "s" : ""}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-gray-700">
+          Pré-commandes à venir : {rows.length}
+        </p>
+        <button onClick={() => void load()} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
+          Actualiser
+        </button>
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
@@ -123,16 +127,21 @@ export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
       {loading ? (
         <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">Chargement...</div>
       ) : (
-        bySlot.map((slot) => (
-          <section key={slot.id || "none"} className="rounded-xl border border-gray-200 bg-white">
-            <h3 className="flex items-center gap-2 border-b border-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-900">
-              <CalendarClock className="h-4 w-4 text-gray-400" /> {slot.label}
-              <span className="text-xs font-normal text-gray-500">{slot.rows.length} pré-commande{slot.rows.length > 1 ? "s" : ""}</span>
-            </h3>
-            {slot.rows.length === 0 ? (
-              <p className="px-4 py-3 text-sm text-gray-400">Aucune pré-commande sur ce créneau.</p>
-            ) : (
-              <ul className="divide-y divide-gray-100">
+        days.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+            Aucune pré-commande à venir.
+          </div>
+        ) : (
+          days.map((day) => (
+            <section key={day.date} className="rounded-xl border border-gray-200 bg-white">
+              <h3 className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-bold capitalize text-gray-900">
+                <CalendarClock className="h-4 w-4 text-gray-500" /> {dayLabel(day.date)}
+                <span className="text-xs font-normal normal-case text-gray-500">{day.count} pré-commande{day.count > 1 ? "s" : ""}</span>
+              </h3>
+              {day.slots.map((slot) => (
+                <div key={slot.id || "none"}>
+                  <p className="border-b border-gray-100 px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-primary">{slot.label}</p>
+                  <ul className="divide-y divide-gray-100">
                 {slot.rows.map((r) => {
                   const delivery = r.order?.delivery
                   const total = r.items.reduce((s, i) => s + i.price * i.quantity, 0) + r.deliveryFee
@@ -200,7 +209,7 @@ export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
                             </span>
                           ) : (
                             <button
-                              onClick={() => setMoving({ id: r.id, date: day, slot: DELIVERY_SLOTS.some((s) => s.id === r.slot) ? r.slot : DELIVERY_SLOTS[0].id })}
+                              onClick={() => setMoving({ id: r.id, date: r.date, slot: DELIVERY_SLOTS.some((s) => s.id === r.slot) ? r.slot : DELIVERY_SLOTS[0].id })}
                               className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                             >
                               Replanifier
@@ -211,10 +220,12 @@ export function ReservationPlanning({ agents }: { agents: PlanningAgent[] }) {
                     </li>
                   )
                 })}
-              </ul>
-            )}
-          </section>
-        ))
+                  </ul>
+                </div>
+              ))}
+            </section>
+          ))
+        )
       )}
       <p className="text-xs text-gray-500">
         Le départ (« En route »), la livraison et l&apos;échec se marquent depuis la page Livraisons : le client est prévenu automatiquement à chaque étape.
