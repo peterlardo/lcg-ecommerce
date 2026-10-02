@@ -193,9 +193,12 @@ export async function POST(request: Request) {
       ? body.paymentMethod
       : "CASH_ON_DELIVERY"
 
+    // Saisie opérateur : l'auteur est l'utilisateur connecté (cloche de notifications, visibilité)
+    const operatorId = body.source === "OPERATOR" ? ((await auth())?.user?.id as string | undefined) ?? null : null
+
     const input: OrderInput = {
       orderNumber: body.orderNumber || generateOrderNumber(),
-      userId: null,
+      userId: operatorId,
       customerName: String(body.customerName),
       customerEmail: String(body.customerEmail || ""),
       customerPhone: String(body.customerPhone),

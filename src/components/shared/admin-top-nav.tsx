@@ -110,7 +110,9 @@ const priorityLinks: NavLink[] = [
     href: "/admin/commandes",
     label: "Commandes",
     icon: ShoppingCart,
+    // Un menu avec sous-liens ne navigue pas : la liste des commandes doit y figurer.
     children: [
+      { href: "/admin/commandes", label: "Commandes", icon: ShoppingCart },
       { href: "/admin/reservations", label: "Pré-commandes", icon: CalendarRange },
       { href: "/admin/archives", label: "Archives", icon: Archive },
     ],

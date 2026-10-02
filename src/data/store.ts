@@ -18,6 +18,9 @@ export interface ContactMessage {
 }
 
 export interface ReservationItem {
+  // Identifiants de la variante : présents pour les pré-commandes récentes (repli sur nom + format sinon).
+  productId?: string
+  variantId?: string
   name: string
   format: string
   quantity: number
@@ -40,6 +43,10 @@ export interface Reservation {
   notes: string
   status: "PENDING" | "CONFIRMED" | "CANCELLED"
   source: string
+  deliveryMode: "DELIVERY" | "PICKUP"
+  zoneId: string | null
+  deliveryFee: number
+  slot: string
   createdAt: string
 }
 
@@ -168,7 +175,28 @@ export interface ProductWriteInput {
   badge?: string | null
   isFeatured?: boolean
   isActive?: boolean
-  variants: { format: string; price: number; stock?: number; unit?: string | null }[]
+  // id : variante existante à mettre à jour (édition) ; absent = nouvelle variante.
+  variants: { id?: string; format: string; price: number; stock?: number; unit?: string | null }[]
+}
+
+/** Variantes impossibles à supprimer : déjà utilisées par des ventes, mouvements de stock ou lots. */
+export class VariantInUseError extends Error {
+  constructor(public formats: string[]) {
+    super(`Variante(s) déjà utilisée(s) dans l'historique : ${formats.join(", ")}`)
+  }
+}
+
+/** Ids de variantes référencées par l'historique (ventes, stock, production) : clés étrangères sans cascade. */
+async function referencedVariantIds(tx: Prisma.TransactionClient, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set()
+  const where = { variantId: { in: ids } }
+  const select = { variantId: true } as const
+  const [orders, movements, lots] = await Promise.all([
+    tx.orderItem.findMany({ where, select, distinct: ["variantId"] }),
+    tx.stockMovement.findMany({ where, select, distinct: ["variantId"] }),
+    tx.productionLot.findMany({ where, select, distinct: ["variantId"] }),
+  ])
+  return new Set([...orders, ...movements, ...lots].map((r) => r.variantId))
 }
 
 export async function createProduct(data: ProductWriteInput): Promise<Product> {
@@ -217,13 +245,29 @@ export async function updateProduct(
     if (data.variants) {
       const existingVariants = await tx.productVariant.findMany({ where: { productId: id } })
       const matchedIds = new Set<string>()
+      // Correspondance par id d'abord : renommer un format garde la même variante
+      // (stock, historique). Repli sur le format pour les clients qui n'envoient pas l'id.
+      const findMatch = (v: ProductWriteInput["variants"][number]) =>
+        existingVariants.find((e) => e.id === v.id && !matchedIds.has(e.id)) ??
+        (v.id ? undefined : existingVariants.find((e) => e.format === v.format && !matchedIds.has(e.id)))
+
+      // Vérifier avant d'écrire : une variante retirée mais présente dans l'historique ne peut
+      // pas être supprimée (clé étrangère) — on refuse plutôt que de la laisser en vitrine.
+      const keptIds = new Set(data.variants.map((v) => findMatch(v)?.id).filter(Boolean))
+      const leftovers = existingVariants.filter((v) => !keptIds.has(v.id))
+      const inUse = await referencedVariantIds(tx, leftovers.map((l) => l.id))
+      if (inUse.size > 0) {
+        throw new VariantInUseError(leftovers.filter((l) => inUse.has(l.id)).map((l) => l.format))
+      }
+
       for (const v of data.variants) {
-        const match = existingVariants.find((e) => e.format === v.format && !matchedIds.has(e.id))
+        const match = findMatch(v)
         if (match) {
           matchedIds.add(match.id)
           await tx.productVariant.update({
             where: { id: match.id },
             data: {
+              format: v.format,
               price: v.price,
               unit: v.unit ?? null,
               ...(v.stock !== undefined ? { stock: v.stock } : {}),
@@ -241,20 +285,8 @@ export async function updateProduct(
           })
         }
       }
-      const leftovers = existingVariants.filter((v) => !matchedIds.has(v.id))
       if (leftovers.length > 0) {
-        const referenced = await tx.orderItem.findMany({
-          where: { variantId: { in: leftovers.map((l) => l.id) } },
-          select: { variantId: true },
-        })
-        const referencedIds = new Set(referenced.map((r) => r.variantId))
-        for (const leftover of leftovers) {
-          if (referencedIds.has(leftover.id)) {
-            console.warn(`updateProduct: variante ${leftover.id} (${leftover.format}) conservée, référencée par des commandes`)
-            continue
-          }
-          await tx.productVariant.delete({ where: { id: leftover.id } })
-        }
+        await tx.productVariant.deleteMany({ where: { id: { in: leftovers.map((l) => l.id) } } })
       }
     }
 
@@ -263,13 +295,22 @@ export async function updateProduct(
   return true
 }
 
-export async function deleteProduct(id: string): Promise<boolean> {
-  try {
-    await getPrisma().product.delete({ where: { id } })
-    return true
-  } catch {
-    return false
+/**
+ * Supprime un produit. S'il a un historique (ventes, stock, production), la suppression
+ * est impossible (clés étrangères) : le produit est alors masqué du site (« archived »).
+ */
+export async function deleteProduct(id: string): Promise<"deleted" | "archived" | "not_found"> {
+  const prisma = getPrisma()
+  const product = await prisma.product.findUnique({ where: { id }, include: { variants: { select: { id: true } } } })
+  if (!product) return "not_found"
+  const inUse = await referencedVariantIds(prisma, product.variants.map((v) => v.id))
+  const ordered = await prisma.orderItem.count({ where: { productId: id } })
+  if (inUse.size > 0 || ordered > 0) {
+    await prisma.product.update({ where: { id }, data: { isActive: false } })
+    return "archived"
   }
+  await prisma.product.delete({ where: { id } })
+  return "deleted"
 }
 
 type ProductWithRelations = Prisma.ProductGetPayload<{ include: { variants: true; category: true } }>
@@ -405,6 +446,10 @@ function mapReservation(r: PrismaReservation): Reservation {
     notes: r.notes,
     status: r.status as "PENDING" | "CONFIRMED" | "CANCELLED",
     source: r.source || "WEB",
+    deliveryMode: r.deliveryMode === "PICKUP" ? "PICKUP" : "DELIVERY",
+    zoneId: r.zoneId ?? null,
+    deliveryFee: r.deliveryFee ?? 0,
+    slot: r.slot ?? "",
     createdAt: r.createdAt.toISOString(),
   }
 }
@@ -438,6 +483,10 @@ export async function addReservation(
       itemsJson: JSON.stringify(res.items || []),
       notes: res.notes,
       source: res.source || "WEB",
+      deliveryMode: res.deliveryMode,
+      zoneId: res.zoneId,
+      deliveryFee: res.deliveryFee,
+      slot: res.slot,
     },
   })
   return mapReservation(r)

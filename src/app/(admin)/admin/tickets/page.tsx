@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { ChevronDown, Filter, Printer, ReceiptText, Search } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
-import { buildTicketHtml } from "@/lib/ticket-template"
+import { buildTicketHtml, printTicketWindow } from "@/lib/ticket-template"
 
 interface Ticket { id: string; ticketNumber: string; customerName: string; customerPhone: string; sellerName: string | null; paymentMethod: string | null; paymentStatus: string; total: number; createdAt: string; notes: string | null; pointOfSale: { name: string; code: string } | null; items: { name: string; format: string; quantity: number; price: number; total: number }[] }
 const paymentLabels: Record<string, string> = { CARD: "Carte", MOBILE_MONEY: "Mobile Money", CASH_ON_DELIVERY: "Espèces" }
@@ -137,8 +137,7 @@ export default function TicketsPage() {
       })
     )
     popup.document.close()
-    popup.focus()
-    popup.print()
+    printTicketWindow(popup)
   }
 
   useEffect(() => {

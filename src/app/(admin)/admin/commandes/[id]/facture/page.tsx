@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, MessageCircle, Printer, Receipt, Trash2 } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
-import { buildTicketHtml, type TicketData } from "@/lib/ticket-template"
+import { buildTicketHtml, printTicketWindow, type TicketData } from "@/lib/ticket-template"
 import { buildOrderDevisText, buildWaLink } from "@/lib/devis-text"
 
 interface OrderItem {
@@ -182,10 +182,7 @@ export default function FacturePage() {
 
   const handlePrint = () => {
     const iframe = document.getElementById("ticket-iframe") as HTMLIFrameElement | null
-    if (iframe?.contentWindow) {
-      iframe.contentWindow.focus()
-      iframe.contentWindow.print()
-    }
+    if (iframe?.contentWindow) printTicketWindow(iframe.contentWindow)
   }
 
   if (loading) {

@@ -43,6 +43,6 @@ include: { pointOfSale: { select: { name: true, code: true } }, user: { select: 
     createdAt: ticket.createdAt.toISOString(),
     notes: ticket.notes,
     pointOfSale: ticket.pointOfSale,
-    items: ticket.items.map((item) => ({ name: item.variant.product.name, format: item.variant.format, quantity: item.quantity, price: item.price, total: item.total })),
+    items: ticket.items.map((item) => ({ name: item.variant.product.name, format: item.variant.format, unit: item.variant.unit, quantity: item.quantity, price: item.price, total: item.total })),
   })))
 }

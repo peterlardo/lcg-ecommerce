@@ -51,6 +51,8 @@ export default function RapportsPage() {
   const [error, setError] = useState("")
   const [tab, setTab] = useState<Tab>("ventes")
   const [period, setPeriod] = useState<string>("month")
+  // "all" = tous les points de vente, sinon id du point de vente.
+  const [pos, setPos] = useState<string>("all")
 
   const periods = [
     { id: "week", label: "Semaine" },
@@ -58,10 +60,10 @@ export default function RapportsPage() {
     { id: "quarter", label: "Trimestre" },
   ]
 
-  const load = async (p?: string) => {
-    const effectivePeriod = p ?? period
+  const load = async (p?: string, posId?: string) => {
+    const params = new URLSearchParams({ period: p ?? period, pos: posId ?? pos })
     try {
-      const res = await fetch(`/api/reports?period=${effectivePeriod}`)
+      const res = await fetch(`/api/reports?${params}`)
       if (!res.ok) throw new Error("Impossible de charger les rapports")
       setData(await res.json())
     } catch (err) {
@@ -75,6 +77,12 @@ export default function RapportsPage() {
     setPeriod(newPeriod)
     setLoading(true)
     load(newPeriod)
+  }
+
+  const handlePosChange = (posId: string) => {
+    setPos(posId)
+    setLoading(true)
+    load(undefined, posId)
   }
 
   useEffect(() => {
@@ -97,6 +105,8 @@ export default function RapportsPage() {
   }, [])
 
   const s = data?.summary
+  // Colonnes de stock par point de vente, quand le rapport couvre tous les points de vente.
+  const posColumns = pos === "all" && (data?.pointsOfSale.length ?? 0) > 1 ? data!.pointsOfSale : []
 
   const exportPDF = () => {
     if (!data) return
@@ -161,6 +171,41 @@ export default function RapportsPage() {
         </div>
         {data?.periodLabel && <span className="min-w-0 text-xs text-gray-400">({data.periodLabel})</span>}
       </div>
+
+      {(data?.pointsOfSale.length ?? 0) > 1 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="shrink-0 text-sm font-medium text-gray-500">Point de vente :</span>
+          <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
+            {[{ id: "all", name: "Tous" }, ...(data?.pointsOfSale ?? [])].map((p) => (
+              <button key={p.id} onClick={() => handlePosChange(p.id)} className={`rounded-md px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-medium transition-colors ${pos === p.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                {p.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(data?.byPointOfSale.length ?? 0) > 1 && (
+        <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+          <h2 className="mb-3 text-xs sm:text-sm font-semibold text-gray-900">Par point de vente ({data?.periodLabel ?? "Mois"})</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {data?.byPointOfSale.map((p) => {
+              const totalRevenue = data.byPointOfSale.reduce((sum, x) => sum + x.revenue, 0)
+              const share = totalRevenue > 0 ? Math.round((p.revenue / totalRevenue) * 100) : 0
+              return (
+                <button key={p.id} onClick={() => handlePosChange(pos === p.id ? "all" : p.id)} className={`rounded-lg border p-3 text-left transition-colors ${pos === p.id ? "border-primary-500 bg-primary-50" : "border-gray-200 hover:bg-gray-50"}`}>
+                  <p className="text-sm font-semibold text-gray-900">{p.name}</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                    <div><p className="text-gray-500">CA</p><p className="font-bold text-gray-900">{formatPrice(p.revenue)}</p><p className="text-gray-400">{share} %</p></div>
+                    <div><p className="text-gray-500">Commandes</p><p className="font-bold text-gray-900">{p.orders}</p></div>
+                    <div><p className="text-gray-500">Stock</p><p className="font-bold text-gray-900">{p.stockUnits} u.</p></div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       <div className="flex gap-1 overflow-x-auto rounded-lg border border-gray-200 bg-gray-100 p-1">
         {tabList.map((t) => {
@@ -232,7 +277,7 @@ export default function RapportsPage() {
               </div>
               <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Toutes les variantes</h2>
-                <div className="overflow-x-auto max-h-80"><table className="w-full text-xs sm:text-sm"><thead className="sticky top-0 bg-gray-50/80"><tr><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Produit</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Format</th><th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Categorie</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Stock</th></tr></thead><tbody className="divide-y divide-gray-100">{(data?.allStockVariants ?? []).map((v, i) => <tr key={i} className={v.stock <= 0 ? "bg-red-50/40" : v.stock <= 10 ? "bg-yellow-50/40" : ""}><td className="px-2 py-2 sm:px-4 sm:py-2">{v.productName}</td><td className="px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{v.format}</td><td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{v.categoryName}</td><td className={`px-2 py-2 sm:px-4 sm:py-2 text-right font-bold ${v.stock <= 0 ? "text-red-600" : v.stock <= 10 ? "text-yellow-700" : ""}`}>{v.stock}</td></tr>)}</tbody></table></div>
+                <div className="overflow-x-auto max-h-80"><table className="w-full text-xs sm:text-sm"><thead className="sticky top-0 bg-gray-50/80"><tr><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Produit</th><th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Format</th><th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Categorie</th>{posColumns.map((p) => <th key={p.id} className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">{p.name}</th>)}<th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">{posColumns.length > 0 ? "Total" : "Stock"}</th></tr></thead><tbody className="divide-y divide-gray-100">{(data?.allStockVariants ?? []).map((v, i) => <tr key={i} className={v.stock <= 0 ? "bg-red-50/40" : v.stock <= 10 ? "bg-yellow-50/40" : ""}><td className="px-2 py-2 sm:px-4 sm:py-2">{v.productName}</td><td className="px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{v.format}</td><td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{v.categoryName}</td>{posColumns.map((p) => <td key={p.id} className="px-2 py-2 sm:px-4 sm:py-2 text-right text-gray-700">{v.stockByPos?.[p.id] ?? 0}</td>)}<td className={`px-2 py-2 sm:px-4 sm:py-2 text-right font-bold ${v.stock <= 0 ? "text-red-600" : v.stock <= 10 ? "text-yellow-700" : ""}`}>{v.stock}</td></tr>)}</tbody></table></div>
               </section>
             </div>
           )}

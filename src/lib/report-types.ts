@@ -69,6 +69,8 @@ export interface StockVariantPoint {
   productName: string
   format: string
   stock: number
+  /** Stock réel par point de vente (id -> quantité). */
+  stockByPos: Record<string, number>
   price: number
   categoryName: string
 }
@@ -226,9 +228,23 @@ export interface DeliveryPoint {
   address: string
 }
 
+export interface PointOfSaleComparison {
+  id: string
+  name: string
+  code: string
+  /** CA de la période (commandes en livraison ou livrées). */
+  revenue: number
+  orders: number
+  stockUnits: number
+}
+
 export interface ReportPayload {
   period: string
   periodLabel: string
+  pointsOfSale: { id: string; name: string }[]
+  /** null = tous les points de vente. */
+  selectedPos: { id: string; name: string } | null
+  byPointOfSale: PointOfSaleComparison[]
   weekOffset: number
   weekStart: string
   weekEnd: string

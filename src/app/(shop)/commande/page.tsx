@@ -28,7 +28,7 @@ interface FormData {
 
 export default function CommandePage() {
   const router = useRouter()
-  const { items, subtotal, clearCart, removeItem } = useCart()
+  const { items, subtotal, clearCart, removeItem, hydrated } = useCart()
   const [paymentMethod, setPaymentMethod] = useState("cod")
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState<FormData>({
@@ -168,6 +168,9 @@ export default function CommandePage() {
       alert(error instanceof Error ? error.message : "Une erreur est survenue. Veuillez réessayer.")
     }
   }
+
+  // Panier enregistré pas encore relu : ne pas afficher « panier vide » par erreur.
+  if (!hydrated) return <div className="max-w-7xl mx-auto px-4 py-20" />
 
   if (items.length === 0) {
     return (

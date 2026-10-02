@@ -21,24 +21,35 @@ interface CartContextType {
   clearCart: () => void
   itemCount: number
   subtotal: number
+  /** false tant que le panier enregistré n'a pas été relu (premier rendu). */
+  hydrated: boolean
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    if (typeof window === "undefined") return []
-    try {
-      const raw = window.localStorage.getItem("lcg-cart")
-      return raw ? (JSON.parse(raw) as CartItem[]) : []
-    } catch {
-      return []
-    }
-  })
+  // Panier vide au premier rendu, comme côté serveur (sinon l'affichage diffère entre serveur
+  // et navigateur) ; le panier enregistré est relu juste après.
+  const [items, setItems] = useState<CartItem[]>([])
+  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    window.localStorage.setItem("lcg-cart", JSON.stringify(items))
-  }, [items])
+    const init = async () => {
+      try {
+        const raw = window.localStorage.getItem("lcg-cart")
+        if (raw) setItems(JSON.parse(raw) as CartItem[])
+      } catch {
+        // stockage indisponible ou illisible : panier vide
+      }
+      setHydrated(true)
+    }
+    void init()
+  }, [])
+
+  useEffect(() => {
+    // Ne pas écraser le panier enregistré avec le panier vide du premier rendu.
+    if (hydrated) window.localStorage.setItem("lcg-cart", JSON.stringify(items))
+  }, [items, hydrated])
 
   const addItem = useCallback((item: Omit<CartItem, "quantity">) => {
     setItems((prev) => {
@@ -81,7 +92,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   return (
     <CartContext.Provider
-      value={{ items, addItem, removeItem, updateQuantity, updatePrice, clearCart, itemCount, subtotal }}
+      value={{ items, addItem, removeItem, updateQuantity, updatePrice, clearCart, itemCount, subtotal, hydrated }}
     >
       {children}
     </CartContext.Provider>

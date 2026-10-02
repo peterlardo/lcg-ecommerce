@@ -39,26 +39,32 @@ export function buildReservationDevisText(data: ReservationMailData): string {
     "",
     "Devis de votre opération :",
     ...data.items.map((i) => `• ${i.name}${i.format ? ` (${i.format})` : ""} x${i.quantity} — ${formatPrice(i.price * i.quantity)}`),
+    ...(data.deliveryFee !== undefined ? [`Livraison : ${data.deliveryFee > 0 ? formatPrice(data.deliveryFee) : "Gratuite"}`] : []),
     "",
     `TOTAL : ${formatPrice(data.total)}`,
-    `Date : ${data.date}${data.heure ? ` à ${data.heure}` : ""}`,
+    `Date : ${data.date}${data.heure ? `, créneau ${data.heure}` : ""}`,
   ]
   if (data.address) lines.push(`Lieu : ${data.address}`)
   if (data.notes) lines.push(`Notes : ${data.notes}`)
   lines.push("", "Notre équipe vous contactera pour confirmer le créneau et le paiement.")
+  if (data.trackingUrl) lines.push(`Suivi : ${data.trackingUrl}`)
   return lines.join("\n")
 }
 
-function normalizeWaPhone(phone: string): string {
+/**
+ * Numéro au format international sans « + », pour WhatsApp.
+ * Congo-Brazzaville : le 0 initial FAIT PARTIE du numéro (06 979 08 17 -> 242 06 979 08 17),
+ * on ne le supprime donc pas. Numéros à 9 chiffres = numéros congolais.
+ */
+export function normalizeWaPhone(phone: string): string {
   let digits = (phone || "").replace(/\D/g, "")
   if (!digits) return ""
-  if (digits.startsWith("00242")) digits = digits.slice(2)
-  if (digits.startsWith("242")) {
-    if (digits.length === 13 && digits[3] === "0") digits = digits.slice(0, 3) + digits.slice(4)
-    return digits
-  }
-  if (digits.startsWith("0")) return `242${digits.slice(1)}`
-  return `242${digits}`
+  if (digits.startsWith("00")) digits = digits.slice(2)
+  if (digits.startsWith("242")) return digits
+  if (digits.length === 9) return `242${digits}`
+  // Numéro congolais saisi sans son 0 (ex. 6 979 08 17).
+  if (digits.length === 8) return `2420${digits}`
+  return digits
 }
 
 export function buildWaLink(phone: string, text: string): string {

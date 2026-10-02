@@ -57,12 +57,20 @@ export function useNotifications(pollInterval = 8000) {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [recent, setRecent] = useState<AppNotification[]>([])
   const seenIds = useRef(new Set<string>())
+  // Premier chargement : l'existant est mémorisé sans être affiché. Ne pas se fier à
+  // seenIds.size : si la liste initiale est vide, la première commande arrivée ne
+  // s'afficherait jamais.
+  const primed = useRef(false)
   const [newCount, setNewCount] = useState(0)
 
   useEffect(() => {
     let active = true
+    let inFlight = false
 
     const check = async () => {
+      // Une seule vérification à la fois : sinon la même commande serait notifiée deux fois.
+      if (inFlight) return
+      inFlight = true
       try {
         const res = await fetch("/api/notifications")
         if (!res.ok) return
@@ -71,18 +79,32 @@ export function useNotifications(pollInterval = 8000) {
 
         setRecent(data)
         const fresh = data.filter((n) => !seenIds.current.has(n.id))
-        if (fresh.length > 0 && seenIds.current.size > 0) {
+        if (fresh.length > 0 && primed.current) {
           setNotifications((prev) => [...fresh, ...prev].slice(0, 10))
           setNewCount((c) => c + fresh.length)
           fresh.forEach(showDesktopNotification)
         }
         data.forEach((n) => seenIds.current.add(n.id))
-      } catch {}
+        primed.current = true
+      } catch {
+      } finally {
+        inFlight = false
+      }
     }
 
     check()
     const timer = setInterval(check, pollInterval)
-    return () => { active = false; clearInterval(timer) }
+    // Edge/Chrome ralentissent ou suspendent les onglets en arrière-plan : au retour
+    // sur l'onglet, on vérifie tout de suite pour afficher les commandes arrivées entre-temps.
+    const onVisible = () => { if (document.visibilityState === "visible") check() }
+    document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("focus", onVisible)
+    return () => {
+      active = false
+      clearInterval(timer)
+      document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("focus", onVisible)
+    }
   }, [pollInterval])
 
   useEffect(() => {

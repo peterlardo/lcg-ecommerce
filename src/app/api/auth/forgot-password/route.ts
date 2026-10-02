@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
 import { getPrisma } from "@/lib/prisma";
 import { sendPasswordResetEmail } from "@/lib/mailer"
+import { siteConfig } from "@/lib/site"
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
       data: { token, userId: user.id, expiresAt },
     })
 
-    const baseUrl = process.env.NEXTAUTH_URL || "https://lacongolaisedesglacons.netlify.app"
+    const baseUrl = process.env.NEXTAUTH_URL || siteConfig.url
     await sendPasswordResetEmail(user.email, token, baseUrl)
 
     return NextResponse.json({ message: "Si un compte existe avec cet email, un lien de réinitialisation a été envoyé." })

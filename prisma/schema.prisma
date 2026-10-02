@@ -338,6 +338,8 @@ model Delivery {
   district      String?
   scheduledDate DateTime?
   assignedAt    DateTime?
+  // Le livreur a vu et accepté la livraison (remis à zéro à chaque réattribution).
+  acceptedAt    DateTime?
   deliveredAt   DateTime?
   failedReason  String?
   notes         String?
@@ -364,8 +366,9 @@ model DeliveryZone {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  agentFees  DeliveryAgentFee[]
-  deliveries Delivery[]
+  agentFees    DeliveryAgentFee[]
+  deliveries   Delivery[]
+  reservations Reservation[]
 }
 
 model DeliveryAgent {
@@ -492,10 +495,16 @@ model Reservation {
   status        ReservationStatus @default(PENDING)
   pointOfSaleId String?
   source        String            @default("WEB")
+  // Livraison à date : retrait sur place ou livraison dans une zone (frais calculés), sur un créneau fixe.
+  deliveryMode  String            @default("DELIVERY")
+  zoneId        String?
+  deliveryFee   Float             @default(0)
+  slot          String            @default("")
   createdAt     DateTime          @default(now())
   user          User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   order         Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
   pointOfSale   PointOfSale?      @relation(fields: [pointOfSaleId], references: [id], onDelete: SetNull)
+  zone          DeliveryZone?     @relation(fields: [zoneId], references: [id], onDelete: SetNull)
 }
 
 model B2BClient {

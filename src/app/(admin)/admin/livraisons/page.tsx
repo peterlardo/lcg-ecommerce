@@ -32,6 +32,7 @@ type Delivery = {
   zone: string
   scheduledDate: string | null
   assignedAt: string | null
+  acceptedAt: string | null
   deliveredAt: string | null
   failedReason: string
   agentId: string | null
@@ -68,6 +69,8 @@ export default function LivraisonsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [busyId, setBusyId] = useState("")
+  // Livreur connecté : il accepte ses livraisons mais ne les réattribue pas.
+  const [isAgent, setIsAgent] = useState(false)
 
   const [search, setSearch] = useState("")
   const [query, setQuery] = useState("")
@@ -89,6 +92,7 @@ export default function LivraisonsPage() {
       setDeliveries(Array.isArray(data?.deliveries) ? data.deliveries : [])
       setAgents(Array.isArray(data?.agents) ? data.agents : [])
       setZones(Array.isArray(data?.zones) ? data.zones : [])
+      setIsAgent(data?.viewerRole === "DELIVERY_AGENT")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de chargement")
     } finally {
@@ -144,6 +148,8 @@ export default function LivraisonsPage() {
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mise a jour impossible")
+      // Le message s'affiche en haut de page : on y remonte pour qu'il soit vu.
+      window.scrollTo({ top: 0, behavior: "smooth" })
       return false
     } finally {
       setBusyId("")
@@ -367,7 +373,8 @@ export default function LivraisonsPage() {
                           delivery={d}
                           agents={agents}
                           busy={busyId === d.id}
-                          canReassign={agents.length > 1}
+                          canReassign={!isAgent && agents.length > 1}
+                          isAgent={isAgent}
                           onPatch={patch}
                         />
                       ))}
@@ -553,17 +560,27 @@ function formatPrice(value: number) {
   return `${Math.round(value || 0).toLocaleString("fr-FR")} FCFA`
 }
 
+function AcceptanceBadge({ acceptedAt, agent }: { acceptedAt: string | null; agent: string }) {
+  if (!acceptedAt) {
+    return <p className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">En attente de {agent}</p>
+  }
+  const time = new Date(acceptedAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+  return <p className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Acceptée par {agent} le {time}</p>
+}
+
 function DeliveryCard({
   delivery,
   agents,
   busy,
   canReassign,
+  isAgent,
   onPatch,
 }: {
   delivery: Delivery
   agents: Agent[]
   busy: boolean
   canReassign: boolean
+  isAgent: boolean
   onPatch: (id: string, body: Record<string, unknown>) => Promise<boolean>
 }) {
   const [open, setOpen] = useState(false)
@@ -624,6 +641,9 @@ function DeliveryCard({
               ? `Livreur : ${delivery.agent}${delivery.agentKind === "PARTNER" ? " (partenaire)" : ""}`
               : "Aucun livreur affecte"}
           </p>
+          {delivery.agent && delivery.status !== "DELIVERED" && (
+            <AcceptanceBadge acceptedAt={delivery.acceptedAt} agent={delivery.agent} />
+          )}
         </div>
       </div>
 
@@ -632,6 +652,16 @@ function DeliveryCard({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
+        {isAgent && delivery.agentId && !delivery.acceptedAt && delivery.status !== "DELIVERED" && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onPatch(delivery.id, { accept: true })}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            J&apos;accepte cette livraison
+          </button>
+        )}
         {delivery.mode === "DELIVERY" && canReassign && (
           <select
             value={delivery.agentId ?? ""}
