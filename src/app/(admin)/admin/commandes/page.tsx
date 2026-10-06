@@ -365,7 +365,7 @@ export default function CommandesPage() {
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   <Link
-                    href={order.paymentStatus === "PAID" ? "#" : `/admin/commandes/${order.id}/facture`}
+                    href={(order.paymentStatus === "PAID" && order.ticketGenerated) ? `/admin/commandes/${order.id}/facture` : order.paymentStatus === "PAID" ? "#" : `/admin/commandes/${order.id}/facture`}
                     onClick={(e) => {
                       e.stopPropagation()
                       if (order.paymentStatus === "PAID") e.preventDefault()
@@ -374,7 +374,7 @@ export default function CommandesPage() {
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border rounded-lg transition-colors ${order.paymentStatus === "PAID" ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed" : "text-primary-700 bg-primary-50 hover:bg-primary-100 border-primary-200"}`}
                   >
                     <Receipt className="h-3.5 w-3.5" />
-                    {order.paymentStatus === "PAID" ? "Ticket de caisse" : "Établir la facture"}
+                    {order.paymentStatus === "PAID" ? "Ticket de caisse" : "Établir le ticket de caisse"}
                   </Link>
                   <div className="hidden sm:block text-right">
                     <p className="text-sm font-semibold text-gray-900">
