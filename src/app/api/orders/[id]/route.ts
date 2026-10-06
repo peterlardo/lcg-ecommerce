@@ -84,11 +84,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const { id } = await params
     const body = await req.json()
-    const { status, pointOfSaleId } = body
+    const { status, pointOfSaleId, userId } = body
     const actor = await auth()
     const actorId = actor?.user?.id ?? null
 
-    if (!status || !VALID_STATUS.includes(status)) {
+    if (status !== undefined && !VALID_STATUS.includes(status)) {
       return NextResponse.json({ error: "Statut invalide" }, { status: 400 })
     }
 
@@ -211,10 +211,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
       }
 
-      const updateData: Record<string, string | boolean> = { status }
+      const updateData: Record<string, string | boolean | null> = {}
+      if (status !== undefined) updateData.status = status
 
-      if ((status === "OUT_FOR_DELIVERY" || status === "DELIVERED") && previous.paymentStatus !== "PAID") {
-        updateData.paymentStatus = "PAID"
+      if (userId !== undefined) {
+        if (userId === null) {
+          updateData.userId = null
+        } else if (typeof userId === "string" && userId.trim()) {
+          const exists = await tx.user.findUnique({ where: { id: userId.trim() }, select: { id: true } })
+          if (exists) updateData.userId = exists.id
+        }
+      }
+
+      if (status === "OUT_FOR_DELIVERY" || status === "DELIVERED") {
+        if (previous.paymentStatus !== "PAID") updateData.paymentStatus = "PAID"
       }
       if (status === "CANCELLED" && previous.paymentStatus === "PAID") {
         updateData.paymentStatus = "REFUNDED"
@@ -248,7 +258,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         total: true, items: { select: { quantity: true, price: true, variant: { select: { format: true, product: { select: { name: true } } } } } },
       },
     })
-    if (fullOrder) {
+    if (fullOrder && status !== undefined) {
       sendStatusChangeEmail({
         orderNumber: fullOrder.orderNumber,
         customerName: fullOrder.customerName ?? "",
@@ -266,7 +276,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       })
     }
 
-    return NextResponse.json({ id: order.id, status: order.status })
+    const enriched = await getPrisma().order.findUnique({
+      where: { id: order.id },
+      select: { id: true, status: true, userId: true, user: { select: { name: true } } },
+    })
+    return NextResponse.json({ id: enriched?.id ?? order.id, status: enriched?.status ?? order.status, userId: enriched?.userId ?? null, userName: enriched?.user?.name ?? null })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Commande introuvable ou erreur serveur"
     const status = message.includes("introuvable") ? 404 : message.includes("Stock") || message.includes("point de vente") ? 400 : 500

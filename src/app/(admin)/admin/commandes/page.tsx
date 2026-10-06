@@ -48,6 +48,8 @@ interface Order {
   source: string
   total: number
   createdAt: string
+  userId?: string | null
+  userName?: string | null
   items: OrderItem[]
   delivery: { address: string; city: string; district: string | null; notes: string | null } | null
   pointOfSaleId: string | null
@@ -98,6 +100,9 @@ export default function CommandesPage() {
   const [draftItems, setDraftItems] = useState<DraftItem[]>([{ productId: "", variantId: "", quantity: 1 }])
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState("")
+  const [users, setUsers] = useState<{ id: string; name: string; role: string; email: string; isActive?: boolean }[]>([])
+  const [assigning, setAssigning] = useState<string | null>(null)
+  const [assignError, setAssignError] = useState("")
   const [page, setPage] = useState(1)
   const PER_PAGE = 5
   const load = useCallback(async () => {
@@ -121,6 +126,10 @@ export default function CommandesPage() {
         if (!controller.signal.aborted && prodRes.ok) setProducts(await prodRes.json())
         const optionsRes = await fetch("/api/delivery-options", { signal: controller.signal })
         if (!controller.signal.aborted && optionsRes.ok) setZones((await optionsRes.json()).zones ?? [])
+        try {
+          const usersRes = await fetch("/api/utilisateurs", { signal: controller.signal })
+          if (!controller.signal.aborted && usersRes.ok) setUsers(await usersRes.json())
+        } catch {}
       } catch (error) {
         if (!controller.signal.aborted) console.error("Erreur chargement commandes:", error)
       } finally {
@@ -149,7 +158,31 @@ export default function CommandesPage() {
 
   const handleSearchName = (v: string) => { setSearchName(v); setPage(1) }
   const handleSearchCode = (v: string) => { setSearchCode(v); setPage(1) }
-  const handleTab = (t: string) => { setActiveTab(t); setPage(1) }
+  const handleTab = (t: string) => { setActiveTab(t); setPage(1)   }
+
+  const handleAssign = async (orderId: string, userId: string | null) => {
+    setAssigning(orderId)
+    setAssignError("")
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setAssignError(data.error || "Erreur lors de l'affectation")
+        setAssigning(null)
+        return
+      }
+      await load()
+    } catch (error) {
+      console.error("Erreur affectation:", error)
+      setAssignError("Erreur interne")
+    } finally {
+      setAssigning(null)
+    }
+  }
 
   const addDraftItem = () => {
     setDraftItems([...draftItems, { productId: "", variantId: "", quantity: 1 }])
@@ -417,6 +450,10 @@ export default function CommandesPage() {
                         </p>
                       )}
                       <p className="break-words text-gray-700">
+                        <span className="font-medium text-gray-500">Créé par: </span>
+                        {order.userName || "Système"}
+                      </p>
+                      <p className="break-words text-gray-700">
                         <span className="font-medium text-gray-500">Client: </span>
                         {order.customerEmail || "email non renseigné"} | {order.customerPhone}
                       </p>
@@ -428,7 +465,30 @@ export default function CommandesPage() {
                       )}
                     </div>
 
-                    <div className="mt-4">
+                    <div className="mt-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <select
+                          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                          defaultValue={order.userId ?? ""}
+                          disabled={assigning === order.id}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            handleAssign(order.id, v === "" ? null : v)
+                          }}
+                        >
+                          <option value="">Non assigné</option>
+                          {users
+                            .filter((u) => u.isActive !== false)
+                            .map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name} ({u.role})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      {assignError && assigning !== order.id && (
+                        <p className="text-xs text-red-600">{assignError}</p>
+                      )}
                       <Link
                         href={`/admin/commandes/${order.id}/facture`}
                         className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors"
