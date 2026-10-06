@@ -29,13 +29,12 @@ export async function allocateStockFIFOTx(tx: TxClient, variantId: string, quant
 
   const created: LotAllocation[] = []
   for (const alloc of allocations) {
-    await tx.productionLot.update({
+    const updated = await tx.productionLot.update({
       where: { id: alloc.lotId },
       data: { remainingQuantity: { decrement: alloc.quantity } },
     })
 
-    const lot = await tx.productionLot.findUnique({ where: { id: alloc.lotId } })
-    if (lot && lot.remainingQuantity <= 0) {
+    if (updated.remainingQuantity <= 0) {
       await tx.productionLot.update({ where: { id: alloc.lotId }, data: { status: "EXHAUSTED" } })
     }
 
@@ -81,13 +80,12 @@ export async function allocateStockFEFOTx(tx: TxClient, variantId: string, quant
 
   const created: LotAllocation[] = []
   for (const alloc of allocations) {
-    await tx.productionLot.update({
+    const updated = await tx.productionLot.update({
       where: { id: alloc.lotId },
       data: { remainingQuantity: { decrement: alloc.quantity } },
     })
 
-    const lot = await tx.productionLot.findUnique({ where: { id: alloc.lotId } })
-    if (lot && lot.remainingQuantity <= 0) {
+    if (updated.remainingQuantity <= 0) {
       await tx.productionLot.update({ where: { id: alloc.lotId }, data: { status: "EXHAUSTED" } })
     }
 

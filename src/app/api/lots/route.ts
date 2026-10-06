@@ -4,7 +4,7 @@ import type { LotAllocation } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
-import { generateLotNumber } from "@/lib/lot-utils"
+import { generateLotNumberTx } from "@/lib/lot-utils"
 import { ensureOperationalStockLocations } from "@/lib/stock-service"
 
 export async function GET(req: Request) {
@@ -147,9 +147,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Donnees invalides" }, { status: 400 })
     }
 
-    const [variant, destination] = await Promise.all([
+    const authSession = await auth()
+    const actorId = authSession?.user?.id ?? null
+
+    const [variant, destination, locations] = await Promise.all([
       getPrisma().productVariant.findUnique({ where: { id: variantId } }),
       destinationId ? getPrisma().pointOfSale.findUnique({ where: { id: destinationId } }) : Promise.resolve(null),
+      destinationId ? Promise.resolve(null) : ensureOperationalStockLocations(),
     ])
     if (!variant) {
       return NextResponse.json({ error: "Variante introuvable" }, { status: 404 })
@@ -158,11 +162,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Le point de vente de destination est invalide ou inactif" }, { status: 400 })
     }
 
-    const lotNumber = await generateLotNumber()
-    const authSession = await auth()
-    const actorId = authSession?.user?.id ?? null
-
     const lot = await getPrisma().$transaction(async (tx) => {
+      const lotNumber = await generateLotNumberTx(tx)
       const newLot = await tx.productionLot.create({
         data: {
           lotNumber,
@@ -194,7 +195,7 @@ export async function POST(req: Request) {
 
       // Auto-distribute production to both operational stock locations
       // unless a single destination point of sale has been chosen
-      if (destinationId) {
+      if (destinationId && destination) {
         await tx.pointOfSaleStock.upsert({
           where: { pointOfSaleId_variantId: { pointOfSaleId: destinationId, variantId } },
           update: { quantity: { increment: quantity } },
@@ -206,7 +207,7 @@ export async function POST(req: Request) {
             variantId,
             type: "PRODUCTION",
             quantity,
-            reason: notes || `Production vers ${destination!.name}`,
+            reason: notes || `Production vers ${destination.name}`,
             reference: lotNumber,
             pointOfSaleId: destinationId,
             lotId: newLot.id,
@@ -214,17 +215,17 @@ export async function POST(req: Request) {
           },
         })
       } else {
-        const locations = await ensureOperationalStockLocations()
-        const perLocation = Math.floor(quantity / locations.length)
-        const remainder = quantity % locations.length
+        const locs = locations ?? await ensureOperationalStockLocations()
+        const perLocation = Math.floor(quantity / locs.length)
+        const remainder = quantity % locs.length
 
-        for (let i = 0; i < locations.length; i++) {
+        for (let i = 0; i < locs.length; i++) {
           const locQty = perLocation + (i < remainder ? 1 : 0)
           if (locQty > 0) {
             await tx.pointOfSaleStock.upsert({
-              where: { pointOfSaleId_variantId: { pointOfSaleId: locations[i].id, variantId } },
+              where: { pointOfSaleId_variantId: { pointOfSaleId: locs[i].id, variantId } },
               update: { quantity: { increment: locQty } },
-              create: { pointOfSaleId: locations[i].id, variantId, quantity: locQty },
+              create: { pointOfSaleId: locs[i].id, variantId, quantity: locQty },
             })
 
             await tx.stockMovement.create({
@@ -232,9 +233,9 @@ export async function POST(req: Request) {
                 variantId,
                 type: "PRODUCTION",
                 quantity: locQty,
-                reason: notes || `Distribution production vers ${locations[i].name}`,
+                reason: notes || `Distribution production vers ${locs[i].name}`,
                 reference: lotNumber,
-                pointOfSaleId: locations[i].id,
+                pointOfSaleId: locs[i].id,
                 lotId: newLot.id,
                 userId: actorId,
               },

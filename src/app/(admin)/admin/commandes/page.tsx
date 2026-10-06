@@ -50,6 +50,7 @@ interface Order {
   createdAt: string
   userId?: string | null
   userName?: string | null
+  ticketGenerated?: boolean
   items: OrderItem[]
   delivery: { address: string; city: string; district: string | null; notes: string | null } | null
   pointOfSaleId: string | null
