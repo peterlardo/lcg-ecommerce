@@ -215,7 +215,7 @@ export default function FacturePage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Établir la facture</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Établir le ticket de caisse</h1>
           <p className="break-words text-sm text-gray-500">
             {order.orderNumber} · {order.customerName} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}
           </p>
@@ -346,7 +346,7 @@ export default function FacturePage() {
               className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg disabled:opacity-50 sm:px-6"
             >
               <Receipt className="h-4 w-4" />
-              {submitting ? "Facturation..." : "Établir la facture"}
+              {submitting ? "Facturation..." : "Établir le ticket de caisse"}
             </button>
           </div>
         </>

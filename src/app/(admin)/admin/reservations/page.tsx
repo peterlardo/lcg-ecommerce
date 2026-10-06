@@ -345,7 +345,7 @@ export default function ReservationsPage() {
                 href={`/admin/commandes/${createdOrder.id}/facture`}
                 className="inline-flex items-center gap-1.5 font-semibold text-green-800 hover:underline"
               >
-                <ShoppingCart className="h-4 w-4" /> Établir la facture
+                <ShoppingCart className="h-4 w-4" /> Établir le ticket de caisse
               </Link>
             )}
             <button onClick={() => setStatusMsg("")} className="text-green-500 hover:text-green-700">

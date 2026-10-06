@@ -365,12 +365,16 @@ export default function CommandesPage() {
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   <Link
-                    href={`/admin/commandes/${order.id}/facture`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
+                    href={order.paymentStatus === "PAID" ? "#" : `/admin/commandes/${order.id}/facture`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (order.paymentStatus === "PAID") e.preventDefault()
+                    }}
+                    aria-disabled={order.paymentStatus === "PAID"}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border rounded-lg transition-colors ${order.paymentStatus === "PAID" ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed" : "text-primary-700 bg-primary-50 hover:bg-primary-100 border-primary-200"}`}
                   >
                     <Receipt className="h-3.5 w-3.5" />
-                    Établir la facture
+                    {order.paymentStatus === "PAID" ? "Ticket de caisse" : "Établir la facture"}
                   </Link>
                   <div className="hidden sm:block text-right">
                     <p className="text-sm font-semibold text-gray-900">
@@ -490,11 +494,13 @@ export default function CommandesPage() {
                         <p className="text-xs text-red-600">{assignError}</p>
                       )}
                       <Link
-                        href={`/admin/commandes/${order.id}/facture`}
-                        className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors"
+                        href={order.paymentStatus === "PAID" ? "#" : `/admin/commandes/${order.id}/facture`}
+                        aria-disabled={order.paymentStatus === "PAID"}
+                        className={`inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors ${order.paymentStatus === "PAID" ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "text-white bg-primary hover:opacity-90"}`}
+                        onClick={(e) => { if (order.paymentStatus === "PAID") e.preventDefault() }}
                       >
                         <Receipt className="h-4 w-4" />
-                        Établir la facture
+                        {order.paymentStatus === "PAID" ? "Ticket de caisse établi" : "Établir la facture"}
                       </Link>
                     </div>
                   </div>
