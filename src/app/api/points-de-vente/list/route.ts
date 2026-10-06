@@ -4,7 +4,7 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { ensureOperationalStockLocations } from "@/lib/stock-service"
 
 export async function GET() {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE"])
   if (forbidden) return forbidden
   await ensureOperationalStockLocations()
 

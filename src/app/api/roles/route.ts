@@ -5,8 +5,8 @@ import { requireManagementAccess } from "@/lib/api-auth"
 const MODULES = [
   "dashboard", "ventes", "tickets", "commandes", "stock", "caisse",
   "production", "distribution", "livraisons",
-  "reservations", "points-de-vente", "produits", "rapports",
-  "controle-distant", "utilisateurs", "etat-stock",
+  "reservations", "points-de-vente", "produits", "promotions", "rapports",
+  "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b",
 ]
 
 export async function GET() {

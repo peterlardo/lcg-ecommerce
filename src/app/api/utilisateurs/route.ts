@@ -38,6 +38,10 @@ export async function POST(request: Request) {
         phone: body.phone?.trim() || null,
         password: await bcrypt.hash(password, 12),
         role,
+        // Compte provisionné par un ADMIN : considéré comme vérifié, sinon un
+        // rôle hors STAFF_ROLES (ex. COMPTABLE) ne pourrait jamais se connecter
+        // (la vérification par e-mail ne fonctionne pas — SMTP en échec).
+        emailVerified: new Date(),
         isActive: body.isActive !== false,
         image: body.image || null,
       },

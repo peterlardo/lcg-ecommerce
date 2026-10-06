@@ -36,11 +36,13 @@ export async function GET() {
     "STOCK_MANAGER",
     "COMMERCIAL",
     "DELIVERY_AGENT",
+    "COMPTABLE",
   ])
   if (forbidden) return forbidden
 
   const session = await auth()
   const isAdmin = session?.user?.role === "ADMIN"
+  const isComptableRole = session?.user?.role === "COMPTABLE"
   const selfId = (session?.user?.id as string | undefined) ?? ""
   // Site vitrine : tout le monde ; poste de l'application : l'auteur (et l'admin).
   const visible = isAdmin
@@ -54,6 +56,9 @@ export async function GET() {
       where: {
         createdAt: { gte: since },
         ...visible,
+        // Filtre strict B2B : le comptable n'est notifié que des commandes
+        // rattachées à un client B2B.
+        ...(isComptableRole ? { b2bClientId: { not: null } } : {}),
         NOT: { notes: { startsWith: "Vente comptoir" } },
       },
       select: {
@@ -69,7 +74,10 @@ export async function GET() {
       take: 20,
     }),
     prisma.reservation.findMany({
-      where: { createdAt: { gte: since }, ...visible },
+      // Les pré-commandes ne portent pas de lien client B2B : hors périmètre.
+      where: isComptableRole
+        ? { id: { in: [] } }
+        : { createdAt: { gte: since }, ...visible },
       select: {
         id: true,
         client: true,

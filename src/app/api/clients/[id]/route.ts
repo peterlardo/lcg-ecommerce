@@ -18,7 +18,7 @@ async function geocodeAndStore(clientId: string, address: string | null, city: s
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function GET(_req: Request, { params }: Ctx) {
-  const forbidden = await requireManagementAccess(["ADMIN", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "COMMERCIAL", "COMPTABLE"])
   if (forbidden) return forbidden
 
   try {
@@ -28,6 +28,11 @@ export async function GET(_req: Request, { params }: Ctx) {
       include: { commercial: { select: { id: true, name: true, email: true } } },
     })
     if (!client) {
+      return NextResponse.json({ error: "Client introuvable" }, { status: 404 })
+    }
+    // Filtre strict B2B : hors périmètre = 404 (pas de fuite d'existence).
+    const role = (await (await import("@/lib/auth")).auth())?.user?.role
+    if (role === "COMPTABLE" && client.type !== "B2B") {
       return NextResponse.json({ error: "Client introuvable" }, { status: 404 })
     }
     return NextResponse.json(client)

@@ -5,7 +5,30 @@ import { getPrisma } from "@/lib/prisma";
 
 type Role = string
 
-const MANAGEMENT_ROLES: Role[] = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
+/** Rôles pour lesquels le login n'exige PAS `emailVerified` (identique à
+ *  STAFF_ROLES de src/lib/auth.ts — duplication assumée : auth.ts importe
+ *  déjà api-auth, import circulaire à éviter). */
+export const STAFF_ROLES: Role[] = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
+
+const MANAGEMENT_ROLES: Role[] = STAFF_ROLES
+
+/** Rôle responsable comptable : lecture large + édition des commandes/factures
+ *  B2B, jamais de création/annulation de vente ni d'accès stock/caisse. */
+export const COMPTABLE_ROLE = "COMPTABLE"
+
+export function isComptable(role: string | undefined): boolean {
+  return role === COMPTABLE_ROLE
+}
+
+/** Portée B2B stricte : seules les commandes rattachées à un client B2B.
+ *  `{}` pour tous les autres rôles. À combiner en AND dans un `where`. */
+export function b2bOrderScope(role: string | undefined): Prisma.OrderWhereInput {
+  return isComptable(role) ? { b2bClientId: { not: null } } : {}
+}
+
+/** Statuts qu'un COMPTABLE peut appliquer : ni confirmation (débite le stock)
+ *  ni annulation (remet du stock en jeu). */
+export const COMPTABLE_STATUS: string[] = ["PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"]
 
 export async function requireManagementAccess(roles: Role[] = MANAGEMENT_ROLES) {
   const session = await auth()
@@ -33,12 +56,14 @@ export type PermissionAction = "view" | "create" | "edit" | "delete"
  * Retourne true si l'accès à cette commande doit être refusé (404).
  */
 export function isRestrictedOrder(
-  order: { notes: string | null; userId: string | null },
+  order: { notes: string | null; userId: string | null; b2bClientId?: string | null },
   role: string | undefined,
   selfId: string | undefined
 ): boolean {
   if (role === "ADMIN") return false
   if (!role || !selfId) return true
+  // Responsable comptable : uniquement les commandes des clients B2B.
+  if (isComptable(role)) return !order.b2bClientId
   if (order.userId && order.userId === selfId) return false
   if (role === "COMMERCIAL") return true
   return (order.notes ?? "").startsWith("Vente comptoir")

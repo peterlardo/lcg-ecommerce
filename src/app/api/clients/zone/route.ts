@@ -265,18 +265,24 @@ export async function PATCH(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "COMMERCIAL", "COMPTABLE"])
   if (forbidden) return forbidden
 
   try {
     const session = await (await import("@/lib/auth")).auth()
     const { searchParams } = new URL(request.url)
     const requestedId = searchParams.get("commercialId")?.trim() || ""
-    const typeFilter = searchParams.get("type")?.trim() || ""
+    // Filtre strict B2B : le responsable comptable ne voit que les clients B2B
+    // et n'a pas accès au travail de pose des points manquants (mélange B2C).
+    const isComptableRole = session?.user?.role === "COMPTABLE"
+    const typeFilter = isComptableRole ? "B2B" : searchParams.get("type")?.trim() || ""
 
     // Clients sans coordonnées : liste de travail pour la pose manuelle des
     // points sur la carte (indépendante du commercial sélectionné).
     if (searchParams.get("missing") === "1") {
+      if (isComptableRole) {
+        return NextResponse.json({ error: "Acces non autorise" }, { status: 403 })
+      }
       const { missing, notice } = await loadMissingClients()
       return NextResponse.json({ missing, notice })
     }

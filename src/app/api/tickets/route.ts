@@ -4,7 +4,7 @@ import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
 export async function GET() {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE"])
   if (forbidden) return forbidden
 
   const session = await auth()

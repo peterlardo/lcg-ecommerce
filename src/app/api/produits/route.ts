@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const includeAll = searchParams.get("all") === "1"
   if (includeAll) {
-    const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
+    const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMPTABLE"])
     if (forbidden) return forbidden
   }
   const products = await getProducts({ includeInactive: includeAll })

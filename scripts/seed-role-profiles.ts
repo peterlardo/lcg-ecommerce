@@ -12,6 +12,7 @@ async function main() {
     { key: "ADMIN", label: "Administrateur", description: "Accès complet à toutes les fonctionnalités", color: "#7c3aed", isSystem: true },
     { key: "STOCK_MANAGER", label: "Gestionnaire de stock", description: "Gestion du stock, production et approvisionnement", color: "#059669", isSystem: true },
     { key: "DELIVERY_AGENT", label: "Agent de livraison", description: "Livraisons et suivi des commandes assignées", color: "#d97706", isSystem: true },
+    { key: "COMPTABLE", label: "Responsable comptable", description: "Clients B2B, commandes, factures et rapports (lecture + suivi)", color: "#2563eb", isSystem: true },
     { key: "CUSTOMER", label: "Client", description: "Accès client (commandes en ligne)", color: "#6b7280", isSystem: true },
   ]
 
@@ -22,7 +23,7 @@ async function main() {
       create: role,
     })
   }
-  console.log("Seeded 4 role profiles")
+  console.log("Seeded 5 role profiles")
   await prisma.$disconnect()
   await pool.end()
 }

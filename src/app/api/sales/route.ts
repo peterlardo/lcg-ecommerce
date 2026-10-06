@@ -47,11 +47,12 @@ function normalizeItems(value: unknown): SaleItemInput[] {
 }
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL", "COMPTABLE"])
   if (forbidden) return forbidden
 
   const session = await auth()
   const isAdmin = session?.user?.role === "ADMIN"
+  const isComptableRole = session?.user?.role === "COMPTABLE"
 
   const posFilter = await getUserPointOfSaleIds()
   const posIds = posFilter?.posIds ?? null
@@ -59,11 +60,16 @@ export async function GET() {
   const sales = await getPrisma().order.findMany({
     where: {
       notes: { startsWith: "Vente comptoir" },
-      ...(isAdmin
-        ? posIds !== null
-          ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
-          : {}
-        : { userId: session!.user!.id }),
+      // Filtre strict B2B : le comptable ne voit que les ventes comptoir
+      // rattachées à un client B2B.
+      ...(isComptableRole ? { b2bClientId: { not: null } } : {}),
+      ...(isComptableRole
+        ? {}
+        : isAdmin
+          ? posIds !== null
+            ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
+            : {}
+          : { userId: session!.user!.id }),
     },
     include: {
       pointOfSale: { select: { id: true, name: true, code: true } },

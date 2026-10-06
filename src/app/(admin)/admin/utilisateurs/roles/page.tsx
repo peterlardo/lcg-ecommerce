@@ -21,6 +21,7 @@ const moduleLabels: Record<string, string> = {
   production: "Production", distribution: "Distribution", livraisons: "Livraisons",
   reservations: "Réservations", "points-de-vente": "Points de vente", produits: "Produits", promotions: "Promotions & Coupons", rapports: "Rapports",
   "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", "etat-stock": "État de stock & caisse",
+  clients: "Clients", "clients-b2b": "Clients B2B",
 }
 
 export default function RolesPage() {

@@ -3,7 +3,7 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { getPrisma } from "@/lib/prisma"
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "COMMERCIAL", "COMPTABLE"])
   if (forbidden) return forbidden
 
   try {

@@ -16,10 +16,12 @@ async function geocodeAndStore(clientId: string, address: string | null, city: s
 }
 
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "COMMERCIAL", "COMPTABLE"])
   if (forbidden) return forbidden
 
   try {
+    const session = await (await import("@/lib/auth")).auth()
+    const role = session?.user?.role
     const { searchParams } = new URL(request.url)
     const q = searchParams.get("q")?.trim() || ""
     const type = searchParams.get("type")?.trim() || ""
@@ -28,7 +30,12 @@ export async function GET(request: Request) {
 
     const where: Record<string, unknown> = {}
 
-    if (type === "B2B" || type === "B2C") where.type = type
+    // Filtre strict B2B : le responsable comptable ne voit que les clients B2B.
+    if (role === "COMPTABLE") {
+      where.type = "B2B"
+    } else if (type === "B2B" || type === "B2C") {
+      where.type = type
+    }
     if (commercialId) where.commercialId = commercialId
     if (active === "true") where.isActive = true
     if (active === "false") where.isActive = false

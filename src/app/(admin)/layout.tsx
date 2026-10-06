@@ -3,7 +3,7 @@ import { AdminShell } from "@/components/shared/admin-shell"
 import { AnnouncementBanner } from "@/components/shared/announcement-banner"
 import { auth } from "@/lib/auth"
 
-const ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"]
+const ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"]
 
 export default async function AdminLayout({
   children,

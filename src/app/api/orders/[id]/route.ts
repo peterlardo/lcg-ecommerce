@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, isRestrictedOrder } from "@/lib/api-auth"
+import { requireManagementAccess, isRestrictedOrder, isComptable, COMPTABLE_STATUS } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { sendStatusChangeEmail } from "@/lib/mailer"
 import { pushNotification } from "@/lib/notifications"
@@ -21,7 +21,7 @@ const VALID_STATUS = [
 ]
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"])
   if (forbidden) return forbidden
   try {
     const { id } = await params
@@ -78,7 +78,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE"])
   if (forbidden) return forbidden
 
   try {
@@ -92,13 +92,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Statut invalide" }, { status: 400 })
     }
 
+    // Responsable comptable : ni confirmation (débite le stock) ni annulation
+    // (remet du stock) — uniquement l'avancement/l'état de facturation.
+    if (isComptable(actor?.user?.role) && !COMPTABLE_STATUS.includes(status)) {
+      return NextResponse.json({ error: "Statut non autorise pour ce role" }, { status: 403 })
+    }
+
     const order = await getPrisma().$transaction(async (tx) => {
       const previous = await tx.order.findUnique({
         where: { id },
         select: {
           items: true, paymentStatus: true, status: true,
           orderNumber: true, source: true, pointOfSaleId: true,
-          notes: true, userId: true,
+          notes: true, userId: true, b2bClientId: true,
         },
       })
 

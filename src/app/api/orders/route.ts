@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds, b2bOrderScope } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { createOrder, type OrderInput } from "@/data/store"
 import { sendOrderEmail, sendOrderDevisEmail, buildOrderDevisText, type OrderMailData } from "@/lib/mailer"
@@ -22,7 +22,7 @@ interface OrderItemBody {
 }
 
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"])
   if (forbidden) return forbidden
 
   try {
@@ -45,11 +45,14 @@ export async function GET(request: Request) {
     }
 
     const where: Prisma.OrderWhereInput =
-      role === "ADMIN"
-        ? (posClause ?? {})
-        : role === "COMMERCIAL"
-          ? { userId: selfId }
-          : { AND: [...(posClause ? [posClause] : []), ownScope] }
+      role === "COMPTABLE"
+        ? // Filtre strict B2B : aucune commande hors client B2B.
+          { AND: [b2bOrderScope(role)] }
+        : role === "ADMIN"
+          ? (posClause ?? {})
+          : role === "COMMERCIAL"
+            ? { userId: selfId }
+            : { AND: [...(posClause ? [posClause] : []), ownScope] }
 
     if (session?.user?.role === "ADMIN" && userIdParam) where.userId = userIdParam
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {

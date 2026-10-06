@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds, saleMovementsFilter } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds, saleMovementsFilter, isComptable, b2bOrderScope } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
 function startOfDay(date: Date) {
@@ -136,7 +136,7 @@ const lotSelect = {
 } as const
 
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"])
   if (forbidden) return forbidden
 
   try {
@@ -177,8 +177,14 @@ export async function GET(request: Request) {
       OR: [{ NOT: { notes: { startsWith: "Vente comptoir" } } }, { userId: selfId }],
     }
 
-    const orderPosFilter: Prisma.OrderWhereInput =
-      role === "ADMIN"
+    const b2bOnly = isComptable(role)
+    const b2bScope = b2bOrderScope(role)
+
+    const orderPosFilter: Prisma.OrderWhereInput = b2bOnly
+      ? // Filtre strict B2B : les rapports du comptable ne portent que sur
+        // les commandes des clients B2B.
+          b2bScope
+      : role === "ADMIN"
         ? (posClause ?? {})
         : role === "COMMERCIAL"
           ? { userId: selfId }
@@ -189,6 +195,9 @@ export async function GET(request: Request) {
     const movementFilter: Prisma.StockMovementWhereInput = {
       ...saleMovementsFilter(role, selfId),
       ...(selectedPos ? { pointOfSaleId: selectedPos.id } : {}),
+      ...(b2bOnly
+        ? { reference: { in: (await getPrisma().order.findMany({ where: b2bScope, select: { orderNumber: true } })).map((o) => o.orderNumber) } }
+        : {}),
     }
 
     const now = new Date()
@@ -234,8 +243,9 @@ export async function GET(request: Request) {
     const deliveryPosFilter: Prisma.DeliveryWhereInput = selectedPos ? { order: { pointOfSaleId: selectedPos.id } } : {}
 
     // Comparaison entre points de vente : toujours tous les PDV visibles, quel que soit le filtre.
-    const comparisonOrderFilter: Prisma.OrderWhereInput =
-      role === "ADMIN"
+    const comparisonOrderFilter: Prisma.OrderWhereInput = b2bOnly
+      ? b2bScope
+      : role === "ADMIN"
         ? {}
         : role === "COMMERCIAL"
           ? { userId: selfId }

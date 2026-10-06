@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, STAFF_ROLES } from "@/lib/api-auth"
 
 export async function PATCH(request: Request, context: { params: Promise<unknown> }) {
   const forbidden = await requireManagementAccess(["ADMIN"])
@@ -12,6 +12,12 @@ export async function PATCH(request: Request, context: { params: Promise<unknown
     const data: Record<string, unknown> = { name: body.name?.trim() || null, email: body.email?.trim() || undefined, phone: body.phone?.trim() || null, role: body.role, isActive: body.isActive }
     if (body.password) data.password = await bcrypt.hash(String(body.password), 12)
     if (body.image !== undefined) data.image = body.image || null
+    // Promotion vers un rôle hors STAFF_ROLES (ex. COMPTABLE) : sans
+    // emailVerified le compte ne pourrait plus jamais se connecter.
+    if (body.role && !STAFF_ROLES.includes(String(body.role))) {
+      const existing = await getPrisma().user.findUnique({ where: { id }, select: { emailVerified: true } })
+      if (existing && !existing.emailVerified) data.emailVerified = new Date()
+    }
     const user = await getPrisma().user.update({ where: { id }, data: data as never })
     if (Array.isArray(body.permissions)) {
       await getPrisma().userPermission.deleteMany({ where: { userId: id } })
