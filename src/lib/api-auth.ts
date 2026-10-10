@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { getPrisma } from "@/lib/prisma";
+import { hasPermission, isStaffRole, type PermissionAction } from "@/lib/permissions"
 
 type Role = string
 
@@ -30,7 +31,14 @@ export function b2bOrderScope(role: string | undefined): Prisma.OrderWhereInput 
  *  ni annulation (remet du stock en jeu). */
 export const COMPTABLE_STATUS: string[] = ["PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"]
 
-export async function requireManagementAccess(roles: Role[] = MANAGEMENT_ROLES) {
+/**
+ * Accès ouvert par les droits cochés sur la fiche de l'utilisateur, quand son rôle n'est pas dans la
+ * liste de la route : `[modules, action]`. Sert aux profils créés par l'administrateur (ex. CAISSIERE),
+ * qui n'étaient acceptés nulle part. Jamais pour les routes réservées au seul administrateur.
+ */
+export type AccessRule = readonly [modules: readonly string[], action?: PermissionAction]
+
+export async function requireManagementAccess(roles: Role[] = MANAGEMENT_ROLES, rule?: AccessRule) {
   const session = await auth()
   const role = session?.user?.role as Role | undefined
 
@@ -38,14 +46,15 @@ export async function requireManagementAccess(roles: Role[] = MANAGEMENT_ROLES) 
     return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
   }
 
-  if (!role || !roles.includes(role)) {
-    return NextResponse.json({ error: "Acces non autorise" }, { status: 403 })
-  }
+  if (role && roles.includes(role)) return null
 
-  return null
+  const adminOnly = roles.length === 1 && roles[0] === "ADMIN"
+  if (rule && !adminOnly && hasPermission(session.user, [...rule[0]], rule[1] ?? "view")) return null
+
+  return NextResponse.json({ error: "Acces non autorise" }, { status: 403 })
 }
 
-export type PermissionAction = "view" | "create" | "edit" | "delete"
+export type { PermissionAction }
 
 /**
  * Règle de visibilité des commandes/ventes :
@@ -87,8 +96,6 @@ export function saleMovementsFilter(
   return { OR: [notForeignCounterSale, { userId: selfId }] }
 }
 
-type PermissionKey = "canView" | "canCreate" | "canEdit" | "canDelete"
-
 export type UserPOSFilter = { userId: string; role: string; posIds: string[] | null }
 
 export async function getUserPointOfSaleIds(): Promise<UserPOSFilter | null> {
@@ -113,11 +120,10 @@ export async function requireModuleAccess(module: string, action: PermissionActi
 
   if (!session?.user) return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
   if (role === "ADMIN") return null
-  if (!role || !MANAGEMENT_ROLES.includes(role)) return NextResponse.json({ error: "Acces non autorise" }, { status: 403 })
-
-  const permission = await getPrisma().userPermission.findUnique({
-    where: { userId_module: { userId: session.user.id, module } },
-  })
-  const key = `can${action.charAt(0).toUpperCase()}${action.slice(1)}` as PermissionKey
-  return permission?.[key] ? null : NextResponse.json({ error: `Droit requis: ${action} sur ${module}` }, { status: 403 })
+  // Tout le personnel (profils créés par l'administrateur compris) : c'est le droit coché qui décide.
+  // Les droits viennent de la session, tenue à jour à chaque modification de la fiche : pas de requête de plus.
+  if (!isStaffRole(role)) return NextResponse.json({ error: "Acces non autorise" }, { status: 403 })
+  return hasPermission(session.user, [module], action)
+    ? null
+    : NextResponse.json({ error: `Droit requis: ${action} sur ${module}` }, { status: 403 })
 }

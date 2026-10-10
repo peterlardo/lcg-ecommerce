@@ -2,8 +2,7 @@ import { redirect } from "next/navigation"
 import { AdminShell } from "@/components/shared/admin-shell"
 import { AnnouncementBanner } from "@/components/shared/announcement-banner"
 import { auth } from "@/lib/auth"
-
-const ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"]
+import { isStaffRole } from "@/lib/permissions"
 
 export default async function AdminLayout({
   children,
@@ -17,7 +16,9 @@ export default async function AdminLayout({
     redirect("/auth/personnel?callbackUrl=/admin")
   }
 
-  if (!role || !ADMIN_ROLES.includes(role)) {
+  // Tout le personnel entre dans l'administration, profils créés par l'administrateur compris
+  // (un compte CAISSIERE était renvoyé à l'accueil du site). Chaque écran vérifie ensuite ses droits.
+  if (!isStaffRole(role)) {
     redirect("/")
   }
 

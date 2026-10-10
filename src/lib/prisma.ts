@@ -27,10 +27,12 @@ function createPgClient(connectionString: string): PrismaClient {
   const { Pool } = require("pg") as typeof import("pg")
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PrismaPg } = require("@prisma/adapter-pg") as typeof import("@prisma/adapter-pg")
+  // Base locale (essais sur le poste de développement) : pas de chiffrement.
+  const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(new URL(connectionString).hostname)
   const pool = new Pool({
     connectionString,
     max: 10,
-    ssl: { rejectUnauthorized: false },
+    ssl: local ? false : { rejectUnauthorized: false },
   })
   const adapter = new PrismaPg(pool)
   return new PrismaClient({ adapter, transactionOptions: { maxWait: 5000, timeout: 15000 } })

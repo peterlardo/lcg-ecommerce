@@ -6,6 +6,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { formatPrice } from "@/lib/utils"
+import { canSeeModule, moduleOfPath } from "@/lib/permissions"
 import type { AppNotification } from "@/hooks/use-notifications"
 import {
   type LucideIcon,
@@ -122,7 +123,6 @@ const priorityLinks: NavLink[] = [
   { href: "/admin/etat-stock", label: "État de stock & caisse", icon: ClipboardCheck },
 ]
 const priorityHrefs = new Set(priorityLinks.flatMap((link) => [link.href, ...(link.children ?? []).map((child) => child.href)]))
-const MODULE_ALIASES: Record<string, string> = { livreurs: "livraisons", archives: "commandes" }
 const PLUS_INDEX = navGroups.length
 const SUBMENU_OFFSET = 100
 
@@ -152,17 +152,12 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
     if (mobileOpen) setMobileOpen(false)
   }
 
-  const canSee = (module: string) =>
-    session?.user?.role === "ADMIN" ||
-    (!session?.user?.permissions?.length && session?.user?.role !== "CUSTOMER") ||
-    session?.user?.permissions?.some((permission) => permission.module === module && permission.canView)
+  // Même règle que les API et l'écran « Utilisateurs » (src/lib/permissions.ts)
+  const canSee = (module: string) => canSeeModule(session?.user, module)
 
   // Certains écrans se pilotent depuis la permission d'un module voisin
   // (les livreurs sont gérés avec le module « livraisons »).
-  const moduleOf = (href: string) => {
-    const slug = href.split("/")[2]
-    return MODULE_ALIASES[slug] ?? slug
-  }
+  const moduleOf = moduleOfPath
 
   const isLinkActive = (href: string) => pathname === href || (href !== "/admin" && pathname.startsWith(href))
 

@@ -752,14 +752,20 @@ export default function VentesPage() {
                   const lowStock = variant.stock > 0 && variant.stock <= lowStockThreshold
                   const disabled = outOfStock
                   const inCart = cart.some((item) => item.variantId === variant.id)
+                  const cartQty = cart.find((item) => item.variantId === variant.id)?.quantity ?? 0
                   return (
-                    <button key={variant.id} disabled={disabled} onClick={() => (inCart ? removeItem(variant.id) : addToCart(variant))} className={`rounded-xl border p-3 sm:p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${inCart ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600/30" : outOfStock ? "border-red-300 bg-red-50 hover:border-red-400" : lowStock ? "border-red-200 bg-red-50 hover:border-red-300" : "border-gray-200 bg-white hover:border-primary-300"}`}>
+                    <button key={variant.id} disabled={disabled} onClick={() => addToCart(variant)} className={`rounded-xl border p-3 sm:p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${inCart ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600/30" : outOfStock ? "border-red-300 bg-red-50 hover:border-red-400" : lowStock ? "border-red-200 bg-red-50 hover:border-red-300" : "border-gray-200 bg-white hover:border-primary-300"}`}>
                       <div className="flex items-start justify-between gap-2 sm:gap-3">
                         <div className="min-w-0">
                           <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{variant.productName}</p>
                           <p className="mt-1   text-gray-500 truncate">{variant.format} - {variant.categoryName}</p>
                         </div>
-                        <span className="shrink-0 rounded-full bg-primary-50 px-2 py-1   font-semibold text-primary-700">{formatPrice(variant.price)}</span>
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <span className="rounded-full bg-primary-50 px-2 py-1   font-semibold text-primary-700">{formatPrice(variant.price)}</span>
+                          {inCart && (
+                            <span className="inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5   font-bold text-white">×{cartQty}</span>
+                          )}
+                        </div>
                       </div>
                       <p className={`mt-2 sm:mt-3   font-medium ${variant.stock <= lowStockThreshold ? "text-red-600" : "text-gray-500"}`}>Stock : {variant.stock} {variant.unit ?? ""}</p>
                     </button>
