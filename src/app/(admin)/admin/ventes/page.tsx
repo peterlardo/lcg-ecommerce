@@ -764,9 +764,9 @@ export default function VentesPage() {
                           <span className="rounded-full bg-primary-50 px-2.5 py-1.5 text-sm sm:text-base font-bold text-primary-700 whitespace-nowrap">{formatPrice(variant.price)}</span>
                           {inCart && (
                             <div className="inline-flex items-center rounded-full bg-blue-600 text-white shadow-sm" onClick={(e) => e.stopPropagation()}>
-                              <button type="button" aria-label={`Diminuer ${variant.productName}`} onClick={(e) => { e.stopPropagation(); if (cartQty <= 1) removeItem(variant.id); else updateQuantity(variant.id, cartQty - 1) }} className="flex items-center rounded-l-full px-2.5 py-1.5 hover:bg-blue-700 active:bg-blue-800"><Minus className="h-4 w-4" /></button>
-                              <span className="min-w-[2rem] text-center px-1 text-base font-extrabold tabular-nums">×{cartQty}</span>
-                              <button type="button" aria-label={`Augmenter ${variant.productName}`} onClick={(e) => { e.stopPropagation(); updateQuantity(variant.id, cartQty + 1) }} className="flex items-center rounded-r-full px-2.5 py-1.5 hover:bg-blue-700 active:bg-blue-800"><Plus className="h-4 w-4" /></button>
+                              <button type="button" aria-label={`Diminuer ${variant.productName}`} onClick={(e) => { e.stopPropagation(); if (cartQty <= 1) removeItem(variant.id); else updateQuantity(variant.id, cartQty - 1) }} className="flex items-center rounded-l-full px-3.5 py-2.5 hover:bg-blue-700 active:bg-blue-800"><Minus className="h-5 w-5 sm:h-6 sm:w-6" /></button>
+                              <span className="min-w-[2.75rem] text-center px-1.5 text-lg sm:text-xl font-extrabold tabular-nums">×{cartQty}</span>
+                              <button type="button" aria-label={`Augmenter ${variant.productName}`} onClick={(e) => { e.stopPropagation(); updateQuantity(variant.id, cartQty + 1) }} className="flex items-center rounded-r-full px-3.5 py-2.5 hover:bg-blue-700 active:bg-blue-800"><Plus className="h-5 w-5 sm:h-6 sm:w-6" /></button>
                             </div>
                           )}
                         </div>

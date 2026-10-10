@@ -31,7 +31,6 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
  */
 export const MODULE_ROLES: Record<string, string[]> = {
   utilisateurs: ["ADMIN"],
-  "controle-distant": ["ADMIN"],
   clients: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   "zone-commerciale": ["ADMIN", "COMMERCIAL", "COMPTABLE"],
 }
