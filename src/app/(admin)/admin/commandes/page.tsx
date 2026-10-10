@@ -13,7 +13,7 @@ import {
   Receipt,
   BellRing,
 } from "lucide-react"
-import { formatPrice, getStatusLabel } from "@/lib/utils"
+import { formatPrice, getStatusLabel, getStatusColor } from "@/lib/utils"
 import { isArchivedOrder } from "@/lib/archives"
 import type { Product } from "@/data/products"
 
@@ -61,6 +61,11 @@ interface Order {
   cashierId?: string | null
   cashierName?: string | null
 }
+
+const orderStatusLabel = (order: Order): string =>
+  order.status === "SENT_TO_CASHIER" && order.cashierName
+    ? `Commande envoyée à la caissière ${order.cashierName}`
+    : getStatusLabel(order.status)
 
 const paymentLabels: Record<string, string> = {
   CARD: "Carte bancaire",
@@ -402,6 +407,15 @@ export default function CommandesPage() {
                         {paymentStatusConfig[order.paymentStatus]?.label || order.paymentStatus}
                       </span>
                     )}
+                    {order.status && (
+                      <span
+                        className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                          getStatusColor(order.status) || "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {orderStatusLabel(order)}
+                      </span>
+                    )}
                   </div>
                   <p className="break-words text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
                 </div>
@@ -419,6 +433,19 @@ export default function CommandesPage() {
                       <Receipt className="h-3.5 w-3.5" />
                       {order.paymentStatus === "PAID" ? "Ticket de caisse" : "Établir le ticket de caisse"}
                     </Link>
+                  )}
+                  {isOperateur && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setExpanded(expanded === order.id ? null : order.id)
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-primary hover:opacity-90 transition-colors"
+                    >
+                      <BellRing className="h-3.5 w-3.5" />
+                      Envoyer à la caisse
+                    </button>
                   )}
                   <div className="hidden sm:block text-right">
                     <p className="text-sm font-semibold text-gray-900">
@@ -581,7 +608,7 @@ export default function CommandesPage() {
                               className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg text-white bg-primary hover:opacity-90 disabled:opacity-50"
                             >
                               <BellRing className="h-4 w-4" />
-                              {sending === order.id ? "Envoi…" : "Envoyer"}
+                              {sending === order.id ? "Envoi…" : "Envoyer à la caisse"}
                             </button>
                           </div>
                           {cashiers.length === 0 && (
