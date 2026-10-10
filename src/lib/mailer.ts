@@ -587,6 +587,7 @@ export async function sendVerificationEmail(email: string, token: string, baseUr
 function getStatusLabelFr(status: string): string {
   const labels: Record<string, string> = {
     PENDING: "En attente",
+    SENT_TO_CASHIER: "Commande envoyée à la Caisse",
     CONFIRMED: "Confirmée",
     PROCESSING: "En production",
     READY: "Prête",
@@ -600,6 +601,7 @@ function getStatusLabelFr(status: string): string {
 function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     PENDING: "#f59e0b",
+    SENT_TO_CASHIER: "#0ea5e9",
     CONFIRMED: "#3b82f6",
     PROCESSING: "#8b5cf6",
     READY: "#06b6d4",

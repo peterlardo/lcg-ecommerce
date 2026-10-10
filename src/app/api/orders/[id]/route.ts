@@ -14,6 +14,7 @@ import {
 
 const VALID_STATUS = [
   "PENDING",
+  "SENT_TO_CASHIER",
   "CONFIRMED",
   "PROCESSING",
   "READY",

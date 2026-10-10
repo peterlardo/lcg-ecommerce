@@ -20,6 +20,7 @@ import type { Product } from "@/data/products"
 const statusFilters = [
   "Toutes",
   "En attente",
+  "Commande envoyée à la Caisse",
   "Confirmée",
   "En production",
   "Prête",

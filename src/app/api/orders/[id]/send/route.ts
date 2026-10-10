@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const order = await getPrisma().order.findUnique({
       where: { id },
-      select: { id: true, orderNumber: true, userId: true },
+      select: { id: true, orderNumber: true, userId: true, status: true },
     })
     if (!order) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
 
@@ -43,8 +43,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const updated = await getPrisma().order.update({
       where: { id },
-      data: { cashierId, sentToCashierAt: cashierId ? new Date() : null },
-      select: { cashierId: true, sentToCashierAt: true },
+      data: {
+        cashierId,
+        sentToCashierAt: cashierId ? new Date() : null,
+        ...(cashierId
+          ? { status: "SENT_TO_CASHIER" }
+          : order.status === "SENT_TO_CASHIER"
+            ? { status: "PENDING" }
+            : {}),
+      },
+      select: { cashierId: true, sentToCashierAt: true, status: true },
     })
 
     await logActivity({

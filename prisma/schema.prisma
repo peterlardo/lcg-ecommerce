@@ -9,6 +9,7 @@ datasource db {
 
 enum OrderStatus {
   PENDING
+  SENT_TO_CASHIER
   CONFIRMED
   PROCESSING
   READY

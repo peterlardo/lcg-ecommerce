@@ -14,7 +14,7 @@ type CaisseData = Pick<ReportPayload, "cashSessionsSummary" | "cashSessionsByDay
 type LotsData = Pick<ReportPayload, "lotSummary" | "lots">
 
 const PAYMENT: Record<string, string> = { CASH_ON_DELIVERY: "Especes", MOBILE_MONEY: "Mobile Money", CARD: "Carte" }
-const STATUS_LBL: Record<string, string> = { PENDING: "En attente", CONFIRMED: "Confirmee", PROCESSING: "En cours", READY: "Prete", OUT_FOR_DELIVERY: "En livraison", DELIVERED: "Livre", CANCELLED: "Annulee" }
+const STATUS_LBL: Record<string, string> = { PENDING: "En attente", SENT_TO_CASHIER: "Caisse", CONFIRMED: "Confirmee", PROCESSING: "En cours", READY: "Prete", OUT_FOR_DELIVERY: "En livraison", DELIVERED: "Livre", CANCELLED: "Annulee" }
 const SUPPLY_LBL: Record<string, string> = { IN: "Entree", PRODUCTION: "Production", TRANSFER_IN: "Transfert", RETURN: "Retour" }
 const LOT_STATUS_LBL: Record<string, string> = { ACTIVE: "Actif", EXHAUSTED: "Epuise", EXPIRED: "Expire" }
 

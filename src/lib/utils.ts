@@ -28,6 +28,7 @@ export function slugify(text: string): string {
 export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     PENDING: "bg-yellow-100 text-yellow-800",
+    SENT_TO_CASHIER: "bg-sky-100 text-sky-800",
     CONFIRMED: "bg-blue-100 text-blue-800",
     PROCESSING: "bg-indigo-100 text-indigo-800",
     READY: "bg-purple-100 text-purple-800",
@@ -47,6 +48,7 @@ export function getStatusColor(status: string): string {
 export function getStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     PENDING: "En attente",
+    SENT_TO_CASHIER: "Commande envoyée à la Caisse",
     CONFIRMED: "Confirmée",
     PROCESSING: "En production",
     READY: "Prête",
