@@ -92,7 +92,7 @@ interface DraftItem {
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleDateString("fr-FR")
+  return `${d.toLocaleDateString("fr-FR")} à ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
 }
 
 const EMPTY_ORDER_FORM = { customerName: "", customerPhone: "", customerEmail: "", address: "", district: "", paymentMethod: "CASH_ON_DELIVERY", notes: "", deliveryMode: "DELIVERY", deliveryZoneId: "" }
@@ -119,6 +119,7 @@ export default function CommandesPage() {
   const { data: session } = useSession()
   const role = (session?.user as { role?: string } | undefined)?.role
   const isOperateur = role === "OPERATEUR_ACCUEIL"
+  const meId = (session?.user as { id?: string } | undefined)?.id
   const [cashiers, setCashiers] = useState<{ id: string; name: string | null; email: string; role: string }[]>([])
   const [sendCashier, setSendCashier] = useState<Record<string, string>>({})
   const [sending, setSending] = useState<string | null>(null)
@@ -170,7 +171,9 @@ export default function CommandesPage() {
   }, [load])
 
   const activeOrders = orders.filter(
-    (order) => !isArchivedOrder(order) && !(isOperateur && order.status === "SENT_TO_CASHIER")
+    (order) =>
+      !isArchivedOrder(order) &&
+      !(order.status === "SENT_TO_CASHIER" && order.cashierId && order.cashierId !== meId)
   )
 
   const filtered = activeOrders.filter((order) => {
