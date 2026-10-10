@@ -11,7 +11,7 @@ type Role = string
  *  déjà api-auth, import circulaire à éviter). */
 export const STAFF_ROLES: Role[] = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
 
-const MANAGEMENT_ROLES: Role[] = STAFF_ROLES
+export const MANAGEMENT_ROLES: Role[] = STAFF_ROLES
 
 /** Rôle responsable comptable : lecture large + édition des commandes/factures
  *  B2B, jamais de création/annulation de vente ni d'accès stock/caisse. */

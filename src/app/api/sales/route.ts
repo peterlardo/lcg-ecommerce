@@ -8,6 +8,7 @@ import {
   consumePointOfSaleStockTx,
   ensureOperationalStockLocations,
 } from "@/lib/stock-service"
+import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
 
 const PAYMENT_METHODS = ["CASH_ON_DELIVERY", "MOBILE_MONEY", "CARD"] as const
 
@@ -47,7 +48,7 @@ function normalizeItems(value: unknown): SaleItemInput[] {
 }
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL", ...CASHIER_ROLES])
   if (forbidden) return forbidden
 
   const session = await auth()
@@ -107,7 +108,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL", ...CASHIER_ROLES])
   if (forbidden) return forbidden
 
   try {
@@ -127,6 +128,13 @@ export async function POST(request: Request) {
 
     if (!pointOfSaleId) {
       return NextResponse.json({ error: "Moyen de stockage requis" }, { status: 400 })
+    }
+
+    if (isCashierRole(session?.user?.role) && pointOfSaleId !== defaultPointOfSaleId) {
+      return NextResponse.json(
+        { error: "Les caissières ne peuvent vendre qu'au Comptoir LCG" },
+        { status: 403 }
+      )
     }
 
     const point = await getPrisma().pointOfSale.findUnique({ where: { id: pointOfSaleId } })
