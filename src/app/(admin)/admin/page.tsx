@@ -226,7 +226,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        <section className="flex flex-col rounded-xl border border-[#1d4ed8] bg-[#1d4ed8] p-3 shadow-card-soft sm:p-5">
+        <section className="flex flex-col rounded-xl border border-[#5076b7] bg-[#5076b7] p-3 shadow-card-soft sm:p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-lg font-bold text-white sm:text-xl">Dernières ventes</h2>
