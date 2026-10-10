@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds, seesOnlyOwnOrders } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE", "OPERATEUR_ACCUEIL"])
   if (forbidden) return forbidden
 
   const session = await auth()
@@ -23,9 +23,11 @@ export async function GET() {
       AND: [
         { OR: [{ notes: { startsWith: "Vente comptoir" } }, { ticketGenerated: true }] },
         ...(posClause ? [posClause] : []),
-        ...(role === "ADMIN" || !role || !selfId
-          ? []
-          : [{ OR: [{ NOT: { notes: { startsWith: "Vente comptoir" } } }, { userId: selfId }] }]),
+        ...(seesOnlyOwnOrders(role) && selfId
+          ? [{ userId: selfId }]
+          : role === "ADMIN" || !role || !selfId
+            ? []
+            : [{ OR: [{ NOT: { notes: { startsWith: "Vente comptoir" } } }, { userId: selfId }] }]),
       ],
     },
 include: { pointOfSale: { select: { name: true, code: true } }, user: { select: { name: true } }, items: { include: { variant: { include: { product: true } } } } },

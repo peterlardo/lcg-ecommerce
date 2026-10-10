@@ -280,9 +280,9 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2.5 text-base font-medium transition-colors sm:px-4 ${activeClass}`}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-3 text-lg font-medium transition-colors sm:px-5 ${activeClass}`}
                 >
-                  <Icon className="h-5 w-5 shrink-0" />
+                  <Icon className="h-6 w-6 shrink-0" />
                   <span className="whitespace-nowrap">{link.label}</span>
                 </Link>
               )
@@ -303,9 +303,9 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
                     setOpenSide(rect.left + 220 > window.innerWidth ? "right" : "left")
                     setOpenIndex(submenuIndex)
                   }}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2.5 text-base font-medium transition-colors sm:px-4 ${activeClass}`}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-3 text-lg font-medium transition-colors sm:px-5 ${activeClass}`}
                 >
-                  <Icon className="h-5 w-5 shrink-0" />
+                  <Icon className="h-6 w-6 shrink-0" />
                   <span className="whitespace-nowrap">{link.label}</span>
                   <ChevronDown
                     className={`h-4 w-4 shrink-0 transition-transform duration-200 ${openIndex === submenuIndex ? "rotate-180" : ""}`}
@@ -325,7 +325,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
                           key={child.href}
                           href={child.href}
                           onClick={() => setOpenIndex(null)}
-                          className={`flex items-center gap-3 px-4 py-2.5 text-[15px] font-medium transition-colors ${
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium transition-colors ${
                             childActive
                               ? "bg-primary-50 text-primary-700"
                               : "text-gray-700 hover:bg-gray-50"
@@ -357,7 +357,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
                   setOpenSide(rect.left + 270 > window.innerWidth ? "right" : "left")
                   setOpenIndex(PLUS_INDEX)
                 }}
-                className={`flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-base font-medium transition-colors sm:px-4 ${
+                className={`flex items-center gap-2 rounded-lg px-4 py-3 text-lg font-medium transition-colors sm:px-5 ${
                   openIndex === PLUS_INDEX
                     ? "bg-white text-[#16489f]"
                     : "text-white/85 hover:bg-white/10 hover:text-white"
@@ -390,7 +390,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
                             key={link.href}
                             href={link.href}
                             onClick={() => setOpenIndex(null)}
-                            className={`flex items-center gap-3 px-4 py-2.5 text-[15px] font-medium transition-colors ${
+                            className={`flex items-center gap-3 px-4 py-3 text-base font-medium transition-colors ${
                               active ? "bg-primary-50 text-primary-700" : "text-gray-700 hover:bg-gray-50"
                             }`}
                           >
@@ -519,7 +519,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
                       key={link.href}
                       href={link.href}
                       onClick={() => setMobileOpen(false)}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] font-medium transition-colors ${
+                      className={`flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors ${
                         active
                           ? "bg-white text-[#16489f]"
                           : "text-white/90 hover:bg-white/10 hover:text-white"

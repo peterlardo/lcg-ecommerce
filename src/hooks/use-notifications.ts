@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { formatPrice } from "@/lib/utils"
+import { playNotificationSound, unlockNotificationAudio } from "@/lib/notification-sound"
 
 export interface AppNotification {
   id: string
@@ -83,6 +84,7 @@ export function useNotifications(pollInterval = 8000) {
           setNotifications((prev) => [...fresh, ...prev].slice(0, 10))
           setNewCount((c) => c + fresh.length)
           fresh.forEach(showDesktopNotification)
+          playNotificationSound()
         }
         data.forEach((n) => seenIds.current.add(n.id))
         primed.current = true
@@ -121,6 +123,16 @@ export function useNotifications(pollInterval = 8000) {
     return () => {
       window.removeEventListener("pointerdown", request)
       window.removeEventListener("keydown", request)
+    }
+  }, [])
+
+  useEffect(() => {
+    const unlock = () => unlockNotificationAudio()
+    window.addEventListener("pointerdown", unlock, { once: true })
+    window.addEventListener("keydown", unlock, { once: true })
+    return () => {
+      window.removeEventListener("pointerdown", unlock)
+      window.removeEventListener("keydown", unlock)
     }
   }, [])
 

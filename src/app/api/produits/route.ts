@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
 import { getProducts, createProduct } from "@/data/store"
 import { ensureOperationalStockLocations, ensurePointOfSaleStockRows } from "@/lib/stock-service"
 import { parseVariants } from "@/lib/product-validation"
@@ -8,8 +9,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const includeAll = searchParams.get("all") === "1"
   if (includeAll) {
-    const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMPTABLE"])
-    if (forbidden) return forbidden
+    const session = await auth()
+    if (!session?.user) return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
   }
   const products = await getProducts({ includeInactive: includeAll })
   return NextResponse.json(products)

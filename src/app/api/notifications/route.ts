@@ -25,11 +25,12 @@ const reservationTotal = (itemsJson: string) => {
 }
 
 // Cloche : commandes et pré-commandes des dernières 24 h passées depuis le site vitrine
-// (source "WEB", visibles par toute l'équipe) ou saisies depuis un poste de
-// l'application (source "OPERATOR", visibles par leur auteur et l'administrateur).
-// Exclues : ventes de caisse ("CAISSE") et commandes générées par la confirmation
-// d'une pré-commande ("RESERVATION", déjà notifiée comme pré-commande).
-const NOTIFIED_SOURCES = ["WEB", "OPERATOR"]
+// (source "WEB", visibles par toute l'équipe), saisies depuis un poste de
+// l'application (source "OPERATOR", visibles par leur auteur et l'administrateur)
+// ou ventes de caisse (source "CAISSE", visibles par leur auteur et l'administrateur).
+// Exclues : commandes générées par la confirmation d'une pré-commande
+// ("RESERVATION", déjà notifiée comme pré-commande).
+const NOTIFIED_SOURCES = ["WEB", "OPERATOR", "CAISSE"]
 export async function GET() {
   const forbidden = await requireManagementAccess([
     "ADMIN",
@@ -44,10 +45,10 @@ export async function GET() {
   const isAdmin = session?.user?.role === "ADMIN"
   const isComptableRole = session?.user?.role === "COMPTABLE"
   const selfId = (session?.user?.id as string | undefined) ?? ""
-  // Site vitrine : tout le monde ; poste de l'application : l'auteur (et l'admin).
+  // Site vitrine : tout le monde ; poste de l'application et caisse : l'auteur (et l'admin).
   const visible = isAdmin
     ? { source: { in: NOTIFIED_SOURCES } }
-    : { OR: [{ source: "WEB" }, { source: "OPERATOR", userId: selfId }] }
+    : { OR: [{ source: "WEB" }, { source: "OPERATOR", userId: selfId }, { source: "CAISSE", userId: selfId }] }
   const since = new Date(Date.now() - DAY_MS)
   const prisma = getPrisma()
 
@@ -59,7 +60,6 @@ export async function GET() {
         // Filtre strict B2B : le comptable n'est notifié que des commandes
         // rattachées à un client B2B.
         ...(isComptableRole ? { b2bClientId: { not: null } } : {}),
-        NOT: { notes: { startsWith: "Vente comptoir" } },
       },
       select: {
         id: true,

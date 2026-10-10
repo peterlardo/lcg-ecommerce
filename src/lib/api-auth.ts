@@ -21,6 +21,19 @@ export function isComptable(role: string | undefined): boolean {
   return role === COMPTABLE_ROLE
 }
 
+/** Rôle « opérateur accueil » (réception) : crée les commandes et les transmet à
+ *  la caisse, mais ne voit que les commandes dont il est l'auteur. */
+export const OPERATEUR_ACCUEIL_ROLE = "OPERATEUR_ACCUEIL"
+
+export function isOperateurAccueil(role: string | undefined): boolean {
+  return role === OPERATEUR_ACCUEIL_ROLE
+}
+
+/** Rôles qui ne voient QUE leurs propres commandes/ventes (auteur = eux-mêmes). */
+export function seesOnlyOwnOrders(role: string | undefined): boolean {
+  return role === "COMMERCIAL" || role === OPERATEUR_ACCUEIL_ROLE
+}
+
 /** Portée B2B stricte : seules les commandes rattachées à un client B2B.
  *  `{}` pour tous les autres rôles. À combiner en AND dans un `where`. */
 export function b2bOrderScope(role: string | undefined): Prisma.OrderWhereInput {
@@ -74,7 +87,7 @@ export function isRestrictedOrder(
   // Responsable comptable : uniquement les commandes des clients B2B.
   if (isComptable(role)) return !order.b2bClientId
   if (order.userId && order.userId === selfId) return false
-  if (role === "COMMERCIAL") return true
+  if (seesOnlyOwnOrders(role)) return true
   return (order.notes ?? "").startsWith("Vente comptoir")
 }
 

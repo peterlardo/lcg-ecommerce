@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds, saleMovementsFilter, isComptable, b2bOrderScope } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds, saleMovementsFilter, isComptable, b2bOrderScope, seesOnlyOwnOrders } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
 function startOfDay(date: Date) {
@@ -136,7 +136,7 @@ const lotSelect = {
 } as const
 
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL"])
   if (forbidden) return forbidden
 
   try {
@@ -186,7 +186,7 @@ export async function GET(request: Request) {
           b2bScope
       : role === "ADMIN"
         ? (posClause ?? {})
-        : role === "COMMERCIAL"
+        : seesOnlyOwnOrders(role)
           ? { userId: selfId }
           : { AND: [...(posClause ? [posClause] : []), ownScope] }
 
@@ -247,7 +247,7 @@ export async function GET(request: Request) {
       ? b2bScope
       : role === "ADMIN"
         ? {}
-        : role === "COMMERCIAL"
+        : seesOnlyOwnOrders(role)
           ? { userId: selfId }
           : { AND: [...(allowedPosIds !== null ? [{ pointOfSaleId: { in: allowedPosIds } }] : []), ownScope] }
 

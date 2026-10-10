@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds, b2bOrderScope } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds, b2bOrderScope, seesOnlyOwnOrders } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { createOrder, type OrderInput } from "@/data/store"
 import { sendOrderEmail, sendOrderDevisEmail, buildOrderDevisText, type OrderMailData } from "@/lib/mailer"
@@ -22,7 +22,7 @@ interface OrderItemBody {
 }
 
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL"])
   if (forbidden) return forbidden
 
   try {
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
           { AND: [b2bOrderScope(role)] }
         : role === "ADMIN"
           ? (posClause ?? {})
-          : role === "COMMERCIAL"
+          : seesOnlyOwnOrders(role)
             ? { userId: selfId }
             : { AND: [...(posClause ? [posClause] : []), ownScope] }
 

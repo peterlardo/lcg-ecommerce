@@ -643,8 +643,8 @@ export default function VentesPage() {
     <div className="space-y-4 sm:space-y-6" suppressHydrationWarning>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Mes ventes</h1>
-          <p className="mt-1 text-xs sm:text-sm text-gray-500">Ventes effectuées depuis le comptoir et points de vente.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Mes ventes</h1>
+          <p className="mt-1 text-sm sm:text-base text-gray-500">Ventes effectuées depuis le comptoir et points de vente.</p>
         </div>
         <button onClick={() => { loadProducts(); if (tab === "historique") loadSalesHistory() }} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
           <RefreshCw className="h-4 w-4" /> Actualiser
@@ -654,24 +654,24 @@ export default function VentesPage() {
       <div className="flex gap-2 border-b border-gray-200 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
           onClick={() => setTab("nouvelle")}
-          className={`shrink-0 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+          className={`shrink-0 px-5 sm:px-6 py-3 text-base sm:text-lg font-semibold border-b-2 transition-colors whitespace-nowrap ${
             tab === "nouvelle"
               ? "border-primary text-primary"
               : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
-          <ReceiptText className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+          <ReceiptText className="inline h-5 w-5 mr-1.5 -mt-0.5" />
           Nouvelle vente
         </button>
         <button
           onClick={() => setTab("historique")}
-          className={`shrink-0 px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+          className={`shrink-0 px-5 sm:px-6 py-3 text-base sm:text-lg font-semibold border-b-2 transition-colors whitespace-nowrap ${
             tab === "historique"
               ? "border-primary text-primary"
               : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
-          <Search className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+          <Search className="inline h-5 w-5 mr-1.5 -mt-0.5" />
           Historique des ventes
           {salesHistory.length > 0 && (
             <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs">{salesHistory.length}</span>

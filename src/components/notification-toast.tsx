@@ -27,13 +27,13 @@ const statusLabels: Record<string, string> = {
 }
 
 const statusColors: Record<string, string> = {
-  PENDING: "bg-blue-500",
-  CONFIRMED: "bg-green-500",
-  PROCESSING: "bg-purple-500",
-  OUT_FOR_DELIVERY: "bg-orange-500",
-  DELIVERED: "bg-emerald-600",
-  CANCELLED: "bg-red-500",
-  SOLD: "bg-emerald-600",
+  PENDING: "bg-blue-300",
+  CONFIRMED: "bg-green-300",
+  PROCESSING: "bg-purple-300",
+  OUT_FOR_DELIVERY: "bg-orange-300",
+  DELIVERED: "bg-emerald-300",
+  CANCELLED: "bg-red-300",
+  SOLD: "bg-emerald-300",
 }
 
 function NotificationItem({ notification, onDismiss }: { notification: Notification; onDismiss: (id: string) => void }) {
@@ -59,22 +59,22 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
   return (
     <div
       style={{ animation: "toast-in 0.35s cubic-bezier(.22, 1, .36, 1) both" }}
-      className="bg-white border border-border rounded-xl shadow-lg overflow-hidden"
+      className="overflow-hidden rounded-xl bg-[#1d4ed8] text-white shadow-lg ring-1 ring-white/20"
     >
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 shrink-0">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 shrink-0">
             {notification.kind === "vente" ? (
-              <ReceiptText className="h-5 w-5 text-primary" />
+              <ReceiptText className="h-5 w-5 text-white" />
             ) : notification.status === "PENDING" ? (
-              <Bell className="h-5 w-5 text-primary" />
+              <Bell className="h-5 w-5 text-white" />
             ) : (
-              <ShoppingCart className="h-5 w-5 text-primary" />
+              <ShoppingCart className="h-5 w-5 text-white" />
             )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className={`text-sm font-semibold text-foreground ${notification.kind === "vente" ? "uppercase tracking-wide" : ""}`}>
+              <p className={`text-sm font-semibold text-white ${notification.kind === "vente" ? "uppercase tracking-wide" : ""}`}>
                 {notification.kind === "vente"
                   ? "VENTE RÉALISÉE"
                   : notification.kind === "precommande"
@@ -87,14 +87,14 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
                         : `Pré-commande · ${statusLabels[notification.status] || notification.status}`
                   : statusLabels[notification.status] || notification.status}
               </p>
-              <span className={`h-2 w-2 rounded-full ${statusColors[notification.status] || "bg-gray-400"}`} />
+              <span className={`h-2 w-2 rounded-full ${statusColors[notification.status] || "bg-white/60"}`} />
             </div>
-            <p className="text-xs text-muted-foreground truncate mt-0.5">
+            <p className="mt-0.5 truncate text-xs text-white/80">
               {notification.orderNumber} — {notification.customerName || "Client"}
             </p>
-            <div className="flex items-center gap-2 mt-1.5">
-              <p className="text-sm font-bold text-primary">{formatPrice(notification.total)}</p>
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <div className="mt-1.5 flex items-center gap-2">
+              <p className="text-sm font-bold text-white">{formatPrice(notification.total)}</p>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-medium text-white/90">
                 {notification.source === "CAISSE" ? (
                   <>
                     <ReceiptText className="h-2.5 w-2.5" />
@@ -114,13 +114,13 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
               </span>
             </div>
           </div>
-          <button onClick={() => onDismiss(notification.id)} className="text-muted-foreground hover:text-foreground shrink-0">
+          <button onClick={() => onDismiss(notification.id)} className="shrink-0 text-white/70 hover:text-white">
             <X className="h-4 w-4" />
           </button>
         </div>
       </div>
-      <div className="h-1 w-full bg-muted">
-        <div className="h-full bg-primary transition-all duration-100 ease-linear" style={{ width: `${progress}%` }} />
+      <div className="h-1 w-full bg-white/20">
+        <div className="h-full bg-white transition-all duration-100 ease-linear" style={{ width: `${progress}%` }} />
       </div>
     </div>
   )
@@ -130,7 +130,7 @@ export function NotificationToast({ notifications, onDismiss }: { notifications:
   if (notifications.length === 0) return null
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2 max-w-sm w-full">
+    <div className="fixed bottom-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2">
       {notifications.slice(0, 3).map((n) => (
         <NotificationItem key={n.id} notification={n} onDismiss={onDismiss} />
       ))}
