@@ -9,6 +9,8 @@ interface Notification {
   kind?: "commande" | "precommande" | "vente"
   orderNumber: string
   customerName: string
+  cashierName?: string
+  userName?: string
   status: string
   total: number
   createdAt: string
@@ -33,6 +35,7 @@ const statusColors: Record<string, string> = {
   OUT_FOR_DELIVERY: "bg-orange-300",
   DELIVERED: "bg-emerald-300",
   CANCELLED: "bg-red-300",
+  SENT_TO_CASHIER: "bg-sky-300",
   SOLD: "bg-emerald-300",
 }
 
@@ -85,7 +88,11 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
                       : notification.status === "CANCELLED"
                         ? "Pré-commande annulée"
                         : `Pré-commande · ${statusLabels[notification.status] || notification.status}`
-                  : statusLabels[notification.status] || notification.status}
+                  : notification.status === "SENT_TO_CASHIER"
+                    ? notification.cashierName
+                      ? `Commande envoyée à la caissière ${notification.cashierName}`
+                      : "Commande envoyée à la Caisse"
+                    : statusLabels[notification.status] || notification.status}
               </p>
               <span className={`h-2 w-2 rounded-full ${statusColors[notification.status] || "bg-white/60"}`} />
             </div>
@@ -108,7 +115,7 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
                 ) : (
                   <>
                     <User className="h-2.5 w-2.5" />
-                    Opérateur
+                    {notification.userName || "Opérateur"}
                   </>
                 )}
               </span>

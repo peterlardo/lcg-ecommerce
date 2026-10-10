@@ -162,7 +162,9 @@ export default function CommandesPage() {
     return () => controller.abort()
   }, [])
 
-  const activeOrders = orders.filter((order) => !isArchivedOrder(order))
+  const activeOrders = orders.filter(
+    (order) => !isArchivedOrder(order) && !(isOperateur && order.status === "SENT_TO_CASHIER")
+  )
 
   const filtered = activeOrders.filter((order) => {
     const matchesTab =
