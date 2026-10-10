@@ -47,7 +47,7 @@ function normalizeItems(value: unknown): SaleItemInput[] {
 }
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL", "COMPTABLE"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL"])
   if (forbidden) return forbidden
 
   const session = await auth()
