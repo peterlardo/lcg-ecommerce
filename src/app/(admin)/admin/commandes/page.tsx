@@ -119,7 +119,6 @@ export default function CommandesPage() {
   const { data: session } = useSession()
   const role = (session?.user as { role?: string } | undefined)?.role
   const isOperateur = role === "OPERATEUR_ACCUEIL"
-  const meId = (session?.user as { id?: string } | undefined)?.id
   const [cashiers, setCashiers] = useState<{ id: string; name: string | null; email: string; role: string }[]>([])
   const [sendCashier, setSendCashier] = useState<Record<string, string>>({})
   const [sending, setSending] = useState<string | null>(null)
@@ -171,9 +170,7 @@ export default function CommandesPage() {
   }, [load])
 
   const activeOrders = orders.filter(
-    (order) =>
-      !isArchivedOrder(order) &&
-      !(order.status === "SENT_TO_CASHIER" && order.cashierId && order.cashierId !== meId)
+    (order) => !isArchivedOrder(order)
   )
 
   const filtered = activeOrders.filter((order) => {
