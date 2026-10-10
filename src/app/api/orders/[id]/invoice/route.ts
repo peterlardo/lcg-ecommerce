@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma"
 import { requireManagementAccess, isRestrictedOrder } from "@/lib/api-auth"
+import { CASHIER_ROLES } from "@/lib/permissions"
 import { auth } from "@/lib/auth"
 import { consumePointOfSaleStockTx } from "@/lib/stock-service"
 
@@ -10,7 +11,7 @@ interface InvoiceItemInput {
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", ...CASHIER_ROLES])
   if (forbidden) return forbidden
 
   try {

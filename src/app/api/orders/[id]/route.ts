@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, isRestrictedOrder, isComptable, COMPTABLE_STATUS } from "@/lib/api-auth"
+import { CASHIER_ROLES } from "@/lib/permissions"
 import { auth } from "@/lib/auth"
 import { logActivity } from "@/lib/activity"
 import { sendStatusChangeEmail } from "@/lib/mailer"
@@ -22,7 +23,7 @@ const VALID_STATUS = [
 ]
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL", ...CASHIER_ROLES])
   if (forbidden) return forbidden
   try {
     const { id } = await params
@@ -33,6 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         delivery: true,
         pointOfSale: { select: { id: true, name: true, code: true } },
         user: { select: { id: true, name: true } },
+        cashier: { select: { id: true, name: true } },
       },
     })
     if (!order) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
@@ -59,6 +61,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       notes: order.notes,
       pointOfSaleId: order.pointOfSaleId,
       pointOfSale: order.pointOfSale,
+      cashierId: order.cashierId ?? null,
+      cashierName: order.cashier?.name ?? null,
+      sentToCashierAt: order.sentToCashierAt ? order.sentToCashierAt.toISOString() : null,
       delivery: order.delivery,
       seller: order.user ? { id: order.user.id, name: order.user.name } : null,
       items: order.items.map((item) => ({

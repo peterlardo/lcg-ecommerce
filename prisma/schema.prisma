@@ -61,6 +61,7 @@ model User {
   sessions             Session[]
   addresses            Address[]
   orders               Order[]
+  cashierOrders        Order[]              @relation("OrderCashier")
   reservations         Reservation[]
   deliveryAgentProfile DeliveryAgent?
   managedPointOfSales  PointOfSale[]        @relation("PointOfSaleManager")
@@ -291,10 +292,13 @@ model Order {
   pointOfSaleId   String?
   source          String         @default("WEB")
   ticketGenerated Boolean        @default(false)
+  cashierId       String?
+  sentToCashierAt DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   user         User?         @relation(fields: [userId], references: [id])
+  cashier      User?         @relation("OrderCashier", fields: [cashierId], references: [id], onDelete: SetNull)
   b2bClient    B2BClient?    @relation(fields: [b2bClientId], references: [id], onDelete: SetNull)
   address      Address?      @relation(fields: [addressId], references: [id])
   items        OrderItem[]
@@ -307,6 +311,7 @@ model Order {
   @@index([status])
   @@index([createdAt])
   @@index([b2bClientId])
+  @@index([cashierId])
 }
 
 model OrderItem {

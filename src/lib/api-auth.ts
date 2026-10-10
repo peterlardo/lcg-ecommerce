@@ -79,7 +79,7 @@ export type { PermissionAction }
  * Retourne true si l'accès à cette commande doit être refusé (404).
  */
 export function isRestrictedOrder(
-  order: { notes: string | null; userId: string | null; b2bClientId?: string | null },
+  order: { notes: string | null; userId: string | null; b2bClientId?: string | null; cashierId?: string | null },
   role: string | undefined,
   selfId: string | undefined
 ): boolean {
@@ -88,6 +88,8 @@ export function isRestrictedOrder(
   // Responsable comptable : uniquement les commandes des clients B2B.
   if (isComptable(role)) return !order.b2bClientId
   if (order.userId && order.userId === selfId) return false
+  // Une caissière à qui la commande a été transmise peut la lire.
+  if (order.cashierId && order.cashierId === selfId) return false
   if (seesOnlyOwnOrders(role)) return true
   return (order.notes ?? "").startsWith("Vente comptoir")
 }

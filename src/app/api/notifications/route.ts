@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
+import { CASHIER_ROLES } from "@/lib/permissions"
 import { auth } from "@/lib/auth"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -38,6 +39,8 @@ export async function GET() {
     "COMMERCIAL",
     "DELIVERY_AGENT",
     "COMPTABLE",
+    "OPERATEUR_ACCUEIL",
+    ...CASHIER_ROLES,
   ])
   if (forbidden) return forbidden
 
@@ -45,8 +48,20 @@ export async function GET() {
   const isAdmin = session?.user?.role === "ADMIN"
   const isComptableRole = session?.user?.role === "COMPTABLE"
   const selfId = (session?.user?.id as string | undefined) ?? ""
-  // Site vitrine : tout le monde ; poste de l'application et caisse : l'auteur (et l'admin).
-  const visible = isAdmin
+  // Site vitrine : tout le monde ; poste de l'application et caisse : l'auteur (et l'admin) ;
+  // commande transmise par l'opérateur : la caissière ciblée (et l'admin).
+  const orderVisible = isAdmin
+    ? { source: { in: NOTIFIED_SOURCES } }
+    : {
+        OR: [
+          { source: "WEB" },
+          { source: "OPERATOR", userId: selfId },
+          { source: "CAISSE", userId: selfId },
+          { cashierId: selfId },
+        ],
+      }
+  // Les pré-commandes ne portent pas de caissière ciblée.
+  const reservationVisible = isAdmin
     ? { source: { in: NOTIFIED_SOURCES } }
     : { OR: [{ source: "WEB" }, { source: "OPERATOR", userId: selfId }, { source: "CAISSE", userId: selfId }] }
   const since = new Date(Date.now() - DAY_MS)
@@ -56,7 +71,7 @@ export async function GET() {
     prisma.order.findMany({
       where: {
         createdAt: { gte: since },
-        ...visible,
+        ...orderVisible,
         // Filtre strict B2B : le comptable n'est notifié que des commandes
         // rattachées à un client B2B.
         ...(isComptableRole ? { b2bClientId: { not: null } } : {}),
@@ -77,7 +92,7 @@ export async function GET() {
       // Les pré-commandes ne portent pas de lien client B2B : hors périmètre.
       where: isComptableRole
         ? { id: { in: [] } }
-        : { createdAt: { gte: since }, ...visible },
+        : { createdAt: { gte: since }, ...reservationVisible },
       select: {
         id: true,
         client: true,

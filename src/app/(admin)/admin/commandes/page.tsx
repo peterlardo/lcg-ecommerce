@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 import {
   Archive,
   ShoppingCart,
@@ -10,6 +11,7 @@ import {
   Plus,
   X,
   Receipt,
+  BellRing,
 } from "lucide-react"
 import { formatPrice, getStatusLabel } from "@/lib/utils"
 import { isArchivedOrder } from "@/lib/archives"
@@ -55,6 +57,8 @@ interface Order {
   delivery: { address: string; city: string; district: string | null; notes: string | null } | null
   pointOfSaleId: string | null
   pointOfSale?: { name: string } | null
+  cashierId?: string | null
+  cashierName?: string | null
 }
 
 const paymentLabels: Record<string, string> = {
@@ -106,6 +110,13 @@ export default function CommandesPage() {
   const [assignError, setAssignError] = useState("")
   const [page, setPage] = useState(1)
   const PER_PAGE = 5
+  const { data: session } = useSession()
+  const role = (session?.user as { role?: string } | undefined)?.role
+  const isOperateur = role === "OPERATEUR_ACCUEIL"
+  const [cashiers, setCashiers] = useState<{ id: string; name: string | null; email: string; role: string }[]>([])
+  const [sendCashier, setSendCashier] = useState<Record<string, string>>({})
+  const [sending, setSending] = useState<string | null>(null)
+  const [sendError, setSendError] = useState("")
   const load = useCallback(async () => {
     try {
       const ordersRes = await fetch("/api/orders")
@@ -130,6 +141,10 @@ export default function CommandesPage() {
         try {
           const usersRes = await fetch("/api/utilisateurs", { signal: controller.signal })
           if (!controller.signal.aborted && usersRes.ok) setUsers(await usersRes.json())
+        } catch {}
+        try {
+          const cashiersRes = await fetch("/api/cashiers", { signal: controller.signal })
+          if (!controller.signal.aborted && cashiersRes.ok) setCashiers(await cashiersRes.json())
         } catch {}
       } catch (error) {
         if (!controller.signal.aborted) console.error("Erreur chargement commandes:", error)
@@ -182,6 +197,31 @@ export default function CommandesPage() {
       setAssignError("Erreur interne")
     } finally {
       setAssigning(null)
+    }
+  }
+
+  const handleSendToCashier = async (orderId: string) => {
+    const cashierId = sendCashier[orderId]
+    if (!cashierId) return
+    setSending(orderId)
+    setSendError("")
+    try {
+      const res = await fetch(`/api/orders/${orderId}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cashierId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSendError(data.error || "Erreur lors de l'envoi")
+        return
+      }
+      await load()
+    } catch (error) {
+      console.error("Erreur envoi caisse:", error)
+      setSendError("Erreur interne")
+    } finally {
+      setSending(null)
     }
   }
 
@@ -365,18 +405,20 @@ export default function CommandesPage() {
                   <p className="break-words text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                  <Link
-                    href={(order.paymentStatus === "PAID" && order.ticketGenerated) ? `/admin/commandes/${order.id}/facture` : order.paymentStatus === "PAID" ? "#" : `/admin/commandes/${order.id}/facture`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (order.paymentStatus === "PAID") e.preventDefault()
-                    }}
-                    aria-disabled={order.paymentStatus === "PAID"}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border rounded-lg transition-colors ${order.paymentStatus === "PAID" ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed" : "text-primary-700 bg-primary-50 hover:bg-primary-100 border-primary-200"}`}
-                  >
-                    <Receipt className="h-3.5 w-3.5" />
-                    {order.paymentStatus === "PAID" ? "Ticket de caisse" : "Établir le ticket de caisse"}
-                  </Link>
+                  {!isOperateur && (
+                    <Link
+                      href={(order.paymentStatus === "PAID" && order.ticketGenerated) ? `/admin/commandes/${order.id}/facture` : order.paymentStatus === "PAID" ? "#" : `/admin/commandes/${order.id}/facture`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (order.paymentStatus === "PAID") e.preventDefault()
+                      }}
+                      aria-disabled={order.paymentStatus === "PAID"}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border rounded-lg transition-colors ${order.paymentStatus === "PAID" ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed" : "text-primary-700 bg-primary-50 hover:bg-primary-100 border-primary-200"}`}
+                    >
+                      <Receipt className="h-3.5 w-3.5" />
+                      {order.paymentStatus === "PAID" ? "Ticket de caisse" : "Établir le ticket de caisse"}
+                    </Link>
+                  )}
                   <div className="hidden sm:block text-right">
                     <p className="text-sm font-semibold text-gray-900">
                       {formatPrice(order.total)}
@@ -494,15 +536,61 @@ export default function CommandesPage() {
                       {assignError && assigning !== order.id && (
                         <p className="text-xs text-red-600">{assignError}</p>
                       )}
-                      <Link
-                        href={order.paymentStatus === "PAID" ? "#" : `/admin/commandes/${order.id}/facture`}
-                        aria-disabled={order.paymentStatus === "PAID"}
-                        className={`inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors ${order.paymentStatus === "PAID" ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "text-white bg-primary hover:opacity-90"}`}
-                        onClick={(e) => { if (order.paymentStatus === "PAID") e.preventDefault() }}
-                      >
-                        <Receipt className="h-4 w-4" />
-                        {order.paymentStatus === "PAID" ? "Ticket de caisse établi" : "Établir la facture"}
-                      </Link>
+                      {!isOperateur && (
+                        <Link
+                          href={order.paymentStatus === "PAID" ? "#" : `/admin/commandes/${order.id}/facture`}
+                          aria-disabled={order.paymentStatus === "PAID"}
+                          className={`inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors ${order.paymentStatus === "PAID" ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "text-white bg-primary hover:opacity-90"}`}
+                          onClick={(e) => { if (order.paymentStatus === "PAID") e.preventDefault() }}
+                        >
+                          <Receipt className="h-4 w-4" />
+                          {order.paymentStatus === "PAID" ? "Ticket de caisse établi" : "Établir la facture"}
+                        </Link>
+                      )}
+
+                      {isOperateur && (
+                        <div className="space-y-2 rounded-lg border border-primary-200 bg-primary-50/60 p-2.5">
+                          <p className="flex items-center gap-1.5 text-xs font-semibold text-primary-800">
+                            <BellRing className="h-3.5 w-3.5" />
+                            Transmettre à la caisse
+                          </p>
+                          {order.cashierName && (
+                            <p className="text-xs text-primary-700">
+                              Transmise à <span className="font-semibold">{order.cashierName}</span>
+                            </p>
+                          )}
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <select
+                              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                              value={sendCashier[order.id] ?? ""}
+                              disabled={sending === order.id}
+                              onChange={(e) => setSendCashier((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                            >
+                              <option value="">Choisir une caissière…</option>
+                              {cashiers.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name ?? c.email} ({c.role})
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={sending === order.id || !sendCashier[order.id]}
+                              onClick={() => handleSendToCashier(order.id)}
+                              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg text-white bg-primary hover:opacity-90 disabled:opacity-50"
+                            >
+                              <BellRing className="h-4 w-4" />
+                              {sending === order.id ? "Envoi…" : "Envoyer"}
+                            </button>
+                          </div>
+                          {cashiers.length === 0 && (
+                            <p className="text-xs text-gray-500">Aucune caissière disponible.</p>
+                          )}
+                          {sendError && sending !== order.id && (
+                            <p className="text-xs text-red-600">{sendError}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

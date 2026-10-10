@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds, b2bOrderScope, seesOnlyOwnOrders } from "@/lib/api-auth"
+import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
 import { auth } from "@/lib/auth"
 import { createOrder, type OrderInput } from "@/data/store"
 import { sendOrderEmail, sendOrderDevisEmail, buildOrderDevisText, type OrderMailData } from "@/lib/mailer"
@@ -22,7 +23,7 @@ interface OrderItemBody {
 }
 
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL", ...CASHIER_ROLES])
   if (forbidden) return forbidden
 
   try {
@@ -50,9 +51,13 @@ export async function GET(request: Request) {
           { AND: [b2bOrderScope(role)] }
         : role === "ADMIN"
           ? (posClause ?? {})
-          : seesOnlyOwnOrders(role)
-            ? { userId: selfId }
-            : { AND: [...(posClause ? [posClause] : []), ownScope] }
+          : isCashierRole(role)
+            ? // La caissière voit les commandes qu'elle a créées et celles
+              // qu'un opérateur lui a transmises.
+              { OR: [{ userId: selfId }, { cashierId: selfId }] }
+            : seesOnlyOwnOrders(role)
+              ? { userId: selfId }
+              : { AND: [...(posClause ? [posClause] : []), ownScope] }
 
     if (session?.user?.role === "ADMIN" && userIdParam) where.userId = userIdParam
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
@@ -81,6 +86,9 @@ export async function GET(request: Request) {
         source: true,
         ticketGenerated: true,
         pointOfSaleId: true,
+        cashierId: true,
+        sentToCashierAt: true,
+        cashier: { select: { id: true, name: true } },
         createdAt: true,
         items: {
           select: {
@@ -163,6 +171,8 @@ export async function GET(request: Request) {
           : null,
         pointOfSaleId: o.pointOfSaleId ?? null,
         pointOfSale: o.pointOfSale ?? null,
+        cashierId: o.cashierId ?? null,
+        cashierName: o.cashier?.name ?? null,
       }))
     )
   } catch (error) {

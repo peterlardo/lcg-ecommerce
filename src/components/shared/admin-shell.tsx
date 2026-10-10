@@ -8,7 +8,7 @@ import { useNotifications } from "@/hooks/use-notifications"
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   useInactivityTimer()
-  const { notifications, recent, newCount, dismiss, dismissAll } = useNotifications(8000)
+  const { notifications, recent, newCount, dismiss, dismissAll } = useNotifications(5000)
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
