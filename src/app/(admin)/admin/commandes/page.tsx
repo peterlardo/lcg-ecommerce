@@ -162,6 +162,13 @@ export default function CommandesPage() {
     return () => controller.abort()
   }, [])
 
+  useEffect(() => {
+    const id = setInterval(() => {
+      load()
+    }, 10000)
+    return () => clearInterval(id)
+  }, [load])
+
   const activeOrders = orders.filter(
     (order) => !isArchivedOrder(order) && !(isOperateur && order.status === "SENT_TO_CASHIER")
   )
