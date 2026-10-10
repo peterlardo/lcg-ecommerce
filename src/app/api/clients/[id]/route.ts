@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
+import { logActivity } from "@/lib/activity"
 import { getPrisma } from "@/lib/prisma"
 import { geocodeAddress } from "@/lib/geocode"
 
@@ -94,6 +95,7 @@ export async function PUT(req: Request, { params }: Ctx) {
 
     void geocodeAndStore(client.id, client.address, client.city)
 
+    await logActivity({ module: "clients", action: "Modification", entity: "client", entityId: id, summary: `Client ${client.companyName || [client.firstName, client.lastName].filter(Boolean).join(" ") || client.email || id} modifié` })
     return NextResponse.json(client)
   } catch (error: unknown) {
     const err = error as { code?: string }
@@ -112,6 +114,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   try {
     const { id } = await params
     await getPrisma().client.delete({ where: { id } })
+    await logActivity({ module: "clients", action: "Suppression", entity: "client", entityId: id, summary: "Client supprimé" })
     return NextResponse.json({ success: true })
   } catch (error: unknown) {
     const err = error as { code?: string }

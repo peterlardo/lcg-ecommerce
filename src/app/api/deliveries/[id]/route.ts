@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { Prisma, DeliveryStatus } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { logActivity } from "@/lib/activity"
 import { notifyReservationStep } from "@/lib/reservation-notify"
 
 const VALID_STATUS = ["PENDING", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "FAILED"]
@@ -30,7 +31,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
       where: { id },
       select: {
         id: true, orderId: true, agentId: true, status: true, mode: true,
-        order: { select: { status: true, source: true, paymentStatus: true } },
+        order: { select: { status: true, source: true, paymentStatus: true, orderNumber: true } },
       },
     })
     if (!current) return NextResponse.json({ error: "Livraison introuvable" }, { status: 404 })
@@ -147,6 +148,30 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/deliveries/[id
       }
       return updated
     })
+
+    const actorId = posFilter?.userId
+    if (actorId) {
+      if (delivery.status !== current.status) {
+        await logActivity({
+          module: "livraisons",
+          action: "Changement de statut",
+          entity: "delivery",
+          entityId: id,
+          summary: `Livraison ${current.order.orderNumber} : ${current.status} → ${delivery.status}${delivery.failedReason ? ` (${delivery.failedReason})` : ""}`,
+          userId: actorId,
+        })
+      }
+      if (body.agentId !== undefined && delivery.agentId !== current.agentId) {
+        await logActivity({
+          module: "livraisons",
+          action: "Affectation livreur",
+          entity: "delivery",
+          entityId: id,
+          summary: `Livraison ${current.order.orderNumber} : ${delivery.agentId ? "livreur affecté" : "livreur retiré"}`,
+          userId: actorId,
+        })
+      }
+    }
 
     // Pré-commande : le client est prévenu (WhatsApp + e-mail) à chaque étape de la livraison.
     if (current.order.source === "RESERVATION" && delivery.status !== current.status) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
+import { logActivity } from "@/lib/activity"
 import { getPrisma } from "@/lib/prisma"
 import { geocodeAddress } from "@/lib/geocode"
 
@@ -123,6 +124,7 @@ export async function POST(request: Request) {
 
     void geocodeAndStore(client.id, client.address, client.city)
 
+    await logActivity({ module: "clients", action: "Création", entity: "client", entityId: client.id, summary: `Client ${client.companyName || [client.firstName, client.lastName].filter(Boolean).join(" ") || client.email || client.id} créé (${type})` })
     return NextResponse.json(client, { status: 201 })
   } catch (error) {
     console.error("POST /api/clients error:", error)

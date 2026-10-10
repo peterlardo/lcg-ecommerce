@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
+import { logActivity } from "@/lib/activity"
 
 export async function GET() {
   const forbidden = await requireManagementAccess(["ADMIN"])
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
     if (Array.isArray(body.posIds) && body.posIds.length) {
       await getPrisma().pointOfSale.updateMany({ where: { id: { in: body.posIds } }, data: { managerUserId: user.id } })
     }
+    await logActivity({ module: "utilisateurs", action: "Création", entity: "user", entityId: user.id, summary: `Compte ${user.email} créé (${role})` })
     return NextResponse.json({ id: user.id, email: user.email }, { status: 201 })
   } catch (error) {
     if (error instanceof Error && error.message.includes("Unique constraint")) return NextResponse.json({ error: "Cet email existe déjà" }, { status: 409 })

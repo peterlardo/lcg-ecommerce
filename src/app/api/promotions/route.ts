@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
+import { logActivity } from "@/lib/activity"
 import { getPrisma } from "@/lib/prisma"
 
 type PromotionRow = {
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
       },
       include: { product: { select: { name: true } }, category: { select: { name: true } } },
     })
+    await logActivity({ module: "promotions", action: "Création", entity: "promotion", entityId: created.id, summary: `Promotion « ${created.name} » créée (${created.percent} %)` })
     return NextResponse.json(serialize(created), { status: 201 })
   } catch (error) {
     console.error("Promotion create error:", error)

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
+import { logActivity } from "@/lib/activity"
 import { getPrisma } from "@/lib/prisma"
 
 export async function PATCH(req: Request, ctx: RouteContext<"/api/promotions/[id]">) {
@@ -46,6 +47,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/promotions/[id
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive)
 
     await getPrisma().promotion.update({ where: { id }, data })
+    await logActivity({ module: "promotions", action: "Modification", entity: "promotion", entityId: id, summary: `Promotion « ${typeof data.name === "string" ? data.name : existing.name} » modifiée` })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Promotion update error:", error)
@@ -62,6 +64,7 @@ export async function DELETE(_req: Request, ctx: RouteContext<"/api/promotions/[
     const existing = await getPrisma().promotion.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: "Promotion introuvable" }, { status: 404 })
     await getPrisma().promotion.delete({ where: { id } })
+    await logActivity({ module: "promotions", action: "Suppression", entity: "promotion", entityId: id, summary: `Promotion « ${existing.name} » supprimée` })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Promotion delete error:", error)

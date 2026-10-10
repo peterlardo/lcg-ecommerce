@@ -29,9 +29,10 @@ export function isOperateurAccueil(role: string | undefined): boolean {
   return role === OPERATEUR_ACCUEIL_ROLE
 }
 
-/** Rôles qui ne voient QUE leurs propres commandes/ventes (auteur = eux-mêmes). */
+/** Rôles qui ne voient QUE leurs propres commandes/ventes (auteur = eux-mêmes).
+ *  Règle générale : tout compte non-ADMIN ne voit que ce qu'il a créé ou vendu. */
 export function seesOnlyOwnOrders(role: string | undefined): boolean {
-  return role === "COMMERCIAL" || role === OPERATEUR_ACCUEIL_ROLE
+  return !!role && role !== "ADMIN"
 }
 
 /** Portée B2B stricte : seules les commandes rattachées à un client B2B.
@@ -101,12 +102,13 @@ export function saleMovementsFilter(
   role: string | undefined,
   selfId: string | undefined
 ): Prisma.StockMovementWhereInput {
-  if (!role || role === "ADMIN") return {}
-  const notForeignCounterSale: Prisma.StockMovementWhereInput = {
-    NOT: { AND: [{ type: "SALE" }, { reason: { startsWith: "Vente comptoir" } }] },
-  }
-  if (!selfId) return notForeignCounterSale
-  return { OR: [notForeignCounterSale, { userId: selfId }] }
+  if (!role || role === "ADMIN" || isComptable(role)) return {}
+  // Tous les autres rôles ne voient QUE leurs propres ventes (mouvements SALE
+  // dont le `userId` est le leur). Les mouvements hors vente restent partagés :
+  // le stock est une ressource commune au point de vente.
+  return selfId
+    ? { OR: [{ NOT: { type: "SALE" } }, { userId: selfId }] }
+    : { NOT: { type: "SALE" } }
 }
 
 export type UserPOSFilter = { userId: string; role: string; posIds: string[] | null }

@@ -12,7 +12,7 @@ export const PERMISSION_MODULES = [
   "stock", "etat-stock", "production", "lots", "tracabilite", "distribution", "livraisons",
   "points-de-vente", "produits", "promotions", "rapports",
   "clients", "clients-b2b", "zone-commerciale",
-  "messages", "parametres", "controle-distant", "utilisateurs",
+  "messages", "parametres", "controle-distant", "utilisateurs", "activite",
 ] as const
 
 export const PERMISSION_MODULE_LABELS: Record<string, string> = {
@@ -22,7 +22,7 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   livraisons: "Livraisons & livreurs", "points-de-vente": "Points de vente", produits: "Produits",
   promotions: "Promotions & coupons", rapports: "Rapports", clients: "Clients", "clients-b2b": "Clients B2B",
   "zone-commerciale": "Zone commerciale", messages: "Messages", parametres: "Paramètres",
-  "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs",
+  "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", activite: "Journal d'activité",
 }
 
 /**
@@ -31,6 +31,7 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
  */
 export const MODULE_ROLES: Record<string, string[]> = {
   utilisateurs: ["ADMIN"],
+  activite: ["ADMIN"],
   clients: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   "zone-commerciale": ["ADMIN", "COMMERCIAL", "COMPTABLE"],
 }

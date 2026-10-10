@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, isRestrictedOrder, isComptable, COMPTABLE_STATUS } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
+import { logActivity } from "@/lib/activity"
 import { sendStatusChangeEmail } from "@/lib/mailer"
 import { pushNotification } from "@/lib/notifications"
 import {
@@ -87,6 +88,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { status, pointOfSaleId, userId } = body
     const actor = await auth()
     const actorId = actor?.user?.id ?? null
+    let beforeStatus: string | undefined
 
     if (status !== undefined && !VALID_STATUS.includes(status)) {
       return NextResponse.json({ error: "Statut invalide" }, { status: 400 })
@@ -109,6 +111,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       })
 
       if (!previous) throw new Error("Commande introuvable")
+      beforeStatus = previous.status
 
       if (isRestrictedOrder(previous, actor?.user?.role, actorId ?? undefined)) {
         throw new Error("Commande introuvable")
@@ -274,6 +277,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         newStatus: status,
         total: fullOrder.total,
       })
+    }
+
+    if (actorId && fullOrder) {
+      if (status !== undefined && status !== beforeStatus) {
+        await logActivity({
+          module: "commandes",
+          action: "Changement de statut",
+          entity: "order",
+          entityId: id,
+          summary: `Commande ${fullOrder.orderNumber} : ${beforeStatus ?? "?"} → ${status}`,
+          userId: actorId,
+        })
+      }
+      if (userId !== undefined) {
+        await logActivity({
+          module: "commandes",
+          action: "Affectation",
+          entity: "order",
+          entityId: id,
+          summary: `Commande ${fullOrder.orderNumber} réaffectée`,
+          userId: actorId,
+        })
+      }
     }
 
     const enriched = await getPrisma().order.findUnique({

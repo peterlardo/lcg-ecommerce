@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, STAFF_ROLES } from "@/lib/api-auth"
+import { logActivity } from "@/lib/activity"
 
 export async function PATCH(request: Request, context: { params: Promise<unknown> }) {
   const forbidden = await requireManagementAccess(["ADMIN"])
@@ -27,6 +28,7 @@ export async function PATCH(request: Request, context: { params: Promise<unknown
       await getPrisma().pointOfSale.updateMany({ where: { managerUserId: id }, data: { managerUserId: null } })
       if (body.posIds.length) await getPrisma().pointOfSale.updateMany({ where: { id: { in: body.posIds } }, data: { managerUserId: id } })
     }
+    await logActivity({ module: "utilisateurs", action: "Modification", entity: "user", entityId: id, summary: `Compte ${user.email} modifié${body.role ? ` (rôle ${body.role})` : ""}${body.password ? " · mot de passe réinitialisé" : ""}` })
     return NextResponse.json({ id: user.id })
   } catch { return NextResponse.json({ error: "Impossible de modifier l'utilisateur" }, { status: 400 }) }
 }

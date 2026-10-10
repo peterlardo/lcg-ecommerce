@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
+import { logActivity } from "@/lib/activity"
 import { getProducts, createProduct } from "@/data/store"
 import { ensureOperationalStockLocations, ensurePointOfSaleStockRows } from "@/lib/stock-service"
 import { parseVariants } from "@/lib/product-validation"
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
     const locations = await ensureOperationalStockLocations()
     await ensurePointOfSaleStockRows(locations.map((l) => l.id))
 
+    await logActivity({ module: "produits", action: "Création", entity: "product", entityId: product.id, summary: `Produit « ${product.name} » créé` })
     return NextResponse.json(product, { status: 201 })
   } catch (error) {
     console.error("Product create error:", error)

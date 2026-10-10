@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
+import { logActivity } from "@/lib/activity"
 import { getProductById, updateProduct, deleteProduct, VariantInUseError, type ProductWriteInput } from "@/data/store"
 import { parseVariants } from "@/lib/product-validation"
 
@@ -48,6 +49,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/produits/[id]"
     if (!success) {
       return NextResponse.json({ error: "Produit introuvable" }, { status: 404 })
     }
+    await logActivity({ module: "produits", action: "Modification", entity: "product", entityId: id, summary: `Produit « ${data.name ?? id} » modifié` })
     return NextResponse.json({ success: true })
   } catch (error) {
     if (error instanceof VariantInUseError) {
@@ -73,6 +75,7 @@ export async function DELETE(_req: Request, ctx: RouteContext<"/api/produits/[id
     if (result === "not_found") {
       return NextResponse.json({ error: "Produit introuvable" }, { status: 404 })
     }
+    await logActivity({ module: "produits", action: "Suppression", entity: "product", entityId: id, summary: `Produit supprimé (${result === "deleted" ? "définitif" : "désactivé"})` })
     return NextResponse.json({ success: true, result })
   } catch (error) {
     console.error("Product delete error:", error)

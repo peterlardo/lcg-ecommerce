@@ -10,6 +10,7 @@ import { canSeeModule, moduleOfPath } from "@/lib/permissions"
 import type { AppNotification } from "@/hooks/use-notifications"
 import {
   type LucideIcon,
+  Activity,
   Archive,
   BadgePercent,
   BarChart3,
@@ -87,6 +88,7 @@ const navGroups = [
     links: [
       { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users },
       { href: "/admin/utilisateurs/roles", label: "Rôles & permissions", icon: ShieldCheck },
+      { href: "/admin/activite", label: "Journal d'activité", icon: Activity },
       { href: "/admin/clients", label: "Clients", icon: Users },
       { href: "/admin/zone-commerciale", label: "Zone commerciale", icon: Map },
       { href: "/admin/controle-distant", label: "Contrôle distant", icon: ShieldCheck },
