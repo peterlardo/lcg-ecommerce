@@ -754,7 +754,7 @@ export default function VentesPage() {
                   const inCart = cart.some((item) => item.variantId === variant.id)
                   const cartQty = cart.find((item) => item.variantId === variant.id)?.quantity ?? 0
                   return (
-                    <button key={variant.id} disabled={disabled} onClick={() => addToCart(variant)} className={`rounded-xl border p-3 sm:p-4 text-left transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${inCart ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600/30" : outOfStock ? "border-red-300 bg-red-50 hover:border-red-400" : lowStock ? "border-red-200 bg-red-50 hover:border-red-300" : "border-gray-200 bg-white hover:border-primary-300"}`}>
+                    <div key={variant.id} role="button" tabIndex={disabled ? -1 : 0} aria-disabled={disabled} onClick={() => { if (!disabled) addToCart(variant) }} onKeyDown={(e) => { if (!disabled && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); addToCart(variant) } }} className={`rounded-xl border p-3 sm:p-4 text-left transition ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:shadow-sm"} ${inCart ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600/30" : outOfStock ? "border-red-300 bg-red-50 hover:border-red-400" : lowStock ? "border-red-200 bg-red-50 hover:border-red-300" : "border-gray-200 bg-white hover:border-primary-300"}`}>
                       <div className="flex items-start justify-between gap-2 sm:gap-3">
                         <div className="min-w-0">
                           <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{variant.productName}</p>
@@ -763,12 +763,16 @@ export default function VentesPage() {
                         <div className="flex shrink-0 flex-col items-end gap-1.5">
                           <span className="rounded-full bg-primary-50 px-2 py-1   font-semibold text-primary-700">{formatPrice(variant.price)}</span>
                           {inCart && (
-                            <span className="inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5   font-bold text-white">×{cartQty}</span>
+                            <div className="inline-flex items-center rounded-full bg-blue-600 text-white" onClick={(e) => e.stopPropagation()}>
+                              <button type="button" aria-label={`Diminuer ${variant.productName}`} onClick={(e) => { e.stopPropagation(); if (cartQty <= 1) removeItem(variant.id); else updateQuantity(variant.id, cartQty - 1) }} className="flex items-center rounded-l-full px-1.5 py-0.5 hover:bg-blue-700 active:bg-blue-800"><Minus className="h-3 w-3" /></button>
+                              <span className="px-1 text-xs font-bold">×{cartQty}</span>
+                              <button type="button" aria-label={`Augmenter ${variant.productName}`} onClick={(e) => { e.stopPropagation(); updateQuantity(variant.id, cartQty + 1) }} className="flex items-center rounded-r-full px-1.5 py-0.5 hover:bg-blue-700 active:bg-blue-800"><Plus className="h-3 w-3" /></button>
+                            </div>
                           )}
                         </div>
                       </div>
                       <p className={`mt-2 sm:mt-3   font-medium ${variant.stock <= lowStockThreshold ? "text-red-600" : "text-gray-500"}`}>Stock : {variant.stock} {variant.unit ?? ""}</p>
-                    </button>
+                    </div>
                   )
                 })}
               </div>
