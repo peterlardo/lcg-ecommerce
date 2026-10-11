@@ -56,6 +56,7 @@ interface EtatStockOrder {
   status: string
   paymentMethod: string | null
   paymentStatus: string
+  source: string | null
   total: number
   createdAt: string
   items: { id: string; name: string; format: string; quantity: number; price: number; total: number }[]
@@ -186,7 +187,7 @@ function Delta({ value, suffix }: { value: number; suffix?: string }) {
 
 export default function EtatStockPage() {
   const { data: session } = useSession()
-  const [tab, setTab] = useState<"stock" | "ventes" | "caisse">("stock")
+  const [tab, setTab] = useState<"stock" | "ventes" | "caisse" | "commandes">("stock")
   const [date, setDate] = useState(() => toIsoDay(new Date()))
   const [userId, setUserId] = useState("")
   const [pointOfSaleId, setPointOfSaleId] = useState("")
@@ -202,6 +203,7 @@ export default function EtatStockPage() {
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null)
 
   const [ordersPage, setOrdersPage] = useState(1)
+  const [commandesPage, setCommandesPage] = useState(1)
   const [movementsPage, setMovementsPage] = useState(1)
   const [cashInput, setCashInput] = useState("")
   const [cashSaving, setCashSaving] = useState(false)
@@ -303,6 +305,32 @@ export default function EtatStockPage() {
       methods: [...byMethod.entries()].sort((a, b) => b[1].total - a[1].total),
     }
   }, [orders, totals?.ventes])
+
+  const commandes = useMemo(() => orders.filter((order) => order.source !== "CAISSE"), [orders])
+  const commandesTotals = useMemo(() => {
+    const byMethod = new Map<string, { count: number; total: number }>()
+    let total = 0
+    for (const order of commandes) {
+      total += order.total
+      const key = order.paymentMethod ?? "UNKNOWN"
+      const bucket = byMethod.get(key) ?? { count: 0, total: 0 }
+      bucket.count += 1
+      bucket.total += order.total
+      byMethod.set(key, bucket)
+    }
+    return {
+      count: commandes.length,
+      total,
+      average: commandes.length > 0 ? total / commandes.length : 0,
+      methods: [...byMethod.entries()].sort((a, b) => b[1].total - a[1].total),
+    }
+  }, [commandes])
+  const commandesTotalPages = Math.max(1, Math.ceil(commandes.length / ORDERS_PER_PAGE))
+  const commandesPageIndex = Math.min(commandesPage, commandesTotalPages)
+  const pagedCommandes = commandes.slice(
+    (commandesPageIndex - 1) * ORDERS_PER_PAGE,
+    commandesPageIndex * ORDERS_PER_PAGE,
+  )
 
   const movements = useMemo(() => data?.movements ?? [], [data])
   const movementsTotalPages = Math.max(1, Math.ceil(movements.length / MOVEMENTS_PER_PAGE))
@@ -514,7 +542,7 @@ export default function EtatStockPage() {
             ) : (
               <select
                 value={userId}
-                onChange={(event) => { setUserId(event.target.value); setOrdersPage(1) }}
+                onChange={(event) => { setUserId(event.target.value); setOrdersPage(1); setCommandesPage(1) }}
                 className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
               >
                 <option value="">Tous les vendeurs</option>
@@ -531,7 +559,7 @@ export default function EtatStockPage() {
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Point de vente</span>
             <select
               value={pointOfSaleId || data?.pointOfSaleId || ""}
-              onChange={(event) => setPointOfSaleId(event.target.value)}
+              onChange={(event) => { setPointOfSaleId(event.target.value); setOrdersPage(1); setCommandesPage(1) }}
               className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
             >
               {(data?.pointOfSales ?? []).filter((point) => point.isActive).map((point) => (
@@ -661,6 +689,9 @@ export default function EtatStockPage() {
             "ventes",
             "Ventes",
           ], [
+            "commandes",
+            "Commandes",
+          ], [
             "caisse",
             "Caisse",
           ]] as const).map(([value, label]) => (
@@ -673,6 +704,7 @@ export default function EtatStockPage() {
             >
               {label}
               {value === "ventes" && orders.length > 0 && ` (${orders.length})`}
+              {value === "commandes" && commandes.length > 0 && ` (${commandes.length})`}
             </button>
           ))}
         </div>
@@ -935,6 +967,78 @@ export default function EtatStockPage() {
               </div>
               {pagination(movements.length, movementsTotalPages, movementsPageIndex, "mouvement(s)", setMovementsPage)}
             </div>
+          </div>
+        )}
+
+        {tab === "commandes" && (
+          <div className="p-3 sm:p-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="col-span-2 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                <p className="text-xs text-muted-foreground">Total des commandes (hors caisse)</p>
+                <p className="mt-1 text-2xl font-bold text-primary sm:text-3xl">{formatPrice(commandesTotals.total)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatLongDate(date)} · {sellerLabel}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/50 p-4">
+                <p className="text-xs text-muted-foreground">Commandes</p>
+                <p className="mt-2 text-xl font-bold text-foreground">{commandesTotals.count}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/50 p-4">
+                <p className="text-xs text-muted-foreground">Panier moyen</p>
+                <p className="mt-2 text-lg font-bold tabular-nums text-foreground break-words sm:text-xl">{formatPrice(commandesTotals.average)}</p>
+              </div>
+            </div>
+
+            {commandesTotals.methods.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {commandesTotals.methods.map(([method, bucket]) => (
+                  <span
+                    key={method}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-3 py-1 text-xs text-muted-foreground"
+                  >
+                    <span className="font-semibold text-foreground">
+                      {paymentLabels[method] ?? method ?? "—"}
+                    </span>
+                    {bucket.count} · {formatPrice(bucket.total)}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 flex-1 divide-y divide-border">
+              {pagedCommandes.map((order) => (
+                <div key={order.id} className="flex flex-col items-stretch gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:py-3">
+                  <div className="min-w-0 sm:flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {order.customerName || "Client"}
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        {order.orderNumber} · {formatTime(order.createdAt)}
+                      </span>
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {order.items.map((item) => `${item.quantity}× ${item.name} (${item.format})`).join(" · ") || "—"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap sm:gap-3">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getStatusColor(order.paymentStatus)}`}>
+                      {paymentLabels[order.paymentMethod ?? ""] ?? order.paymentMethod ?? "—"}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getStatusColor(order.status)}`}>
+                      {getStatusLabel(order.status)}
+                    </span>
+                    <span className="whitespace-nowrap text-sm font-semibold text-foreground sm:text-base">
+                      {formatPrice(order.total)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {!loading && commandes.length === 0 && (
+                <p className="py-8 text-center text-sm text-muted-foreground">Aucune commande hors caisse pour ce vendeur à cette date.</p>
+              )}
+            </div>
+
+            {pagination(commandes.length, commandesTotalPages, commandesPageIndex, "commande(s)", setCommandesPage)}
           </div>
         )}
 

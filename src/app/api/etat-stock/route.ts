@@ -107,6 +107,7 @@ export async function GET(request: Request) {
           status: true,
           paymentMethod: true,
           paymentStatus: true,
+          source: true,
           total: true,
           createdAt: true,
           items: {
@@ -281,6 +282,7 @@ export async function GET(request: Request) {
         status: order.status,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
+        source: order.source,
         total: order.total,
         createdAt: order.createdAt.toISOString(),
         items: order.items.map((item) => ({
