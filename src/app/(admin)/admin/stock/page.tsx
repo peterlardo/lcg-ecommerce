@@ -32,8 +32,9 @@ interface StockMovement {
   createdAt: string
   productName: string
   format: string
-  pointOfSaleName?: string
-  pointOfSaleCode?: string
+  pointOfSaleId?: string | null
+  pointOfSaleName?: string | null
+  pointOfSaleCode?: string | null
 }
 
 interface StockLocation {
@@ -143,9 +144,7 @@ export default function StockPage() {
 
   const locationDashboard = useMemo(() => {
     if (!selectedLocationId || !payload) return null
-    const movements = (payload.movements ?? []).filter(
-      (m) => m.pointOfSaleCode && (payload.locations ?? []).find((l) => l.id === selectedLocationId && l.code === m.pointOfSaleCode)
-    )
+    const movements = (payload.movements ?? []).filter((m) => m.pointOfSaleId === selectedLocationId)
 
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -327,7 +326,7 @@ export default function StockPage() {
         <h3 className="mb-3 text-sm font-semibold text-gray-900">Derniers mouvements{selectedLocation ? ` — ${selectedLocation.name}` : ""}</h3>
         <div className="space-y-2">
           {(payload?.movements ?? [])
-            .filter((m) => !selectedLocationId || m.pointOfSaleName || (payload?.locations ?? []).find((l) => l.id === selectedLocationId && l.code === m.pointOfSaleCode))
+            .filter((m) => !selectedLocationId || m.pointOfSaleId === selectedLocationId)
             .slice(0, 8)
             .map((movement) => {
               const opt = movementOptions[movement.type]
