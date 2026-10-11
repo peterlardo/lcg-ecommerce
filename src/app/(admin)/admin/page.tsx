@@ -283,106 +283,106 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        <section className="flex flex-col rounded-xl border border-[#5076b7] bg-[#5076b7] p-3 shadow-card-soft sm:p-5">
+        <section className="flex flex-col rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-lg font-bold text-white sm:text-xl">Dernières ventes</h2>
-              <p className="mt-1 text-xs text-white">Clients, quantités et montants des dernières ventes</p>
+              <h2 className="text-lg font-bold text-foreground sm:text-xl">Dernières ventes</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Clients, quantités et montants des dernières ventes</p>
             </div>
-            <Link href="/admin/commandes" className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-white hover:text-white/80 hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <Link href="/admin/commandes" className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           <div className="mt-3 flex flex-wrap items-end gap-2 sm:mt-4">
             <label htmlFor="sales-client" className="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-[220px]">
-              <span className="text-xs font-semibold uppercase tracking-wider text-white/90">Nom du client</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nom du client</span>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" aria-hidden="true" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <input
                   id="sales-client"
                   type="text"
                   value={saleClient}
                   onChange={(e) => { setSaleClient(e.target.value); setSalesPage(1) }}
                   placeholder="Rechercher un client..."
-                  className="h-9 w-full rounded-lg border border-white/30 bg-white/10 pl-9 pr-3 text-sm text-white placeholder:text-white/60 focus:border-white focus:outline-none"
+                  className="h-9 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
                 />
               </div>
             </label>
             <label htmlFor="sales-date" className="flex flex-col gap-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-white/80">Date de la vente</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date de la vente</span>
               <input
                 id="sales-date"
                 type="date"
                 value={saleDate}
                 onChange={(e) => { setSaleDate(e.target.value); setSalesPage(1) }}
-                className="h-9 rounded-lg border border-white/30 bg-white/10 px-2.5 text-sm text-white focus:border-white focus:outline-none"
+                className="h-9 rounded-lg border border-border bg-background px-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
               />
             </label>
             {isAdmin && (
               <label htmlFor="sales-user" className="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-[200px]">
-                <span className="text-xs font-semibold uppercase tracking-wider text-white/80">Membre d&apos;équipe</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Membre d&apos;équipe</span>
                 <select
                   id="sales-user"
                   value={saleUserId}
                   onChange={(e) => { setSaleUserId(e.target.value); setSalesPage(1) }}
-                  className="h-9 w-full rounded-lg border border-white/30 bg-white/10 px-2.5 text-sm text-white focus:border-white focus:outline-none"
+                  className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
                 >
-                  <option value="" className="text-gray-900">Tous les membres</option>
+                  <option value="">Tous les membres</option>
                   {memberOptions.map((u) => (
-                    <option key={u.id} value={u.id} className="text-gray-900">{u.name}</option>
+                    <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
-                  {memberOptions.length === 0 && <option disabled className="text-gray-900">Aucun membre disponible</option>}
+                  {memberOptions.length === 0 && <option disabled>Aucun membre disponible</option>}
                 </select>
               </label>
             )}
             {isSalesFiltered && (
               <button
                 onClick={() => { setSaleClient(""); setSaleDate(""); setSaleUserId(""); setSalesPage(1) }}
-                className="h-9 rounded-lg border border-white/30 bg-white/10 px-3 text-xs font-medium text-white transition-colors hover:bg-white/20"
+                className="h-9 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
               >
                 Réinitialiser
               </button>
             )}
           </div>
 
-          <div className="mt-3 flex-1 divide-y divide-white/15">
+          <div className="mt-3 flex-1 divide-y divide-border">
             {pagedSales.map((order) => {
               const quantity = order.items.reduce((sum, item) => sum + item.quantity, 0)
               const articles = order.items.map((item) => `${item.quantity}× ${item.name}${item.format ? ` (${item.format})` : ""}`).join(" · ")
               return (
                 <div key={order.id} className="flex items-center justify-between gap-3 py-2.5 sm:py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white">
+                    <p className="truncate text-sm font-medium text-foreground">
                       {order.customerName || "Client"}
-                      <span className="ml-2 text-xs font-normal text-white/70">{formatSaleTime(order.createdAt)}</span>
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">{formatSaleTime(order.createdAt)}</span>
                     </p>
-                    <p className="truncate text-xs text-white/70">{articles || order.orderNumber}</p>
+                    <p className="truncate text-xs text-muted-foreground">{articles || order.orderNumber}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                    <span className="rounded-full bg-white/15 px-2 py-0.5  font-semibold text-white sm:px-2.5 sm:py-1 ">
+                    <span className="rounded-full bg-muted px-2 py-0.5  font-semibold text-foreground sm:px-2.5 sm:py-1 ">
                       {quantity} article{quantity > 1 ? "s" : ""}
                     </span>
-                    <span className="whitespace-nowrap text-sm font-semibold text-white sm:text-base">{formatPrice(order.total)}</span>
+                    <span className="whitespace-nowrap text-sm font-semibold text-foreground sm:text-base">{formatPrice(order.total)}</span>
                   </div>
                 </div>
               )
             })}
             {!loading && filteredSales.length === 0 && (
-              <p className="py-8 text-center text-sm text-white/70">{emptySalesMessage}</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">{emptySalesMessage}</p>
             )}
           </div>
 
           {filteredSales.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/15 pt-3">
-              <p className="min-w-0 text-xs text-white/80">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+              <p className="min-w-0 text-xs text-muted-foreground">
                 {filteredSales.length} vente{filteredSales.length > 1 ? "s" : ""}
                 {salesTotalPages > 1 && ` · Page ${salesPageIndex}/${salesTotalPages}`}
               </p>
               {salesTotalPages > 1 && (
                 <div className="flex shrink-0 items-center gap-1">
-                  <button onClick={() => setSalesPage(1)} disabled={salesPageIndex <= 1} aria-label="Première page" className="rounded-md px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white/80 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
-                  <button onClick={() => setSalesPage(salesPageIndex - 1)} disabled={salesPageIndex <= 1} aria-label="Page précédente" className="rounded-md px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white/80 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
-                  {Array.from({ length: salesTotalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === salesTotalPages || Math.abs(p - salesPageIndex) <= 1).reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []).map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1 sm:px-1.5 text-xs text-white/70">…</span> : <button key={p} onClick={() => setSalesPage(p)} aria-current={p === salesPageIndex ? "page" : undefined} className={`min-w-[24px] sm:min-w-[28px] rounded-md px-1.5 sm:px-2 py-1 sm:py-1.5 text-xs font-medium transition-colors ${p === salesPageIndex ? "bg-white text-[#16489f]" : "text-white/80 hover:bg-white/10"}`}>{p}</button>)}
-                  <button onClick={() => setSalesPage(salesPageIndex + 1)} disabled={salesPageIndex >= salesTotalPages} aria-label="Page suivante" className="rounded-md px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white/80 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
-                  <button onClick={() => setSalesPage(salesTotalPages)} disabled={salesPageIndex >= salesTotalPages} aria-label="Dernière page" className="rounded-md px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium text-white/80 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed">&raquo;</button>
+                  <button onClick={() => setSalesPage(1)} disabled={salesPageIndex <= 1} aria-label="Première page" className="rounded-md px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&laquo;</button>
+                  <button onClick={() => setSalesPage(salesPageIndex - 1)} disabled={salesPageIndex <= 1} aria-label="Page précédente" className="rounded-md px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
+                  {Array.from({ length: salesTotalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === salesTotalPages || Math.abs(p - salesPageIndex) <= 1).reduce<(number | string)[]>((acc, p, i, arr) => { if (i > 0 && typeof arr[i - 1] === "number" && p - (arr[i - 1] as number) > 1) acc.push("..."); acc.push(p); return acc; }, []).map((p, i) => typeof p === "string" ? <span key={`e${i}`} className="px-1 sm:px-1.5 text-xs text-muted-foreground">…</span> : <button key={p} onClick={() => setSalesPage(p)} aria-current={p === salesPageIndex ? "page" : undefined} className={`min-w-[24px] sm:min-w-[28px] rounded-md px-1.5 sm:px-2 py-1 sm:py-1.5 text-xs font-medium transition-colors ${p === salesPageIndex ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{p}</button>)}
+                  <button onClick={() => setSalesPage(salesPageIndex + 1)} disabled={salesPageIndex >= salesTotalPages} aria-label="Page suivante" className="rounded-md px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
+                  <button onClick={() => setSalesPage(salesTotalPages)} disabled={salesPageIndex >= salesTotalPages} aria-label="Dernière page" className="rounded-md px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed">&raquo;</button>
                 </div>
               )}
             </div>
