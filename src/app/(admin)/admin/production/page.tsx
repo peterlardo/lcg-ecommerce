@@ -362,11 +362,13 @@ export default function ProductionPage() {
     }
   }
 
-  const deleteLot = async (lotId: string) => {
-    if (!confirm("Supprimer ce lot ? Le stock restant sera retiré.")) return
+  // Seuls les lots épuisés se suppriment (même règle côté serveur)
+  const deleteLot = async (lot: Lot) => {
+    if (lot.status !== "EXHAUSTED") return
+    if (!confirm(`Supprimer le lot épuisé ${lot.lotNumber} ?\n\nSon historique d'allocations sera effacé. Les ventes et les mouvements de stock sont conservés.`)) return
     setError("")
     setSuccess("")
-    const res = await fetch(`/api/lots/${lotId}`, { method: "DELETE" })
+    const res = await fetch(`/api/lots/${lot.id}`, { method: "DELETE" })
     if (!res.ok) {
       const body = await res.json().catch(() => null)
       fail(body?.error ?? "Suppression impossible")
@@ -374,7 +376,7 @@ export default function ProductionPage() {
     }
     setSelectedLot(null)
     await load()
-    succeed("Lot supprimé")
+    succeed(`Lot ${lot.lotNumber} supprimé`)
   }
 
   const regularise = async () => {
@@ -716,6 +718,11 @@ export default function ProductionPage() {
                         <button onClick={() => viewLot(lot)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="Détails" aria-label={`Détails du lot ${lot.lotNumber}`}>
                           <FileText className="h-4 w-4" />
                         </button>
+                        {lot.status === "EXHAUSTED" && (
+                          <button onClick={() => deleteLot(lot)} className="ml-1 rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600" title="Supprimer ce lot épuisé" aria-label={`Supprimer le lot épuisé ${lot.lotNumber}`}>
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )
@@ -836,12 +843,12 @@ export default function ProductionPage() {
 
             <div className="mb-2 flex items-center justify-between gap-2">
               <h4 className="text-xs font-semibold text-gray-900 sm:text-sm">Historique des allocations ({(selectedLot.allocations ?? []).length})</h4>
-              {(selectedLot.allocations ?? []).length === 0 ? (
-                <button onClick={() => deleteLot(selectedLot.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1  font-medium text-red-600 hover:bg-red-50 sm:px-3 sm:py-1.5 ">
+              {selectedLot.status === "EXHAUSTED" ? (
+                <button onClick={() => deleteLot(selectedLot)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1  font-medium text-red-600 hover:bg-red-50 sm:px-3 sm:py-1.5 ">
                   <Trash2 className="h-3 w-3" /> Supprimer
                 </button>
               ) : (
-                <span className="text-xs text-gray-400">Lot déjà utilisé : suppression impossible</span>
+                <span className="text-xs text-gray-400">Seul un lot épuisé peut être supprimé</span>
               )}
             </div>
 

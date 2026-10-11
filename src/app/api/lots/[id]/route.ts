@@ -3,6 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { LOT_STATUSES } from "@/lib/lot-input"
+import { logActivity } from "@/lib/activity"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const forbidden = await requireManagementAccess()
@@ -116,49 +117,27 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   try {
     const { id } = await params
-    const lot = await getPrisma().productionLot.findUnique({ where: { id }, include: { allocations: true } })
+    const lot = await getPrisma().productionLot.findUnique({ where: { id } })
     if (!lot) {
       return NextResponse.json({ error: "Lot introuvable" }, { status: 404 })
     }
 
-    if (lot.allocations.length > 0) {
-      return NextResponse.json({ error: "Impossible de supprimer un lot deja utilise" }, { status: 400 })
+    // Seul un lot épuisé se supprime : il ne porte plus aucun stock, donc rien ne bouge dans les points de vente.
+    // Un lot actif ou expiré a encore du stock : il se corrige par une perte ou un ajustement, pas par une suppression.
+    if (lot.status !== "EXHAUSTED" || lot.remainingQuantity > 0) {
+      return NextResponse.json({ error: "Seul un lot epuise peut etre supprime" }, { status: 400 })
     }
 
-    await getPrisma().$transaction(async (tx) => {
-      if (lot.remainingQuantity > 0) {
-        const productionMovement = await tx.stockMovement.findFirst({
-          where: { lotId: id, pointOfSaleId: { not: null } },
-          select: { pointOfSaleId: true },
-        })
+    // Les allocations du lot partent avec lui. Les mouvements de stock et les lignes de vente sont
+    // conservés, simplement détachés du lot : l'historique des ventes et de la production reste complet.
+    await getPrisma().productionLot.delete({ where: { id } })
 
-        if (productionMovement?.pointOfSaleId) {
-          const stock = await tx.pointOfSaleStock.findUnique({
-            where: {
-              pointOfSaleId_variantId: {
-                pointOfSaleId: productionMovement.pointOfSaleId,
-                variantId: lot.variantId,
-              },
-            },
-          })
-          if (!stock || stock.quantity < lot.remainingQuantity) {
-            throw new Error("Stock du moyen de stockage insuffisant pour supprimer ce lot")
-          }
-
-          await tx.pointOfSaleStock.update({
-            where: { id: stock.id },
-            data: { quantity: { decrement: lot.remainingQuantity } },
-          })
-        }
-
-        await tx.productVariant.update({
-          where: { id: lot.variantId },
-          data: { stock: { decrement: lot.remainingQuantity } },
-        })
-      }
-      await tx.lotAllocation.deleteMany({ where: { lotId: id } })
-      await tx.stockMovement.deleteMany({ where: { lotId: id } })
-      await tx.productionLot.delete({ where: { id } })
+    await logActivity({
+      module: "production",
+      action: "suppression",
+      entity: "ProductionLot",
+      entityId: id,
+      summary: `Suppression du lot épuisé ${lot.lotNumber} (${lot.initialQuantity} unités produites)`,
     })
 
     return NextResponse.json({ ok: true })

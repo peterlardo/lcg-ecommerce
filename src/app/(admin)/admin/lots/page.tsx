@@ -194,7 +194,7 @@ export default function LotsPage() {
   }
 
   const deleteLot = async (lotId: string) => {
-    if (!confirm("Supprimer ce lot ? Le stock restant sera retire.")) return
+    if (!confirm("Supprimer ce lot epuise ?\n\nSon historique d'allocations sera efface. Les ventes et les mouvements de stock sont conserves.")) return
     setError("")
     const res = await fetch(`/api/lots/${lotId}`, { method: "DELETE" })
     if (!res.ok) {
@@ -400,9 +400,11 @@ export default function LotsPage() {
                     <button onClick={updateLot} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100">
                       Enregistrer
                     </button>
-                    <button onClick={() => deleteLot(selectedLot.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
-                      <Trash2 className="h-3 w-3" /> Supprimer
-                    </button>
+                    {selectedLot.status === "EXHAUSTED" && (
+                      <button onClick={() => deleteLot(selectedLot.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+                        <Trash2 className="h-3 w-3" /> Supprimer
+                      </button>
+                    )}
                   </div>
                 </div>
 
