@@ -162,8 +162,8 @@ export default function DashboardPage() {
           aggFormats.set(key,a)
         }
       }
-      setRealTimeFormats(Array.from(aggFormats.values()) as unknown as any[])
-      setRealTimeCommandees(ords.slice(0,200))
+      setRealTimeFormats(Array.from(aggFormats.values()) as any)
+      setRealTimeCommandees(ords.slice(0,200) as any)
       const aggV = new Map<string, any>()
       for (const o of ords) {
         const key = o.userId || o.userName || 'unknown'
@@ -171,7 +171,7 @@ export default function DashboardPage() {
         a.count++; a.total+=Number(o.total||0); a.qty+=(o.items||[]) .reduce((s:any,i:any)=>s+Number(i.quantity||0),0)
         aggV.set(key,a)
       }
-      setRealTimeVendeurs(Array.from(aggV.values()))
+      setRealTimeVendeurs(Array.from(aggV.values()) as any)
       const aggO = new Map<string, any>()
       for (const o of ords) {
         const key = o.openedById || o.userId || 'unknown'
@@ -179,7 +179,7 @@ export default function DashboardPage() {
         a.count++; a.total+=Number(o.total||0); a.qty+=(o.items||[]) .reduce((s:any,i:any)=>s+Number(i.quantity||0),0)
         aggO.set(key,a)
       }
-      setRealTimeOperateurs(Array.from(aggO.values()))
+      setRealTimeOperateurs(Array.from(aggO.values()) as any)
     } finally {
       setRealTimeLoading(false)
     }
