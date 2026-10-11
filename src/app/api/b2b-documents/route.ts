@@ -17,6 +17,8 @@ const REF_PREFIX: Record<string, string> = {
   FACTURE: "FAC",
 }
 
+const DOCUMENT_STATUSES = ["DRAFT", "SENT", "CONFIRMED", "REJECTED", "DELIVERED", "INVOICED", "CANCELLED"]
+
 function isP2002(error: unknown): error is { code: string } {
   return !!error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002"
 }
@@ -35,7 +37,17 @@ export async function GET(req: Request) {
     const type = url.searchParams.get("type")?.toUpperCase() ?? ""
     const status = url.searchParams.get("status")?.toUpperCase() ?? ""
     const q = url.searchParams.get("q")?.trim()
-    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1))
+    const page = url.searchParams.get("page") === null ? 1 : Number(url.searchParams.get("page"))
+
+    if (type && !PRIMARY_DOC_TYPES.includes(type as (typeof PRIMARY_DOC_TYPES)[number])) {
+      return NextResponse.json({ error: "Type de document invalide" }, { status: 400 })
+    }
+    if (status && !DOCUMENT_STATUSES.includes(status)) {
+      return NextResponse.json({ error: "Statut de document invalide" }, { status: 400 })
+    }
+    if (!Number.isFinite(page) || !Number.isInteger(page) || page < 1) {
+      return NextResponse.json({ error: "Paramètre page invalide" }, { status: 400 })
+    }
 
     const where: Prisma.B2bDocumentWhereInput = {}
     if (type) where.type = type as Prisma.B2bDocumentWhereInput["type"]
@@ -61,7 +73,8 @@ export async function GET(req: Request) {
           _count: { select: { items: true } },
         },
       }),
-      getPrisma().b2bDocument.groupBy({ by: ["type"], _count: { _all: true } }),
+      // Même portée que la liste : un COMMERCIAL ne voit PAS l'agrégat global.
+      getPrisma().b2bDocument.groupBy({ by: ["type"], where, _count: { _all: true } }),
       getPrisma().b2bDocument.count({ where }),
     ])
 

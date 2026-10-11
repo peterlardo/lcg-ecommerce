@@ -79,60 +79,74 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   // Mise à jour des lignes (brouillons uniquement) : { items?, discount?, notes? }
   if (!body.action) {
-    if (doc.status !== "DRAFT") {
-      return NextResponse.json({ error: "Seuls les brouillons sont modifiables" }, { status: 400 })
-    }
-    const items = Array.isArray(body.items) ? body.items : null
-    if (items && items.length === 0) {
-      return NextResponse.json({ error: "Ajoutez au moins un article" }, { status: 400 })
-    }
-    const discount = body.discount !== undefined ? Math.max(0, Number(body.discount) || 0) : doc.discount
-    const notes = body.notes !== undefined ? String(body.notes) : doc.notes
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const newItems = items
-        ? items.map((i) => {
-            const item = i as { productVariantId?: unknown; quantity?: unknown; unitPrice?: unknown }
-            return {
-              productVariantId: String(item.productVariantId ?? ""),
-              quantity: Math.max(1, Number(item.quantity) || 1),
-              unitPrice: Math.max(0, Number(item.unitPrice) || 0),
-            }
-          })
-        : null
-      if (newItems && newItems.some((i) => !i.productVariantId)) {
-        throw new Error("Article sans produit")
+    try {
+      if (doc.status !== "DRAFT") {
+        return NextResponse.json({ error: "Seuls les brouillons sont modifiables" }, { status: 400 })
       }
-      if (newItems) await tx.b2bDocumentItem.deleteMany({ where: { documentId: id } })
-      const subtotal = newItems ? newItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) : doc.subtotal
+      const items = Array.isArray(body.items) ? body.items : null
+      if (items && items.length === 0) {
+        return NextResponse.json({ error: "Ajoutez au moins un article" }, { status: 400 })
+      }
+      let newItems: { productVariantId: string; quantity: number; unitPrice: number }[] | null = null
+      if (items) {
+        const mapped = items.map((i) => {
+          const item = i as { productVariantId?: unknown; quantity?: unknown; unitPrice?: unknown }
+          const productVariantId = String(item.productVariantId ?? "")
+          if (!productVariantId) return { error: "Article sans produit" }
+          const quantity = Number(item.quantity ?? 1)
+          if (!Number.isFinite(quantity) || quantity <= 0) return { error: "Quantité invalide" }
+          const unitPrice = Number(item.unitPrice ?? 0)
+          if (!Number.isFinite(unitPrice) || unitPrice < 0) return { error: "Prix unitaire invalide" }
+          return { productVariantId, quantity: Math.floor(quantity), unitPrice }
+        })
+        const bad = mapped.find((m) => "error" in m)
+        if (bad) return NextResponse.json({ error: bad.error }, { status: 400 })
+        newItems = mapped as { productVariantId: string; quantity: number; unitPrice: number }[]
+      }
+      const discount = body.discount !== undefined ? Math.max(0, Number(body.discount) || 0) : doc.discount
+      const notes = body.notes !== undefined ? String(body.notes) : doc.notes
 
-      await tx.b2bDocument.update({
-        where: { id },
-        data: {
-          ...(newItems
-            ? {
-                subtotal,
-                total: Math.max(0, subtotal - discount),
-                items: { create: newItems.map((i) => ({ productVariantId: i.productVariantId, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.unitPrice * i.quantity })) },
-              }
-            : discount !== doc.discount
-              ? { discount, total: Math.max(0, doc.subtotal - discount) }
-              : {}),
-          ...(notes !== doc.notes ? { notes } : {}),
-        },
+      const updated = await prisma.$transaction(async (tx) => {
+        if (newItems) await tx.b2bDocumentItem.deleteMany({ where: { documentId: id } })
+        const subtotal = newItems ? newItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) : doc.subtotal
+
+        await tx.b2bDocument.update({
+          where: { id },
+          data: {
+            ...(newItems
+              ? {
+                  subtotal,
+                  total: Math.max(0, subtotal - discount),
+                  items: { create: newItems.map((i) => ({ productVariantId: i.productVariantId, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.unitPrice * i.quantity })) },
+                }
+              : discount !== doc.discount
+                ? { discount, total: Math.max(0, doc.subtotal - discount) }
+                : {}),
+            ...(notes !== doc.notes ? { notes } : {}),
+          },
+        })
+        return tx.b2bDocument.findUnique({
+          where: { id },
+          include: { client: true, items: { include: { productVariant: true } } },
+        })
       })
-      return tx.b2bDocument.findUnique({
-        where: { id },
-        include: { client: true, items: { include: { productVariant: true } } },
-      })
-    })
-    await logActivity({ module: "b2b", action: "update", entity: "B2bDocument", entityId: id, summary: `Modification ${doc.reference}` })
-    return NextResponse.json({ document: updated })
+      await logActivity({ module: "b2b", action: "update", entity: "B2bDocument", entityId: id, summary: `Modification ${doc.reference}` })
+      return NextResponse.json({ document: updated })
+    } catch (error) {
+      console.error("update b2b-document error:", error)
+      return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
+    }
   }
 
   const action = String(body.action)
 
+  // Rejet/annulation réservés aux documents non engagés (brouillon ou envoyé).
+  const REJECTABLE = ["DRAFT", "SENT"]
+
   if (action === "cancel") {
+    if (!REJECTABLE.includes(doc.status)) {
+      return NextResponse.json({ error: "Ce document ne peut pas être annulé" }, { status: 400 })
+    }
     if (!body.cancelReason) {
       return NextResponse.json({ error: "Le motif d'annulation est obligatoire" }, { status: 400 })
     }
@@ -145,6 +159,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   if (action === "reject") {
+    if (!REJECTABLE.includes(doc.status)) {
+      return NextResponse.json({ error: "Ce document ne peut pas être rejeté" }, { status: 400 })
+    }
     const updated = await prisma.b2bDocument.update({
       where: { id },
       data: { status: "REJECTED" },
@@ -166,19 +183,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   if (action === "transform") {
-    const target = String(body.target ?? "")
+    // La cible se dérive TOUJOURS du type du document : le client ne choisit
+    // jamais la cible (un body.target éventuel est ignoré).
     const nextType: Record<string, string> = {
-      "DEVIS": target || "COMMANDE",
-      "COMMANDE": target || "LIVRAISON",
-      "LIVRAISON": target || "FACTURE",
+      DEVIS: "COMMANDE",
+      COMMANDE: "LIVRAISON",
+      LIVRAISON: "FACTURE",
     }
     const toType = nextType[doc.type]
     if (!toType) return NextResponse.json({ error: "Impossible de transformer ce statut" }, { status: 400 })
     if (doc.status !== "CONFIRMED" && doc.status !== "DRAFT") {
-      return NextResponse.json({ error: "Le document doit être CONFIRMED pour être transformé" }, { status: 400 })
+      return NextResponse.json({ error: "Le document doit être DRAFT ou CONFIRMED pour être transformé" }, { status: 400 })
     }
     if (doc.items.some((i) => !i.productVariantId)) {
       return NextResponse.json({ error: "Un article est sans produit" }, { status: 400 })
+    }
+    // Un document déjà transformé (enfant non annulé) ne peut pas l'être une
+    // seconde fois : éviterait un double débit de stock / un doublon comptable.
+    const alreadyTransformed = await prisma.b2bDocument.count({
+      where: { parentId: doc.id, status: { not: "CANCELLED" } },
+    })
+    if (alreadyTransformed > 0) {
+      return NextResponse.json({ error: "Document déjà transformé" }, { status: 400 })
     }
 
     try {
@@ -216,6 +242,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             total: doc.total,
             notes: doc.notes,
             createdById: selfId,
+            ...(toType === "LIVRAISON" ? { deliveredAt: new Date() } : {}),
+            ...(toType === "FACTURE" ? { invoicedAt: new Date() } : {}),
             items: {
               create: doc.items.map((i) => ({ productVariantId: i.productVariantId, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.lineTotal })),
             },
