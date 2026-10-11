@@ -110,6 +110,7 @@ export async function GET(request: Request) {
           source: true,
           total: true,
           createdAt: true,
+          user: { select: { id: true, name: true } },
           items: {
             select: {
               id: true,
@@ -283,6 +284,7 @@ export async function GET(request: Request) {
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         source: order.source,
+        seller: order.user ? { id: order.user.id, name: order.user.name } : null,
         total: order.total,
         createdAt: order.createdAt.toISOString(),
         items: order.items.map((item) => ({

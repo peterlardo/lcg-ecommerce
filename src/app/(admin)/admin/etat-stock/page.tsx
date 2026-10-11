@@ -57,6 +57,7 @@ interface EtatStockOrder {
   paymentMethod: string | null
   paymentStatus: string
   source: string | null
+  seller: { id: string; name: string | null } | null
   total: number
   createdAt: string
   items: { id: string; name: string; format: string; quantity: number; price: number; total: number }[]
@@ -904,6 +905,7 @@ export default function EtatStockPage() {
                       {order.customerName || "Client"}
                       <span className="ml-2 text-xs font-normal text-muted-foreground">
                         {order.orderNumber} · {formatTime(order.createdAt)}
+                        {order.seller?.name ? ` · par ${order.seller.name}` : ""}
                       </span>
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
@@ -1014,6 +1016,7 @@ export default function EtatStockPage() {
                       {order.customerName || "Client"}
                       <span className="ml-2 text-xs font-normal text-muted-foreground">
                         {order.orderNumber} · {formatTime(order.createdAt)}
+                        {order.seller?.name ? ` · par ${order.seller.name}` : ""}
                       </span>
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
