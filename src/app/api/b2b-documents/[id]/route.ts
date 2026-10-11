@@ -94,7 +94,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           const productVariantId = String(item.productVariantId ?? "")
           if (!productVariantId) return { error: "Article sans produit" }
           const quantity = Number(item.quantity ?? 1)
-          if (!Number.isFinite(quantity) || quantity <= 0) return { error: "Quantité invalide" }
+          // Garde stricte >= 1 : évite qu'une quantité 0 < q < 1 (ex. 0.5) passe
+          // puis soit arrondie à 0 par Math.floor → ligne à quantité 0.
+          if (!Number.isFinite(quantity) || quantity < 1) return { error: "Quantité invalide" }
           const unitPrice = Number(item.unitPrice ?? 0)
           if (!Number.isFinite(unitPrice) || unitPrice < 0) return { error: "Prix unitaire invalide" }
           return { productVariantId, quantity: Math.floor(quantity), unitPrice }
