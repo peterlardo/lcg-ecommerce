@@ -837,37 +837,6 @@ export default function VentesPage() {
                 </label>
               </div>
 
-              {pointOfSaleId && posStocks.length > 0 && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">Stock du point de vente</p>
-                  <div className="space-y-1.5">
-                    {(() => {
-                      const posMap = new Map(posStocks.map((s) => [s.variantId, s.quantity]))
-                      const allVariants = products.flatMap((p) =>
-                        p.variants.map((v) => ({
-                          name: p.name,
-                          format: v.format,
-                          stock: posMap.get(v.id) ?? 0,
-                          unit: v.unit,
-                        }))
-                      )
-                      return allVariants.filter((v) => v.stock > 0).map((v, i) => {
-                        const isOut = v.stock <= 0
-                        const isLow = v.stock > 0 && v.stock <= lowStockThreshold
-                        return (
-                          <div key={i} className="flex items-center justify-between text-xs">
-                            <span className="min-w-0 truncate text-gray-700">{v.name} {v.format}</span>
-                            <span className={`ml-2 shrink-0 font-semibold ${isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-gray-900"}`}>
-                              {v.stock} {v.unit ?? ""}
-                            </span>
-                          </div>
-                        )
-                      })
-                    })()}
-                  </div>
-                </div>
-              )}
-
               <div className="my-3 sm:my-5 space-y-2 border-y border-gray-100 py-3 sm:py-4">
                 {cart.map((item) => (
                     <div key={item.variantId} className="rounded-lg bg-gray-50 p-2.5 sm:p-3">
