@@ -162,13 +162,13 @@ export default function DashboardPage() {
           aggFormats.set(key,a)
         }
       }
-      setRealTimeFormats(Array.from(aggFormats.values()))
+      setRealTimeFormats(Array.from(aggFormats.values()) as unknown as any[])
       setRealTimeCommandees(ords.slice(0,200))
       const aggV = new Map<string, any>()
       for (const o of ords) {
         const key = o.userId || o.userName || 'unknown'
         const a = aggV.get(key)||{key,name:o.userName||o.userId||'Vendeur inconnu',count:0,qty:0,total:0}
-        a.count++; a.total+=Number(o.total||0); a.qty+=(o.items||[]).reduce((s,i)=>s+Number(i.quantity||0),0)
+        a.count++; a.total+=Number(o.total||0); a.qty+=(o.items||[]) .reduce((s:any,i:any)=>s+Number(i.quantity||0),0)
         aggV.set(key,a)
       }
       setRealTimeVendeurs(Array.from(aggV.values()))
@@ -176,7 +176,7 @@ export default function DashboardPage() {
       for (const o of ords) {
         const key = o.openedById || o.userId || 'unknown'
         const a = aggO.get(key)||{key,name:o.openedByName||o.userName||'Opérateur inconnu',count:0,qty:0,total:0}
-        a.count++; a.total+=Number(o.total||0); a.qty+=(o.items||[]).reduce((s,i)=>s+Number(i.quantity||0),0)
+        a.count++; a.total+=Number(o.total||0); a.qty+=(o.items||[]) .reduce((s:any,i:any)=>s+Number(i.quantity||0),0)
         aggO.set(key,a)
       }
       setRealTimeOperateurs(Array.from(aggO.values()))
@@ -548,7 +548,7 @@ export default function DashboardPage() {
               <option value="operateurs">Quantités par opérateur accueil</option>
             </select>
             <button
-              onClick={() => { setRealTimePage(1); (loadRealTime as any)() }}
+              onClick={() => { setRealTimePage(1); void loadRealTime() }}
               className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/10 px-2 py-1.5 text-xs font-medium text-white hover:bg-white/20"
             >
               Actualiser
