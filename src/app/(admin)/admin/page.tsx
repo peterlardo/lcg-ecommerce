@@ -540,7 +540,7 @@ export default function DashboardPage() {
             <select
               value={realTimeScope}
               onChange={(e) => { setRealTimeScope(e.target.value as any); setRealTimePage(1) }}
-              className="rounded-lg border border-white/30 bg-white/10 px-2 py-1.5 text-xs font-medium text-white outline-none focus:ring-2 focus:ring-white/40"
+              className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-medium text-foreground outline-none focus:ring-2 focus:ring-white/40"
             >
               <option value="formats">Ventes par format de produit</option>
               <option value="commandees">Ventes commandées</option>
@@ -549,7 +549,7 @@ export default function DashboardPage() {
             </select>
             <button
               onClick={() => { setRealTimePage(1); void loadRealTime() }}
-              className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/10 px-2 py-1.5 text-xs font-medium text-white hover:bg-white/20"
+              className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-medium text-foreground hover:bg-white/20"
             >
               Actualiser
             </button>
