@@ -1,5 +1,6 @@
 import jsPDF from "jspdf"
 import { LOGO_BADGE_BASE64 } from "./logo-badge-base64"
+import { drawCoverPage } from "./pdf-cover"
 
 const COMPANY = {
   name: "LCG - La Congolaise des Glac\u00e7ons",
@@ -9,54 +10,12 @@ const COMPANY = {
 }
 
 function addCoverPage(doc: jsPDF) {
-  const w = 210, h = 297
-  doc.setFillColor(15, 25, 55)
-  doc.rect(0, 0, w, h, "F")
-  doc.setFillColor(31, 79, 163)
-  doc.rect(0, 0, 8, h, "F")
-  doc.setFillColor(31, 79, 163)
-  doc.triangle(0, 180, 120, 140, 0, 100, "F")
-  doc.setFillColor(25, 60, 130)
-  doc.triangle(0, 220, 160, 180, 0, 140, "F")
-  try { doc.addImage(LOGO_BADGE_BASE64, "PNG", 80, 25, 50, 50) } catch {}
-  doc.setTextColor(180, 200, 240)
-  doc.setFontSize(11)
-  doc.setFont("helvetica", "normal")
-  doc.text(COMPANY.name.toUpperCase(), w / 2, 85, { align: "center" })
-  doc.setDrawColor(31, 79, 163)
-  doc.setLineWidth(0.8)
-  doc.line(40, 92, w - 40, 92)
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(28)
-  doc.setFont("helvetica", "bold")
-  doc.text("Documentation Technique", w / 2, 115, { align: "center" })
-  doc.setFontSize(16)
-  doc.setFont("helvetica", "normal")
-  doc.text("Module Lot, Production et Tra\u00e7abilit\u00e9", w / 2, 135, { align: "center" })
-  doc.setFillColor(31, 79, 163)
-  doc.roundedRect((w - 120) / 2, 142, 120, 3, 1.5, 1.5, "F")
-  doc.setTextColor(160, 180, 220)
-  doc.setFontSize(12)
-  doc.text("Version 1.0  |  " + new Date().toLocaleDateString("fr-FR"), w / 2, 160, { align: "center" })
-  const by = h - 70
-  doc.setFillColor(20, 35, 70)
-  doc.roundedRect(30, by, w - 60, 55, 4, 4, "F")
-  doc.setTextColor(100, 140, 220)
-  doc.setFontSize(9)
-  doc.setFont("helvetica", "bold")
-  doc.text("EDITEUR", 50, by + 12)
-  doc.setTextColor(220, 230, 250)
-  doc.setFontSize(11)
-  doc.setFont("helvetica", "normal")
-  doc.text(COMPANY.name, 50, by + 20)
-  doc.setTextColor(100, 140, 220)
-  doc.setFontSize(9)
-  doc.setFont("helvetica", "bold")
-  doc.text("COORDONNEES", 50, by + 32)
-  doc.setTextColor(200, 210, 240)
-  doc.setFontSize(9)
-  doc.setFont("helvetica", "normal")
-  doc.text(`${COMPANY.address}  |  ${COMPANY.phone}  |  ${COMPANY.email}`, 50, by + 40)
+  drawCoverPage(doc, {
+    title: "Documentation Technique",
+    subtitle: "Module Lot, Production et Tra\u00e7abilit\u00e9",
+    meta: "Version 1.0  |  " + new Date().toLocaleDateString("fr-FR"),
+    company: COMPANY,
+  })
 }
 
 function addPageHeader(doc: jsPDF, title: string, pageNum: number) {

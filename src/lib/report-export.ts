@@ -2,6 +2,7 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
 import { LOGO_BADGE_BASE64 } from "./logo-badge-base64"
+import { drawCoverPage } from "./pdf-cover"
 import type { ReportPayload } from "./report-types"
 
 type VentesData = Pick<ReportPayload, "summary" | "topProducts" | "paymentBreakdown30" | "daily7">
@@ -61,106 +62,12 @@ function createDoc(): jsPDF {
   return doc
 }
 
-function addCoverPage(doc: jsPDF, reportTitle: string, reportVersion: string) {
-  const w = 210
-  const h = 297
-
-  // Full page dark background
-  doc.setFillColor(15, 25, 55)
-  doc.rect(0, 0, w, h, "F")
-
-  // Accent stripe left
-  doc.setFillColor(31, 79, 163)
-  doc.rect(0, 0, 8, h, "F")
-
-  // Decorative diagonal shape
-  doc.setFillColor(31, 79, 163)
-  doc.setDrawColor(31, 79, 163)
-  doc.triangle(0, 180, 120, 140, 0, 100, "F")
-  doc.setFillColor(25, 60, 130)
-  doc.triangle(0, 220, 160, 180, 0, 140, "F")
-
-  // Logo
-  try {
-    doc.addImage(LOGO_BADGE_BASE64, "PNG", 80, 25, 50, 50)
-  } catch { /* logo not available */ }
-
-  // Company name under logo
-  doc.setTextColor(180, 200, 240)
-  doc.setFontSize(11)
-  doc.setFont("helvetica", "normal")
-  doc.text(COMPANY.name.toUpperCase(), w / 2, 85, { align: "center" })
-
-  // Thin separator line
-  doc.setDrawColor(31, 79, 163)
-  doc.setLineWidth(0.8)
-  doc.line(40, 92, w - 40, 92)
-
-  // Report title - bold modern style
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(32)
-  doc.setFont("helvetica", "bold")
-  const titleLines = wrapText(reportTitle, 170)
-  let ty = 118
-  for (const line of titleLines) {
-    doc.text(line, w / 2, ty, { align: "center" })
-    ty += 14
-  }
-
-  // Accent underline under title
-  doc.setFillColor(31, 79, 163)
-  const lineW = Math.min(120, doc.getTextWidth(reportTitle) + 20)
-  doc.roundedRect((w - lineW) / 2, ty + 2, lineW, 3, 1.5, 1.5, "F")
-
-  // Version + Date
-  doc.setTextColor(160, 180, 220)
-  doc.setFontSize(12)
-  doc.setFont("helvetica", "normal")
-  doc.text("Version " + reportVersion + "  |  " + today(), w / 2, ty + 22, { align: "center" })
-
-  // Bottom info block
-  const by = h - 70
-  doc.setFillColor(20, 35, 70)
-  doc.roundedRect(30, by, w - 60, 55, 4, 4, "F")
-
-  // Editor
-  doc.setTextColor(100, 140, 220)
-  doc.setFontSize(9)
-  doc.setFont("helvetica", "bold")
-  doc.text("EDITEUR DU RAPPORT", 50, by + 12)
-  doc.setTextColor(220, 230, 250)
-  doc.setFontSize(11)
-  doc.setFont("helvetica", "normal")
-  doc.text(COMPANY.name, 50, by + 20)
-
-  // Coordinates
-  doc.setTextColor(100, 140, 220)
-  doc.setFontSize(9)
-  doc.setFont("helvetica", "bold")
-  doc.text("COORDONNEES", 50, by + 32)
-  doc.setTextColor(200, 210, 240)
-  doc.setFontSize(9)
-  doc.setFont("helvetica", "normal")
-  doc.text(COMPANY.address, 50, by + 39)
-  doc.text(COMPANY.phone + "  |  " + COMPANY.email, 50, by + 46)
-  doc.text(COMPANY.website, 50, by + 53)
-}
-
-function wrapText(text: string, maxWidth: number): string[] {
-  const words = text.split(" ")
-  const lines: string[] = []
-  let current = ""
-  for (const word of words) {
-    const test = current ? current + " " + word : word
-    if (test.length * 5.5 > maxWidth && current) {
-      lines.push(current)
-      current = word
-    } else {
-      current = test
-    }
-  }
-  if (current) lines.push(current)
-  return lines
+function addCoverPage(doc: jsPDF, reportTitle: string, reportVersion: string, meta?: string) {
+  drawCoverPage(doc, {
+    title: reportTitle,
+    meta: meta ?? "Version " + reportVersion + "  |  " + today(),
+    company: COMPANY,
+  })
 }
 
 function addPageHeader(doc: jsPDF, reportTitle: string) {
@@ -776,6 +683,13 @@ export function exportClotureCaissePDF(data: ClotureReport) {
     }
   }
 
+  addCoverPage(
+    doc,
+    title,
+    REPORT_VERSION,
+    [data.session.reportReference, new Date(data.session.openedAt).toLocaleDateString("fr-FR")].filter(Boolean).join("  |  "),
+  )
+  doc.addPage()
   header(true)
   let y = 46
 
@@ -946,7 +860,7 @@ startY: y,
   sig(134, "La Direction")
   y += 26
 
-  finalizePDF(doc, title, `cloture-caisse-${(data.session.reportReference ?? todayShort()).replace(/[^\w-]/g, "")}.pdf`, false)
+  finalizePDF(doc, title, `cloture-caisse-${(data.session.reportReference ?? todayShort()).replace(/[^\w-]/g, "")}.pdf`)
 }
 export function exportClotureCaisseExcel(data: ClotureReport) {
   const wb = XLSX.utils.book_new()
