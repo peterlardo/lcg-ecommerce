@@ -162,7 +162,7 @@ export default function DashboardPage() {
           aggFormats.set(key,a)
         }
       }
-      setRealTimeFormats(Array.from(aggFormats.values()) as any)
+      setRealTimeFormats(Array.from(aggFormats.values()) as unknown as any[])
       setRealTimeCommandees(ords.slice(0,200))
       const aggV = new Map<string, any>()
       for (const o of ords) {
