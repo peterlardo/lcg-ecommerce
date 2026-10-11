@@ -1,5 +1,5 @@
 import jsPDF from "jspdf"
-import { LOGO_BASE64 } from "./logo-base64"
+import { LOGO_BADGE_BASE64 } from "./logo-badge-base64"
 
 const COMPANY = {
   name: "LCG - La Congolaise des Glac\u00e7ons",
@@ -18,7 +18,7 @@ function addCoverPage(doc: jsPDF) {
   doc.triangle(0, 180, 120, 140, 0, 100, "F")
   doc.setFillColor(25, 60, 130)
   doc.triangle(0, 220, 160, 180, 0, 140, "F")
-  try { doc.addImage(LOGO_BASE64, "PNG", 80, 25, 50, 50) } catch {}
+  try { doc.addImage(LOGO_BADGE_BASE64, "PNG", 80, 25, 50, 50) } catch {}
   doc.setTextColor(180, 200, 240)
   doc.setFontSize(11)
   doc.setFont("helvetica", "normal")
@@ -61,7 +61,7 @@ function addCoverPage(doc: jsPDF) {
 
 function addPageHeader(doc: jsPDF, title: string, pageNum: number) {
   const w = 210
-  try { doc.addImage(LOGO_BASE64, "PNG", 10, 8, 10, 10) } catch {}
+  try { doc.addImage(LOGO_BADGE_BASE64, "PNG", 10, 8, 10, 10) } catch {}
   doc.setFontSize(8)
   doc.setTextColor(100, 100, 100)
   doc.setFont("helvetica", "normal")

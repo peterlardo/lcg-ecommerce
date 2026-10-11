@@ -1,7 +1,7 @@
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
-import { LOGO_BASE64 } from "./logo-base64"
+import { LOGO_BADGE_BASE64 } from "./logo-badge-base64"
 import type { ReportPayload } from "./report-types"
 
 type VentesData = Pick<ReportPayload, "summary" | "topProducts" | "paymentBreakdown30" | "daily7">
@@ -82,7 +82,7 @@ function addCoverPage(doc: jsPDF, reportTitle: string, reportVersion: string) {
 
   // Logo
   try {
-    doc.addImage(LOGO_BASE64, "PNG", 80, 25, 50, 50)
+    doc.addImage(LOGO_BADGE_BASE64, "PNG", 80, 25, 50, 50)
   } catch { /* logo not available */ }
 
   // Company name under logo
@@ -168,7 +168,7 @@ function addPageHeader(doc: jsPDF, reportTitle: string) {
 
   // Logo (small) top left
   try {
-    doc.addImage(LOGO_BASE64, "PNG", 10, 5, 11, 11)
+    doc.addImage(LOGO_BADGE_BASE64, "PNG", 10, 5, 11, 11)
   } catch { /* skip */ }
 
   // Company name
@@ -218,11 +218,12 @@ function addPageFooter(doc: jsPDF, reportTitle: string, pageNum: number, totalPa
   doc.text("Page " + pageNum + " / " + totalPages, w - 10, footerY, { align: "right" })
 }
 
-function finalizePDF(doc: jsPDF, reportTitle: string, filename: string) {
+function finalizePDF(doc: jsPDF, reportTitle: string, filename: string, hasCover = true) {
   const totalPages = doc.getNumberOfPages()
-  for (let i = 2; i <= totalPages; i++) {
+  const start = hasCover ? 2 : 1
+  for (let i = start; i <= totalPages; i++) {
     doc.setPage(i)
-    addPageFooter(doc, reportTitle, i - 1, totalPages - 1)
+    addPageFooter(doc, reportTitle, hasCover ? i - 1 : i, hasCover ? totalPages - 1 : totalPages)
   }
   doc.save(filename)
 }
@@ -718,23 +719,6 @@ export interface ClotureReport {
   }[]
 }
 
-const MOVEMENT_LBL: Record<string, string> = {
-  SALE: "Vente comptoir",
-  ADJUSTMENT_OUT: "Sortie ajustement",
-  ADJUSTMENT_IN: "Entree ajustement",
-  PRODUCTION: "Production",
-  IN: "Entree",
-  OUT: "Sortie",
-  TRANSFER_OUT: "Transfert sortant",
-  TRANSFER_IN: "Transfert entrant",
-  RETURN: "Retour",
-  LOSS: "Perte",
-}
-
-function dt(value: string) {
-  return new Date(value).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })
-}
-
 function sectionTitle(doc: jsPDF, y: number, title: string) {
   doc.setFontSize(13)
   doc.setFont("helvetica", "bold")
@@ -759,178 +743,211 @@ function kv(doc: jsPDF, y: number, label: string, value: string) {
 
 export function exportClotureCaissePDF(data: ClotureReport) {
   const doc = createDoc()
-  const title = "Rapport de cloture de caisse"
-  addCoverPage(doc, title, REPORT_VERSION)
-  doc.addPage()
-  addPageHeader(doc, title)
-  let y = 30
+  const title = "FICHE D'ARRÊTÉ DE CAISSE JOURNALIER"
 
-  // ── En-tete : identite de la session ──
-  y = sectionTitle(doc, y, "Identification de la session")
-  y = kv(doc, y, "Reference", data.session.reportReference ?? "-")
-  y = kv(doc, y, "Point de vente", data.pointOfSale ? `${data.pointOfSale.name} (${data.pointOfSale.code})` : "-")
-  y = kv(doc, y, "Vendeur", data.seller?.name ?? data.seller?.email ?? "-")
-  y = kv(doc, y, "Ouverture", dt(data.session.openedAt))
-  y = kv(doc, y, "Cloture", data.session.closedAt ? dt(data.session.closedAt) : "Session encore ouverte")
-  y = kv(doc, y, "Statut", data.session.status === "CLOSED" ? "Fermee" : "Ouverte")
-  y = kv(doc, y, "Rapport genere le", data.session.reportGeneratedAt ? dt(data.session.reportGeneratedAt) : "-")
-  y += 6
-
-  // ── Arras ──
-  y = sectionTitle(doc, y, "Arras de caisse")
-  autoTable(doc, {
-    startY: y,
-    head: [["Fond de caisse", "Chiffre d'affaires", "Attendu", "Compte reel", "Ecart"]],
-    body: [[
-      fmt(data.reconciliation.openingBalance),
-      fmt(data.reconciliation.revenue),
-      fmt(data.reconciliation.expected),
-      data.reconciliation.closingBalance === null ? "-" : fmt(data.reconciliation.closingBalance),
-      data.reconciliation.gap === null
-        ? "-"
-        : `${data.reconciliation.gap > 0 ? "+" : ""}${fmt(data.reconciliation.gap)}`,
-    ]],
-    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
-  })
-  y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
-
-  // ── Synthese ──
-  y = sectionTitle(doc, y, "Synthese de la journee")
-  y = kv(doc, y, "Transactions", String(data.totals.orders))
-  y = kv(doc, y, "Articles vendus", String(data.totals.items))
-  y = kv(doc, y, "References produits", String(data.totals.products))
-  y = kv(doc, y, "Mouvements de stock", String(data.totals.movements))
-  y += 6
-
-  if (data.paymentBreakdown.length > 0) {
-    y = sectionTitle(doc, y, "Encaissements par mode de paiement")
-    autoTable(doc, {
-      startY: y,
-      head: [["Mode", "Transactions", "Montant"]],
-      body: data.paymentBreakdown.map((row) => [
-        PAYMENT[row.method] ?? row.method,
-        String(row.count),
-        fmt(row.amount),
-      ]),
-      styles: { fontSize: 8.5, textColor: [40, 40, 40] },
-      headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
-    })
-    y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
+  const header = (full: boolean) => {
+    try {
+      doc.addImage(LOGO_BADGE_BASE64, "PNG", 2, 4.5, 10, 10)
+    } catch { /* skip */ }
+    doc.setFontSize(13)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(31, 79, 163)
+    doc.text("LCG  –  La Congolaise des Glaçons", 14, 13)
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(60, 60, 60)
+    doc.text("Service commercial – Tél. 06 739 49 49 / 05 607 91 91", 14, 17.5)
+    doc.text("97, rue Ewo, Ouenzé – Brazzaville, République du Congo  |  site web : www.lcg.cg  |  email : contact@lcg.cg", 14, 21.5)
+    doc.setFontSize(7.5)
+    doc.setTextColor(90, 90, 90)
+    doc.text("SARL au capital de 1 000 000 FCFA  –  RCCM : CG-BZV-01-2025-B12-00-146  –  NIU : M250000007225623", 14, 25.5)
+    doc.setDrawColor(31, 79, 163)
+    doc.setLineWidth(0.5)
+    doc.line(14, 27.5, 196, 27.5)
+    if (full) {
+      doc.setFontSize(15)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(40, 40, 40)
+      doc.text(title, 105, 34.5, { align: "center" })
+      doc.setFontSize(8.5)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(120, 120, 120)
+      doc.text("À remplir par le caissier ou la caissière à la fin de chaque service", 105, 39.5, { align: "center" })
+    }
   }
 
-  // ── Quantites vendues ──
-  y = sectionTitle(doc, y, "Quantites vendues par produit")
+  header(true)
+  let y = 46
+
+  const spaceFor = (needed: number) => {
+    const pageHeight = doc.internal.pageSize.height
+    if (y + needed > pageHeight - 18) {
+      doc.addPage()
+      header(false)
+      y = 46
+    }
+  }
+
+  // ── Identification ──
+  const opened = new Date(data.session.openedAt)
+  const closed = data.session.closedAt ? new Date(data.session.closedAt) : null
+  y = sectionTitle(doc, y, "Identification de la fiche")
+  y = kv(doc, y, "Date", opened.toLocaleDateString("fr-FR"))
+  y = kv(doc, y, "N° de caisse", data.session.reportReference ?? data.session.id)
+  y = kv(doc, y, "Caissier(ère)", data.seller?.name ?? data.seller?.email ?? "-")
+  y = kv(doc, y, "Point de vente", data.pointOfSale ? `${data.pointOfSale.name} (${data.pointOfSale.code})` : "-")
+  y = kv(doc, y, "Heure d'ouverture", opened.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }))
+  y = kv(doc, y, "Heure de clôture", closed ? closed.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "Session encore ouverte")
+  y += 6
+
+  // ── 1. Ventes du jour ──
+  spaceFor(40)
+  y = sectionTitle(doc, y, "1. VENTES DU JOUR")
   if (data.soldByProduct.length === 0) {
     doc.setFontSize(9)
     doc.setTextColor(120, 120, 120)
-    doc.text("Aucune vente enregistree sur cette session.", 14, y)
-    y += 10
+    doc.text("Aucune vente enregistrée sur cette session.", 14, y)
+    y += 8
   } else {
     autoTable(doc, {
       startY: y,
-      head: [["Produit", "Format", "Quantite vendue", "Montant"]],
+      pageBreak: "avoid",
+      head: [["Produit", "Format", "Quantité", "Prix unitaire (FCFA)", "Montant (FCFA)"]],
       body: data.soldByProduct.map((row) => [
         row.productName,
         row.format ?? "-",
         String(row.quantity),
+        fmt(row.quantity ? row.amount / row.quantity : 0),
         fmt(row.amount),
       ]),
-      foot: [[
-        "Total",
-        "",
-        String(data.totals.items),
-        fmt(data.soldByProduct.reduce((sum, row) => sum + row.amount, 0)),
-      ]],
+      foot: [["Total", "", String(data.totals.items), "", fmt(data.soldByProduct.reduce((sum, row) => sum + row.amount, 0))]],
       styles: { fontSize: 8.5, textColor: [40, 40, 40] },
       headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
       footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
     })
-    y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
+    y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
   }
 
-  // ── Ventes detaillees ──
-  y = sectionTitle(doc, y, "Detail des transactions")
-  if (data.orders.length === 0) {
-    doc.setFontSize(9)
-    doc.setTextColor(120, 120, 120)
-    doc.text("Aucune transaction.", 14, y)
-    y += 10
-  } else {
-    autoTable(doc, {
-      startY: y,
-      head: [["Heure", "Piece", "Client", "Articles", "Paiement", "Statut", "Montant"]],
-      body: data.orders.map((order) => [
-        new Date(order.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
-        order.orderNumber,
-        order.customerName ?? "-",
-        String(order.items),
-        order.paymentMethodLabel,
-        STATUS_LBL[order.paymentStatus] ?? order.paymentStatus,
-        fmt(order.total),
-      ]),
-      foot: [["", "", "", "", "", "Total", fmt(data.reconciliation.revenue)]],
-      styles: { fontSize: 7.5, textColor: [40, 40, 40] },
-      headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
-      footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
-    })
-    y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
-  }
+  // ── 2. Encaissements par mode de paiement ──
+  spaceFor(30)
+  y = sectionTitle(doc, y, "2. ENCAISSEMENTS PAR MODE DE PAIEMENT")
+  autoTable(doc, {
+startY: y,
+      pageBreak: "avoid",
+      head: [["Mode de paiement", "Montant (FCFA)", "Références / observations"]],
+    body: data.paymentBreakdown.length > 0
+      ? data.paymentBreakdown.map((row) => [PAYMENT[row.method] ?? row.method, fmt(row.amount), ""])
+      : [["-", "", ""]],
+    foot: [["TOTAL ENCAISSÉ", fmt(data.paymentBreakdown.reduce((sum, row) => sum + row.amount, 0)), ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
 
-  // ── Mouvements ──
-  y = sectionTitle(doc, y, "Mouvements de stock de la session")
-  if (data.movements.length === 0) {
-    doc.setFontSize(9)
-    doc.setTextColor(120, 120, 120)
-    doc.text("Aucun mouvement de stock.", 14, y)
-    y += 10
-  } else {
-    autoTable(doc, {
-      startY: y,
-      head: [["Heure", "Type", "Produit", "Format", "Qte", "Reference", "Motif"]],
-      body: data.movements.map((m) => [
-        new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
-        MOVEMENT_LBL[m.type] ?? m.type,
-        m.productName,
-        m.format ?? "-",
-        String(m.quantity),
-        m.reference ?? "-",
-        m.reason ?? "-",
-      ]),
-      styles: { fontSize: 7, textColor: [40, 40, 40] },
-      headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
-    })
-    y = (doc as AutoTableDoc).lastAutoTable.finalY + 12
-  }
+  // ── 3. Sorties de caisse ──
+  spaceFor(34)
+  y = sectionTitle(doc, y, "3. SORTIES DE CAISSE (dépenses payées en espèces)")
+  autoTable(doc, {
+startY: y,
+      pageBreak: "avoid",
+      head: [["N°", "Motif de la dépense", "N° de justificatif", "Montant (FCFA)"]],
+    body: [["1", "", "", ""], ["2", "", "", ""], ["3", "", "", ""]],
+    foot: [["", "", "TOTAL DES SORTIES", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
 
-  // ── Signatures ──
-  const pageHeight = doc.internal.pageSize.height
-  if (y > pageHeight - 55) {
-    doc.addPage()
-    addPageHeader(doc, title)
-    y = 30
-  }
-  y = sectionTitle(doc, y, "Visa")
+  // ── 4. Billetage ──
+  spaceFor(56)
+  y = sectionTitle(doc, y, "4. BILLETAGE (comptage des espèces)")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    margin: { left: 14 },
+    tableWidth: 90,
+    head: [["Billets", "Nombre", "Montant (FCFA)"]],
+    body: [["10 000", "", ""], ["5 000", "", ""], ["2 000", "", ""], ["1 000", "", ""], ["500", "", ""]],
+    foot: [["Sous-total billets", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40], cellPadding: 1.4 },
+    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
+  })
+  const billetsFinalY = (doc as AutoTableDoc).lastAutoTable.finalY
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    margin: { left: 112 },
+    tableWidth: 84,
+    head: [["Pièces", "Nombre", "Montant (FCFA)"]],
+    body: [["500", "", ""], ["100", "", ""], ["50", "", ""], ["25", "", ""], ["10 et moins", "", ""]],
+    foot: [["Sous-total pièces", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40], cellPadding: 1.4 },
+    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
+  })
+  y = Math.max(billetsFinalY, (doc as AutoTableDoc).lastAutoTable.finalY) + 5
   doc.setFontSize(9)
   doc.setFont("helvetica", "bold")
-  doc.setTextColor(90, 90, 90)
-  doc.text("Vendeur", 14, y + 12)
-  doc.text("Responsable stock", 80, y + 12)
-  doc.text("Direction", 146, y + 12)
+  doc.setTextColor(40, 40, 40)
+  doc.text("Total des espèces comptées : ........................................ FCFA", 14, y + 3)
+  y += 10
+
+  // ── 5. Rapprochement de caisse ──
+  const cashAmount = data.paymentBreakdown.find((row) => row.method === "CASH_ON_DELIVERY")?.amount ?? 0
+  spaceFor(52)
+  y = sectionTitle(doc, y, "5. RAPPROCHEMENT DE CAISSE")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Calcul", "Montant (FCFA)"]],
+    body: [
+      ["A. Fonds de caisse à l'ouverture", fmt(data.reconciliation.openingBalance)],
+      ["B. Encaissements en espèces (ligne « Espèces » du tableau 2)", fmt(cashAmount)],
+      ["C. Sorties de caisse (total du tableau 3)", ""],
+      ["D. Solde théorique (A + B - C)", ""],
+      ["E. Espèces réellement comptées (billetage)", ""],
+      ["F. Écart (E - D)   [ ] Excédent   /   [ ] Manquant", ""],
+      ["G. Montant versé ou remis au responsable", ""],
+      ["H. Fonds de caisse laissé pour le service suivant", ""],
+    ],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40], cellPadding: 1.4 },
+    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 5
+
+  // ── Observations ──
+  spaceFor(30)
+  y = sectionTitle(doc, y, "OBSERVATIONS")
   doc.setDrawColor(160, 160, 160)
   doc.setLineWidth(0.2)
-  for (const x of [14, 80, 146]) {
-    doc.line(x, y + 14, x + 54, y + 14)
+  doc.rect(14, y, 182, 18)
+  y += 26
+
+  // ── Signatures ──
+  spaceFor(30)
+  const sig = (x: number, label: string) => {
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(90, 90, 90)
+    doc.text(label, x, y)
+    doc.setDrawColor(160, 160, 160)
+    doc.setLineWidth(0.2)
+    doc.line(x, y + 13, x + 54, y + 13)
+    doc.setFontSize(8)
+    doc.setTextColor(120, 120, 120)
+    doc.text("Nom :", x, y + 21)
+    doc.line(x + 12, y + 21, x + 54, y + 21)
   }
-  doc.setLineWidth(0.3)
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(140, 140, 140)
-  doc.setFontSize(7)
-  doc.text("Document genere automatiquement par le systeme LCG.", 14, y + 26)
+  sig(14, "Le caissier / la caissière")
+  sig(74, "Le superviseur commercial")
+  sig(134, "La Direction")
+  y += 26
 
-  finalizePDF(doc, title, `cloture-caisse-${(data.session.reportReference ?? todayShort()).replace(/[^\w-]/g, "")}.pdf`)
+  finalizePDF(doc, title, `cloture-caisse-${(data.session.reportReference ?? todayShort()).replace(/[^\w-]/g, "")}.pdf`, false)
 }
-
 export function exportClotureCaisseExcel(data: ClotureReport) {
   const wb = XLSX.utils.book_new()
 

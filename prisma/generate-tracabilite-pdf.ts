@@ -4,7 +4,7 @@ import { prisma } from "../src/lib/prisma"
 import { readFileSync } from "fs"
 import { join } from "path"
 
-const LOGO_BASE64 = readFileSync(join(process.cwd(), "src", "lib", "logo-base64.ts"), "utf-8").match(/LOGO_BASE64 = "(.+)"/)?.[1] ?? ""
+const LOGO_BASE64 = readFileSync(join(process.cwd(), "src", "lib", "logo-badge-base64.ts"), "utf-8").match(/LOGO_BADGE_BASE64 = "(.+)"/)?.[1] ?? ""
 
 const COMPANY = {
   name: "LCG - La Congolaise des Glacons",
