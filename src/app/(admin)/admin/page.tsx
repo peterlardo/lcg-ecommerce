@@ -94,6 +94,15 @@ export default function DashboardPage() {
   const [trendDate, setTrendDate] = useState("")
   const [trendUserId, setTrendUserId] = useState("")
   const [trendPage, setTrendPage] = useState(1)
+  const [realTimeScope,setRealTimeScope]=useState("formats")
+  const [realTimeFormats,setRealTimeFormats]=useState([])
+  const [realTimeCommandees,setRealTimeCommandees]=useState([])
+  const [realTimeVendeurs,setRealTimeVendeurs]=useState([])
+  const [realTimeOperateurs,setRealTimeOperateurs]=useState([])
+  const [realTimeLoading,setRealTimeLoading]=useState(false)
+  const [realTimePage, setRealTimePage] = useState(1)
+  const RT_PER_PAGE = 5 as const
+
   const [teamUsers, setTeamUsers] = useState<{ id: string; name: string }[]>([])
   const deferredTrendClient = useDeferredValue(trendClient.trim())
 
@@ -134,6 +143,54 @@ export default function DashboardPage() {
     const interval = setInterval(() => { void init() }, 15000)
     return () => { controller.abort(); clearInterval(interval) }
   }, [deferredTrendClient, trendDate, trendUserId, session?.user?.role])
+  const loadRealTime = async (signal?: AbortSignal) => {
+    try {
+      setRealTimeLoading(true)
+      const [ordersRes, salesRes] = await Promise.all([
+        fetch('/api/orders?limit=1000', { signal }),
+        fetch('/api/sales?limit=1000', { signal }),
+      ])
+      const orders = ordersRes.ok ? await ordersRes.json() : []
+      const sales = salesRes.ok ? await salesRes.json() : []
+      const ords = Array.isArray(orders) ? orders : (orders?.orders || [])
+      const aggFormats = new Map<string, any>()
+      for (const o of ords) {
+        for (const it of (o.items||[])) {
+          const key = String(it.format||'')
+          const a = aggFormats.get(key)||{format:key,count:0,qty:0,total:0}
+          a.count++; a.qty+=Number(it.quantity||0); a.total+=Number(it.total||0)
+          aggFormats.set(key,a)
+        }
+      }
+      setRealTimeFormats(Array.from(aggFormats.values()))
+      setRealTimeCommandees(ords.slice(0,200))
+      const aggV = new Map<string, any>()
+      for (const o of ords) {
+        const key = o.userId || o.userName || 'unknown'
+        const a = aggV.get(key)||{key,name:o.userName||o.userId||'Vendeur inconnu',count:0,qty:0,total:0}
+        a.count++; a.total+=Number(o.total||0); a.qty+=(o.items||[]).reduce((s,i)=>s+Number(i.quantity||0),0)
+        aggV.set(key,a)
+      }
+      setRealTimeVendeurs(Array.from(aggV.values()))
+      const aggO = new Map<string, any>()
+      for (const o of ords) {
+        const key = o.openedById || o.userId || 'unknown'
+        const a = aggO.get(key)||{key,name:o.openedByName||o.userName||'Opérateur inconnu',count:0,qty:0,total:0}
+        a.count++; a.total+=Number(o.total||0); a.qty+=(o.items||[]).reduce((s,i)=>s+Number(i.quantity||0),0)
+        aggO.set(key,a)
+      }
+      setRealTimeOperateurs(Array.from(aggO.values()))
+    } finally {
+      setRealTimeLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const c = new AbortController()
+    void loadRealTime(c.signal)
+    const t = setInterval(()=>void loadRealTime(c.signal), 30000)
+    return ()=>{c.abort(); clearInterval(t)}
+  }, [])
 
   const role = session?.user?.role
   const isAdmin = role === "ADMIN"
@@ -473,7 +530,98 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Dernières pré-commandes</h2><p className="mt-1 text-xs text-muted-foreground">Pré-commandes les plus récentes</p></div><Link href="/admin/reservations" className="inline-flex items-center gap-1 text-xs font-semibold text-white hover:text-white/80 hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link></div><div className="mt-3 divide-y divide-border sm:mt-4">{reservations.slice(0, 5).map((res) => <div key={res.id} className="flex items-center justify-between gap-2 py-2.5 text-sm sm:gap-3 sm:py-3"><div className="min-w-0"><p className="truncate font-medium text-foreground">{res.client}</p><p className="text-xs text-muted-foreground">{res.type} · {res.date} à {res.heure || "-"}</p></div><div className="flex shrink-0 items-center gap-1.5 sm:gap-2"><span className={`hidden rounded-full px-2.5 py-1 text-xs font-medium sm:inline-block ${sourceLabels[res.source]?.className || "bg-gray-100 text-gray-600"}`}>{sourceLabels[res.source]?.label || res.source || "En ligne"}</span><span className="rounded-full bg-muted px-2 py-0.5  font-medium text-muted-foreground sm:px-2.5 ">{res.status}</span></div></div>)}{!loading && reservations.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground sm:py-8">Aucune pré-commande pour le moment.</p>}</div></section>
+      <section className="rounded-xl border border-border bg-[#1d4ed8] p-3 shadow-card-soft sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-semibold text-white">Ventes en temps réel</h2>
+            <p className="mt-1 text-xs text-white/90">Consultez les ventes par format, les commandes et les quantités par vendeur/opérateur accueil</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={realTimeScope}
+              onChange={(e) => { setRealTimeScope(e.target.value as any); setRealTimePage(1) }}
+              className="rounded-lg border border-white/30 bg-white/10 px-2 py-1.5 text-xs font-medium text-white outline-none focus:ring-2 focus:ring-white/40"
+            >
+              <option value="formats">Ventes par format de produit</option>
+              <option value="commandees">Ventes commandées</option>
+              <option value="vendeurs">Quantités par vendeur</option>
+              <option value="operateurs">Quantités par opérateur accueil</option>
+            </select>
+            <button
+              onClick={() => { setRealTimePage(1); (loadRealTime as any)() }}
+              className="inline-flex items-center gap-1 rounded-lg border border-white/30 bg-white/10 px-2 py-1.5 text-xs font-medium text-white hover:bg-white/20"
+            >
+              Actualiser
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 sm:mt-4">
+          {realTimeScope === 'formats' && (
+            <div className="space-y-2">
+              {(realTimeFormats as any[]).slice((realTimePage-1)*RT_PER_PAGE, realTimePage*RT_PER_PAGE).map((f:any, i:number) => (
+                <div key={i} className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">{f.format || 'Sans format'}</p>
+                    <p className="text-xs text-white/90">{f.count} ligne(s) · {f.qty} unité(s)</p>
+                  </div>
+                  <span className="text-sm font-semibold text-white">{formatPrice(f.total||0)}</span>
+                </div>
+              ))}
+              {!realTimeLoading && (realTimeFormats as any[]).length === 0 && (
+                <p className="py-6 text-center text-sm text-white/90">Aucune donnée pour le moment.</p>
+              )}
+            </div>
+          )}
+          {realTimeScope === 'commandees' && (
+            <div className="space-y-2">
+              {(realTimeCommandees as any[]).slice((realTimePage-1)*RT_PER_PAGE, realTimePage*RT_PER_PAGE).map((o:any) => (
+                <div key={o.id} className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">{o.orderNumber}</p>
+                    <p className="text-xs text-white/90">{o.customerName} · {new Date(o.createdAt).toLocaleString('fr-FR')}</p>
+                  </div>
+                  <span className="text-sm font-semibold text-white">{formatPrice(o.total||0)}</span>
+                </div>
+              ))}
+              {!realTimeLoading && (realTimeCommandees as any[]).length === 0 && (
+                <p className="py-6 text-center text-sm text-white/90">Aucune commande trouvée.</p>
+              )}
+            </div>
+          )}
+          {realTimeScope === 'vendeurs' && (
+            <div className="space-y-2">
+              {(realTimeVendeurs as any[]).slice((realTimePage-1)*RT_PER_PAGE, realTimePage*RT_PER_PAGE).map((v:any) => (
+                <div key={v.key} className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">{v.name || 'Vendeur inconnu'}</p>
+                    <p className="text-xs text-white/90">{v.count} vente(s) · {v.qty} unité(s)</p>
+                  </div>
+                  <span className="text-sm font-semibold text-white">{formatPrice(v.total||0)}</span>
+                </div>
+              ))}
+              {!realTimeLoading && (realTimeVendeurs as any[]).length === 0 && (
+                <p className="py-6 text-center text-sm text-white/90">Aucun vendeur avec des ventes.</p>
+              )}
+            </div>
+          )}
+          {realTimeScope === 'operateurs' && (
+            <div className="space-y-2">
+              {(realTimeOperateurs as any[]).slice((realTimePage-1)*RT_PER_PAGE, realTimePage*RT_PER_PAGE).map((op:any) => (
+                <div key={op.key} className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">{op.name || 'Opérateur inconnu'}</p>
+                    <p className="text-xs text-white/90">{op.count} vente(s) · {op.qty} unité(s)</p>
+                  </div>
+                  <span className="text-sm font-semibold text-white">{formatPrice(op.total||0)}</span>
+                </div>
+              ))}
+              {!realTimeLoading && (realTimeOperateurs as any[]).length === 0 && (
+                <p className="py-6 text-center text-sm text-white/90">Aucun opérateur avec des ventes.</p>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-foreground">Actions rapides</h2><p className="mt-1 text-xs text-muted-foreground">Accéder aux opérations courantes</p></div><CheckCircle2 className="h-5 w-5 text-primary" /></div><div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 lg:grid-cols-5"><Link href="/admin/ventes" className="flex items-center gap-2 rounded-lg border border-border p-2.5 hover:bg-muted sm:gap-3 sm:p-3"><ShoppingCart className="h-4 w-4 text-primary" /><span className="text-xs font-medium text-foreground sm:text-sm">Nouvelle vente</span></Link><Link href="/admin/produits" className="flex items-center gap-2 rounded-lg border border-border p-2.5 hover:bg-muted sm:gap-3 sm:p-3"><Plus className="h-4 w-4 text-primary" /><span className="text-xs font-medium text-foreground sm:text-sm">Produit</span></Link><Link href="/admin/stock" className="flex items-center gap-2 rounded-lg border border-border p-2.5 hover:bg-muted sm:gap-3 sm:p-3"><ClipboardList className="h-4 w-4 text-primary" /><span className="text-xs font-medium text-foreground sm:text-sm">Stock</span></Link><Link href="/admin/production" className="flex items-center gap-2 rounded-lg border border-border p-2.5 hover:bg-muted sm:gap-3 sm:p-3"><Factory className="h-4 w-4 text-primary" /><span className="text-xs font-medium text-foreground sm:text-sm">Production</span></Link><Link href="/admin/rapports" className="flex items-center gap-2 rounded-lg border border-border p-2.5 hover:bg-muted sm:gap-3 sm:p-3"><Package className="h-4 w-4 text-primary" /><span className="text-xs font-medium text-foreground sm:text-sm">Rapports</span></Link></div></section>
     </div>
