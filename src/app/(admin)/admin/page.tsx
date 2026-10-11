@@ -533,8 +533,8 @@ export default function DashboardPage() {
       <section className="rounded-xl border border-border bg-white p-3 shadow-card-soft sm:p-5 text-foreground">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="font-semibold text-white">Ventes en temps réel</h2>
-            <p className="mt-1 text-xs text-white/90">Consultez les ventes par format, les commandes et les quantités par vendeur/opérateur accueil</p>
+            <h2 className="font-semibold text-foreground">Ventes en temps réel</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Consultez les ventes par format, les commandes et les quantités par vendeur/opérateur accueil</p>
           </div>
           <div className="flex items-center gap-2">
             <select
