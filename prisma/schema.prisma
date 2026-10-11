@@ -55,6 +55,7 @@ model User {
   image         String?
   role          String    @default("CUSTOMER")
   isActive      Boolean   @default(true)
+  supervisesB2b Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -79,6 +80,7 @@ model User {
   deviceSessions       UserDeviceSession[]
   loginLogs            LoginLog[]
   activityLogs         ActivityLog[]
+  commercialTargets    CommercialTarget[]
 
   operationZone String?
   zoneLat       Float?
@@ -221,12 +223,15 @@ model ProductVariant {
   price     Float
   stock     Int     @default(0)
   unit      String?
+  wholesalePrice Float?
 
   product           Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems        OrderItem[]
   stockMovements    StockMovement[]
   pointOfSaleStocks PointOfSaleStock[]
   productionLots    ProductionLot[]
+  b2bDocumentItems  B2bDocumentItem[]
+  contractItems     B2bContractItem[]
 }
 
 enum CouponType {
@@ -564,10 +569,14 @@ model Client {
   notes        String?
   isActive     Boolean    @default(true)
   commercialId String?
+  creditLimit  Float?
+  category     String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
   commercial User? @relation(fields: [commercialId], references: [id], onDelete: SetNull)
+  b2bDocuments B2bDocument[]
+  b2bContracts B2bContract[]
 
   @@index([type])
   @@index([commercialId])
@@ -749,4 +758,178 @@ model ActivityLog {
   @@index([userId])
   @@index([module, createdAt])
   @@index([createdAt])
+}
+
+enum B2bDocumentType {
+  DEVIS
+  COMMANDE
+  LIVRAISON
+  FACTURE
+}
+
+enum B2bDocumentStatus {
+  DRAFT
+  SENT
+  CONFIRMED
+  REJECTED
+  DELIVERED
+  INVOICED
+  CANCELLED
+}
+
+enum B2bContractStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+}
+
+enum PaymentPromiseStatus {
+  PENDING
+  KEPT
+  BROKEN
+}
+
+enum PaymentValidationStatus {
+  PENDING
+  VALIDATED
+}
+
+enum PaymentReminderType {
+  PAYMENT_DUE
+  OVERDUE
+  FOLLOW_UP
+}
+
+model B2bDocument {
+  id String @id @default(cuid())
+  type B2bDocumentType
+  reference String @unique
+  status B2bDocumentStatus @default(DRAFT)
+  clientId String?
+  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  parentId String?
+  parent B2bDocument? @relation("DocHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children B2bDocument[] @relation("DocHierarchy")
+  pointOfSaleId String?
+  subtotal Float
+  discount Float @default(0)
+  total Float
+  notes String?
+  validUntil DateTime?
+  deliveryTerms String?
+  requestedDeliveryDate DateTime?
+  createdById String?
+  items B2bDocumentItem[]
+  payments CustomerPayment[]
+  promises PaymentPromise[]
+  reminders PaymentReminder[]
+  receivedAt DateTime?
+  deliveredAt DateTime?
+  invoicedAt DateTime?
+  cancelledAt DateTime?
+  cancelledById String?
+  cancelReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([type])
+  @@index([clientId])
+  @@index([status])
+}
+
+model B2bDocumentItem {
+  id String @id @default(cuid())
+  documentId String
+  document B2bDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  productVariantId String?
+  productVariant ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  quantity Int
+  unitPrice Float
+  lineTotal Float
+  createdAt DateTime @default(now())
+  @@index([documentId])
+}
+
+model B2bContract {
+  id String @id @default(cuid())
+  clientId String
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status B2bContractStatus @default(ACTIVE)
+  startsAt DateTime
+  endsAt DateTime?
+  paymentTermsDays Int @default(30)
+  minOrderAmount Float @default(0)
+  deliveryFrequency String?
+  discountPercent Float?
+  notes String?
+  createdById String?
+  items B2bContractItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([clientId])
+}
+
+model B2bContractItem {
+  id String @id @default(cuid())
+  contractId String
+  contract B2bContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  productVariantId String
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  unitPrice Float
+  createdAt DateTime @default(now())
+  @@unique([contractId, productVariantId])
+}
+
+model CommercialTarget {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  yearMonth String
+  targetAmount Float
+  createdById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, yearMonth])
+}
+
+model PaymentPromise {
+  id String @id @default(cuid())
+  b2bDocumentId String
+  b2bDocument B2bDocument @relation(fields: [b2bDocumentId], references: [id], onDelete: Cascade)
+  amount Float
+  dueDate DateTime
+  status PaymentPromiseStatus @default(PENDING)
+  notes String?
+  createdById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CustomerPayment {
+  id String @id @default(cuid())
+  b2bDocumentId String?
+  b2bDocument B2bDocument? @relation(fields: [b2bDocumentId], references: [id], onDelete: SetNull)
+  orderId String?
+  amount Float
+  method PaymentMethod
+  notes String?
+  customerName String?
+  validationStatus PaymentValidationStatus @default(PENDING)
+  validatedById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([b2bDocumentId])
+}
+
+model PaymentReminder {
+  id String @id @default(cuid())
+  b2bDocumentId String?
+  b2bDocument B2bDocument? @relation(fields: [b2bDocumentId], references: [id], onDelete: SetNull)
+  orderId String?
+  type PaymentReminderType @default(PAYMENT_DUE)
+  sentAt DateTime?
+  channel String @default("WHATSAPP")
+  notes String?
+  createdById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
