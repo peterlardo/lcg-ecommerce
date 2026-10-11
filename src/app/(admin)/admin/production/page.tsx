@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, CheckCircle2, Factory, FileText, PackagePlus, RefreshCw, Search, Trash2, TrendingUp, XCircle } from "lucide-react"
+import { AlertCircle, Boxes, CheckCircle2, Factory, FileText, PackagePlus, RefreshCw, Search, Trash2, TrendingUp, XCircle } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 interface Lot {
@@ -98,6 +98,11 @@ export default function ProductionPage() {
   const [searchLot, setSearchLot] = useState("")
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null)
   const [tab, setTab] = useState<"lots" | "alerts">("lots")
+  const [formMode, setFormMode] = useState<"single" | "batch">("single")
+  const [batchMode, setBatchMode] = useState<"uniform" | "custom">("uniform")
+  const [batchQty, setBatchQty] = useState(1)
+  const [batchQtys, setBatchQtys] = useState<Record<string, number>>({})
+  const [batchSubmitting, setBatchSubmitting] = useState(false)
 
   const load = async () => {
     setError("")
@@ -231,6 +236,51 @@ export default function ProductionPage() {
     await load()
   }
 
+  const submitBatchProduction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setSuccess("")
+
+    const entries = stockVariants
+      .map((v) => ({ variantId: v.variantId, quantity: batchMode === "uniform" ? batchQty : (batchQtys[v.variantId] ?? 0) }))
+      .filter((x) => x.quantity > 0)
+
+    if (entries.length === 0) {
+      setError("Renseignez au moins une quantite a produire")
+      return
+    }
+
+    setBatchSubmitting(true)
+    try {
+      const res = await fetch("/api/lots/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entries,
+          pointOfSaleId: destinationPointOfSaleId || undefined,
+          expiryDate: expiryDate || null,
+          notes: note || null,
+        }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        setError(body?.error ?? "Erreur lors de la production groupee")
+        return
+      }
+
+      const body = await res.json()
+      setSuccess(`${body.count} lot(s) cree(s) avec succes`)
+      setBatchQty(1)
+      setBatchQtys({})
+      setExpiryDate("")
+      setNote("")
+      await load()
+    } finally {
+      setBatchSubmitting(false)
+    }
+  }
+
   const deleteLot = async (lotId: string) => {
     if (!confirm("Supprimer ce lot ? Le stock restant sera retire.")) return
     setError("")
@@ -294,7 +344,15 @@ export default function ProductionPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
         <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold text-gray-900 sm:mb-4 sm:text-sm"><Factory className="h-4 w-4" /> Nouveau lot</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4">
+            <h2 className="flex items-center gap-2 text-xs font-semibold text-gray-900 sm:text-sm">{formMode === "single" ? <Factory className="h-4 w-4" /> : <Boxes className="h-4 w-4" />} {formMode === "single" ? "Nouveau lot" : "Production groupée"}</h2>
+            <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
+              <button type="button" onClick={() => setFormMode("single")} className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${formMode === "single" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Lot simple</button>
+              <button type="button" onClick={() => setFormMode("batch")} className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${formMode === "batch" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Production groupée</button>
+            </div>
+          </div>
+
+          {formMode === "single" && (
           <form onSubmit={submitProduction} className="space-y-3 sm:space-y-4">
             <label className="block text-xs font-medium text-gray-700 sm:text-sm">
               Produit / format
@@ -331,6 +389,79 @@ export default function ProductionPage() {
               <PackagePlus className="h-4 w-4" /> Creer le lot
             </button>
           </form>
+          )}
+
+          {formMode === "batch" && (
+            <form onSubmit={submitBatchProduction} className="space-y-3 sm:space-y-4">
+              <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+                Point de vente de destination
+                <select value={destinationPointOfSaleId} onChange={(e) => setDestinationPointOfSaleId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:py-2 sm:text-sm">
+                  {points.filter((p) => p.isActive).map((point) => <option key={point.id} value={point.id}>{point.name} ({point.code})</option>)}
+                </select>
+              </label>
+
+              <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
+                <button type="button" onClick={() => setBatchMode("uniform")} className={`flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${batchMode === "uniform" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Quantité unique</button>
+                <button type="button" onClick={() => setBatchMode("custom")} className={`flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${batchMode === "custom" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Personnalisé</button>
+              </div>
+
+              {batchMode === "uniform" && (
+                <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+                  Quantité pour tous les formats
+                  <input type="number" min={1} value={batchQty} onChange={(e) => setBatchQty(Math.max(1, Number(e.target.value) || 1))} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:py-2 sm:text-sm" />
+                </label>
+              )}
+
+              <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+                Date d&apos;expiration (optionnel)
+                <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:py-2 sm:text-sm" />
+              </label>
+              <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+                Note
+                <input value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:py-2 sm:text-sm" placeholder="Production groupée..." />
+              </label>
+
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-200">
+                <table className="w-full min-w-[480px] text-xs sm:text-sm">
+                  <thead className="sticky top-0 bg-gray-50/80">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-3 sm:py-2 ">Produit</th>
+                      <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-3 sm:py-2 ">Format</th>
+                      <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-3 sm:py-2 ">Stock</th>
+                      <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-3 sm:py-2 ">Quantité</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {stockVariants.map((v) => (
+                      <tr key={v.variantId} className="hover:bg-gray-50/50">
+                        <td className="px-2 py-1.5 sm:px-3 sm:py-2">{v.productName}</td>
+                        <td className="px-2 py-1.5 text-gray-600 sm:px-3 sm:py-2">{v.format}</td>
+                        <td className="px-2 py-1.5 text-right sm:px-3 sm:py-2">{v.stock}</td>
+                        <td className="px-2 py-1.5 text-right sm:px-3 sm:py-2">
+                          {batchMode === "uniform" ? (
+                            <span className="font-semibold text-primary-700">×{batchQty}</span>
+                          ) : (
+                            <input
+                              type="number"
+                              min={0}
+                              value={batchQtys[v.variantId] ?? ""}
+                              onChange={(e) => setBatchQtys((prev) => ({ ...prev, [v.variantId]: Number(e.target.value) || 0 }))}
+                              placeholder={v.stock === 0 ? "0" : ""}
+                              className="w-20 rounded-lg border border-gray-300 px-2 py-1 text-right text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:text-sm"
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <button disabled={batchSubmitting || !destinationPointOfSaleId || stockVariants.length === 0} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:py-2.5 sm:text-sm">
+                <Boxes className="h-4 w-4" /> {batchSubmitting ? "Production en cours..." : "Produire en groupe"}
+              </button>
+            </form>
+          )}
         </section>
 
         <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 lg:col-span-2">
