@@ -3,7 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, saleMovementsFilter } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
-import { allocateStockFIFOTx, generateLotNumberTx } from "@/lib/lot-utils"
+import { allocateStockFIFOTx, createCoverageLotTx } from "@/lib/lot-utils"
 import { fetchCachedLocations, ensureOperationalStockLocations, OPERATIONAL_STOCK_CODES } from "@/lib/stock-service"
 
 const NEGATIVE_TYPES = new Set(["OUT", "SALE", "LOSS", "TRANSFER_OUT", "ADJUSTMENT_OUT"])
@@ -197,16 +197,11 @@ export async function POST(request: Request) {
             update: { quantity: { increment: quantity } },
             create: { pointOfSaleId, variantId, quantity },
           })
-        } else {
-          await tx.productionLot.create({
-            data: {
-              lotNumber: await generateLotNumberTx(tx),
-              variantId,
-              initialQuantity: quantity,
-              remainingQuantity: quantity,
-              productionDate: new Date(),
-            },
-          })
+        }
+        // Toute entrée est couverte par un lot, avec ou sans point de vente : sans lot, ce stock serait
+        // refusé à la vente. Un transfert reçu ne crée rien : la marchandise garde son lot d'origine.
+        if (!pointOfSaleId || type !== "TRANSFER_IN") {
+          await createCoverageLotTx(tx, { variantId, quantity, notes: reason || "Entrée de stock", createdById: actorId })
         }
       } else if (NEGATIVE_TYPES.has(type)) {
         if (pointOfSaleId) {

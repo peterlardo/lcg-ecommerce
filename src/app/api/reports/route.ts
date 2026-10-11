@@ -492,7 +492,12 @@ export async function GET(request: Request) {
 
     const salesByDay = daily30.map((d) => ({ ...d, ventes: activeAllDelivered.filter((o) => dayKey(o.createdAt) === d.date).reduce((s, o) => s + o.total, 0) }))
 
-    const supplyMovements = movements.filter((m) => supplyTypes.includes(m.type))
+    // Chaque production écrit un mouvement global (sans point de vente) puis un mouvement par point de vente servi.
+    // Vue d'ensemble : seul le mouvement global est additionné, sinon chaque lot compte deux fois.
+    // Avec un point de vente choisi, la requête ne ramène déjà que ses mouvements.
+    const countedMovements = selectedPos ? movements : movements.filter((m) => !(m.type === "PRODUCTION" && m.pointOfSale))
+
+    const supplyMovements = countedMovements.filter((m) => supplyTypes.includes(m.type))
     const supplyByDay = daysArray(periodFrom, dayCount).map((date) => {
       const key = dayKey(date)
       const dayM = supplyMovements.filter((m) => dayKey(m.createdAt) === key)
@@ -529,12 +534,12 @@ export async function GET(request: Request) {
 
     const productionByDay = daysArray(periodFrom, dayCount).map((date) => {
       const key = dayKey(date)
-      return { name: date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }), date: key, quantity: movements.filter((m) => m.type === "PRODUCTION" && dayKey(m.createdAt) === key).reduce((s, m) => s + m.quantity, 0) }
+      return { name: date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }), date: key, quantity: countedMovements.filter((m) => m.type === "PRODUCTION" && dayKey(m.createdAt) === key).reduce((s, m) => s + m.quantity, 0) }
     })
 
     const productionSummary = {
-      totalProduced: movements.filter((m) => m.type === "PRODUCTION").reduce((s, m) => s + m.quantity, 0),
-      productionCount: movements.filter((m) => m.type === "PRODUCTION").length,
+      totalProduced: countedMovements.filter((m) => m.type === "PRODUCTION").reduce((s, m) => s + m.quantity, 0),
+      productionCount: countedMovements.filter((m) => m.type === "PRODUCTION").length,
       totalIn: movements.filter((m) => ["IN", "RETURN"].includes(m.type)).reduce((s, m) => s + m.quantity, 0),
       totalLoss: movements.filter((m) => m.type === "LOSS").reduce((s, m) => s + m.quantity, 0),
       totalAdjustOut: movements.filter((m) => m.type === "ADJUSTMENT_OUT").reduce((s, m) => s + m.quantity, 0),

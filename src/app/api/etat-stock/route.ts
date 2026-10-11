@@ -3,6 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { consumePointOfSaleStockTx, restockPointOfSaleStockTx } from "@/lib/stock-service"
+import { createCoverageLotTx } from "@/lib/lot-utils"
 import { COMPTOIR_CODE } from "@/lib/comptoir"
 
 const VIEW_ROLES = ["ADMIN", "STOCK_MANAGER", "COMMERCIAL", "DELIVERY_AGENT"]
@@ -387,6 +388,8 @@ export async function POST(request: Request) {
           reference,
           userId: movementUserId,
         })
+        // le stock trouvé en plus à l'inventaire est couvert par un lot, sinon il serait refusé à la vente
+        await createCoverageLotTx(tx, { variantId, quantity: delta, notes: `Inventaire ${reference} : ${reason}`, createdById: movementUserId })
       } else {
         await consumePointOfSaleStockTx(tx, {
           variantId,

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
-import { generateLotNumberTx } from "@/lib/lot-utils"
+import { generateLotNumberTx, isLotNumberConflict } from "@/lib/lot-utils"
 import { ensureOperationalStockLocations } from "@/lib/stock-service"
+import { checkedLotDates, checkedLotQuantity, LotInputError } from "@/lib/lot-input"
 
 export async function POST(req: Request) {
   const forbidden = await requireManagementAccess()
@@ -11,8 +12,9 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json()
-    const { entries, productionDate, expiryDate, notes } = body
+    const { entries } = body
     const destinationId = body.pointOfSaleId ? String(body.pointOfSaleId) : null
+    const notes = typeof body.notes === "string" ? body.notes.trim() : ""
 
     if (!Array.isArray(entries) || entries.length === 0) {
       return NextResponse.json({ error: "Aucune entree de production fournie" }, { status: 400 })
@@ -21,16 +23,27 @@ export async function POST(req: Request) {
     const cleaned = new Map<string, number>()
     for (const entry of entries) {
       const variantId = entry?.variantId ? String(entry.variantId) : ""
-      const qty = Number(entry?.quantity)
       if (!variantId) continue
-      if (!Number.isFinite(qty) || qty <= 0) {
-        return NextResponse.json({ error: "Quantite invalide pour un format fourni" }, { status: 400 })
+      let qty: number
+      try {
+        qty = checkedLotQuantity(entry?.quantity)
+      } catch (error) {
+        if (error instanceof LotInputError) return NextResponse.json({ error: error.message }, { status: 400 })
+        throw error
       }
       cleaned.set(variantId, (cleaned.get(variantId) ?? 0) + qty)
     }
 
     if (cleaned.size === 0) {
       return NextResponse.json({ error: "Aucune quantite valide" }, { status: 400 })
+    }
+
+    let dates: { productionDate: Date; expiryDate: Date | null }
+    try {
+      dates = checkedLotDates(body.productionDate, body.expiryDate)
+    } catch (error) {
+      if (error instanceof LotInputError) return NextResponse.json({ error: error.message }, { status: 400 })
+      throw error
     }
 
     const authSession = await auth()
@@ -61,9 +74,10 @@ export async function POST(req: Request) {
             variantId,
             initialQuantity: quantity,
             remainingQuantity: quantity,
-            productionDate: productionDate ? new Date(productionDate) : new Date(),
-            expiryDate: expiryDate ? new Date(expiryDate) : null,
+            productionDate: dates.productionDate,
+            expiryDate: dates.expiryDate,
             notes: notes || null,
+            createdById: actorId,
           },
         })
         created.push({ lotNumber, variantId })
@@ -140,6 +154,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ count: lots.length, lots }, { status: 201 })
   } catch (error) {
+    if (isLotNumberConflict(error)) {
+      return NextResponse.json({ error: "Un autre lot vient d'etre cree au meme instant : veuillez reessayer" }, { status: 409 })
+    }
     console.error("POST lots/batch error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })
   }

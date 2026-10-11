@@ -4,8 +4,9 @@ import type { LotAllocation } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
-import { generateLotNumberTx } from "@/lib/lot-utils"
+import { expireOverdueLotsTx, generateLotNumberTx, isLotNumberConflict } from "@/lib/lot-utils"
 import { ensureOperationalStockLocations } from "@/lib/stock-service"
+import { LOT_LIST_LIMIT, checkedLotDates, checkedLotQuantity, LotInputError } from "@/lib/lot-input"
 
 export async function GET(req: Request) {
   const forbidden = await requireManagementAccess()
@@ -19,6 +20,9 @@ export async function GET(req: Request) {
   const session = await auth()
   const movementWhere = saleMovementsFilter(session?.user?.role, session?.user?.id)
 
+  // Les lots dont la date d'expiration est passée basculent en « EXPIRED » avant l'affichage
+  await expireOverdueLotsTx(getPrisma())
+
   const where: Prisma.ProductionLotWhereInput = {}
   if (variantId) where.variantId = variantId
   if (status) where.status = status
@@ -31,14 +35,24 @@ export async function GET(req: Request) {
       ...(withAllocations ? { allocations: { orderBy: { createdAt: "desc" }, take: 20 } } : {}),
     },
     orderBy: { createdAt: "desc" },
-    take: 200,
+    take: LOT_LIST_LIMIT,
   })
 
-  const summary = await getPrisma().productionLot.aggregate({
-    where: { status: "ACTIVE" },
-    _sum: { remainingQuantity: true },
-    _count: true,
-  })
+  // Totaux de l'écran : toujours sur l'ensemble des lots, quels que soient le filtre et la limite de la liste.
+  const [summary, allLots] = await Promise.all([
+    getPrisma().productionLot.aggregate({
+      where: { status: "ACTIVE" },
+      _sum: { remainingQuantity: true },
+      _count: true,
+    }),
+    getPrisma().productionLot.aggregate({ _sum: { initialQuantity: true }, _count: true }),
+  ])
+  const totals = {
+    lots: allLots._count,
+    produced: allLots._sum.initialQuantity ?? 0,
+    activeLots: summary._count,
+    activeRemaining: summary._sum.remainingQuantity ?? 0,
+  }
 
   type LotWithAllocations = (typeof lots)[number] & {
     allocations?: LotAllocation[]
@@ -131,7 +145,7 @@ export async function GET(req: Request) {
     destination: lotDestMap.get(lot.id) ?? null,
   }))
 
-  return NextResponse.json({ lots: enrichedLots, summary })
+  return NextResponse.json({ lots: enrichedLots, summary, totals, truncated: lots.length >= LOT_LIST_LIMIT })
 }
 
 export async function POST(req: Request) {
@@ -140,11 +154,21 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json()
-    const { variantId, quantity, productionDate, expiryDate, notes } = body
+    const variantId = body.variantId ? String(body.variantId) : ""
     const destinationId = body.pointOfSaleId ? String(body.pointOfSaleId) : null
+    const notes = typeof body.notes === "string" ? body.notes.trim() : ""
 
-    if (!variantId || !quantity || quantity <= 0) {
-      return NextResponse.json({ error: "Donnees invalides" }, { status: 400 })
+    if (!variantId) {
+      return NextResponse.json({ error: "Choisissez un produit et un format" }, { status: 400 })
+    }
+    let quantity: number
+    let dates: { productionDate: Date; expiryDate: Date | null }
+    try {
+      quantity = checkedLotQuantity(body.quantity)
+      dates = checkedLotDates(body.productionDate, body.expiryDate)
+    } catch (error) {
+      if (error instanceof LotInputError) return NextResponse.json({ error: error.message }, { status: 400 })
+      throw error
     }
 
     const authSession = await auth()
@@ -170,9 +194,10 @@ export async function POST(req: Request) {
           variantId,
           initialQuantity: quantity,
           remainingQuantity: quantity,
-          productionDate: productionDate ? new Date(productionDate) : new Date(),
-          expiryDate: expiryDate ? new Date(expiryDate) : null,
+          productionDate: dates.productionDate,
+          expiryDate: dates.expiryDate,
           notes: notes || null,
+          createdById: actorId,
         },
       })
 
@@ -249,6 +274,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ lot, destination: destination ? { id: destination.id, name: destination.name, code: destination.code } : null }, { status: 201 })
   } catch (error) {
+    if (isLotNumberConflict(error)) {
+      return NextResponse.json({ error: "Un autre lot vient d'etre cree au meme instant : veuillez reessayer" }, { status: 409 })
+    }
     console.error("POST lots error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })
   }

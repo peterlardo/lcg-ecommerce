@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
+import { LOT_STATUSES } from "@/lib/lot-input"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const forbidden = await requireManagementAccess()
@@ -88,6 +89,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const lot = await getPrisma().productionLot.findUnique({ where: { id } })
     if (!lot) {
       return NextResponse.json({ error: "Lot introuvable" }, { status: 404 })
+    }
+    if (status && !LOT_STATUSES.includes(String(status))) {
+      return NextResponse.json({ error: "Statut de lot inconnu" }, { status: 400 })
     }
 
     const updated = await getPrisma().productionLot.update({
