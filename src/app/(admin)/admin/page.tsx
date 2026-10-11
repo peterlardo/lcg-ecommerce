@@ -530,7 +530,7 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <section className="rounded-xl border border-border bg-[#1d4ed8] p-3 shadow-card-soft sm:p-5">
+      <section className="rounded-xl border border-border bg-white p-3 shadow-card-soft sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-semibold text-white">Ventes en temps réel</h2>
