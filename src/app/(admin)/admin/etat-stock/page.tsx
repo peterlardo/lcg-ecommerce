@@ -97,7 +97,7 @@ interface EtatStockPayload {
   pointOfSale: { id: string; name: string; code: string } | null
   userId: string
   seller: { id: string; name: string | null } | null
-  sellers: { id: string; name: string | null; role: string }[]
+  sellers: { id: string; name: string | null; email: string | null; role: string }[]
   pointOfSales: { id: string; name: string; code: string; isActive: boolean }[]
   canManage: boolean
   canSeeAllSellers: boolean
@@ -520,7 +520,7 @@ export default function EtatStockPage() {
                 <option value="">Tous les vendeurs</option>
                 {(data?.sellers ?? []).map((seller) => (
                   <option key={seller.id} value={seller.id}>
-                    {seller.name || seller.id}
+                    {seller.name || seller.email || seller.id}
                   </option>
                 ))}
               </select>

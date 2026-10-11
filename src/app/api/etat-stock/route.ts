@@ -6,7 +6,6 @@ import { consumePointOfSaleStockTx, restockPointOfSaleStockTx } from "@/lib/stoc
 import { COMPTOIR_CODE } from "@/lib/comptoir"
 
 const VIEW_ROLES = ["ADMIN", "STOCK_MANAGER", "COMMERCIAL", "DELIVERY_AGENT"]
-const SELLER_ROLES = ["ADMIN", "STOCK_MANAGER", "COMMERCIAL", "DELIVERY_AGENT", "CAISSE", "CAISSIERE", "CAISSIER", "CASHIER"]
 const MANAGE_ROLES = ["ADMIN", "STOCK_MANAGER"]
 
 const POSITIVE_TYPES = new Set(["IN", "PRODUCTION", "TRANSFER_IN", "RETURN", "ADJUSTMENT_IN", "CANCEL_RESTOCK"])
@@ -55,8 +54,8 @@ export async function GET(request: Request) {
         orderBy: { name: "asc" },
       }),
       getPrisma().user.findMany({
-        where: { role: { in: SELLER_ROLES }, isActive: true },
-        select: { id: true, name: true, role: true },
+        where: { isActive: true },
+        select: { id: true, name: true, email: true, role: true },
         orderBy: { name: "asc" },
       }),
     ])
