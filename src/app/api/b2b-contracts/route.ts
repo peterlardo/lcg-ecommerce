@@ -32,10 +32,12 @@ function parseItems(raw: unknown): { items: { productVariantId: string; unitPric
   return { items }
 }
 
-function numOrNull(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
+/** Coercition stricte : absent → défaut, présent → nombre fini ≥ 0, sinon erreur. */
+function parseAmount(raw: unknown, field: string, def: number): { value: number } | { error: string } {
+  if (raw === undefined || raw === null || raw === "") return { value: def }
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0) return { error: `Valeur invalide : ${field}` }
+  return { value: n }
 }
 
 function isP2002(error: unknown): error is { code: string } {
@@ -89,7 +91,9 @@ export async function POST(req: Request) {
   try {
     const session = await auth()
     const selfId = session?.user?.id
+    const role = session?.user?.role
     if (!selfId) return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
+    const supervisesB2b = (session?.user as { supervisesB2b?: boolean } | undefined)?.supervisesB2b === true
 
     let body: Record<string, unknown>
     try {
@@ -112,6 +116,12 @@ export async function POST(req: Request) {
     const prisma = getPrisma()
     const client = await prisma.client.findFirst({ where: { id: clientId, type: "B2B" } })
     if (!client) return NextResponse.json({ error: "Client B2B introuvable" }, { status: 404 })
+    // Portée propriétaire (alignée sur GET/PATCH/DELETE) : hors ADMIN/COMPTABLE et
+    // sans supervisesB2b, un COMMERCIAL ne crée que sur SES clients.
+    const seesAll = !!role && (B2B_SCOPE_USERS as readonly string[]).includes(role)
+    if (!seesAll && !supervisesB2b && client.commercialId !== selfId) {
+      return NextResponse.json({ error: "Non autorisé" }, { status: 403 })
+    }
 
     const startsAt = body.startsAt ? new Date(String(body.startsAt)) : new Date()
     if (Number.isNaN(startsAt.getTime())) {
@@ -121,6 +131,13 @@ export async function POST(req: Request) {
     if (endsAt && Number.isNaN(endsAt.getTime())) {
       return NextResponse.json({ error: "Date de fin invalide" }, { status: 400 })
     }
+
+    const terms = parseAmount(body.paymentTermsDays, "paymentTermsDays", 30)
+    if ("error" in terms) return NextResponse.json({ error: terms.error }, { status: 400 })
+    const minOrder = parseAmount(body.minOrderAmount, "minOrderAmount", 0)
+    if ("error" in minOrder) return NextResponse.json({ error: minOrder.error }, { status: 400 })
+    const discount = parseAmount(body.discountPercent, "discountPercent", 0)
+    if ("error" in discount) return NextResponse.json({ error: discount.error }, { status: 400 })
 
     // Garde « 1 ACTIVE max / client » : un second contrat actif est refusé.
     if (status === "ACTIVE") {
@@ -135,10 +152,10 @@ export async function POST(req: Request) {
           status: status as Prisma.B2bContractCreateInput["status"],
           startsAt,
           endsAt,
-          paymentTermsDays: Number(body.paymentTermsDays) || 30,
-          minOrderAmount: Number(body.minOrderAmount) || 0,
+          paymentTermsDays: terms.value,
+          minOrderAmount: minOrder.value,
           deliveryFrequency: body.deliveryFrequency ? String(body.deliveryFrequency) : null,
-          discountPercent: numOrNull(body.discountPercent),
+          discountPercent: discount.value,
           notes: body.notes ? String(body.notes) : null,
           createdById: selfId,
           items: { create: parsed.items },
