@@ -38,6 +38,9 @@ export default function UtilisateursPage() {
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
   const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  // retour affiché à côté du bouton « Enregistrer » (le bandeau du haut de page est hors de vue à cet endroit)
+  const [saveStatus, setSaveStatus] = useState<{ ok: boolean; text: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const editFileRef = useRef<HTMLInputElement>(null)
 
@@ -123,6 +126,7 @@ export default function UtilisateursPage() {
 
   const selectUser = (user: User) => {
     setSelected(user.id)
+    setSaveStatus(null)
     setEditName(user.name || "")
     setEditEmail(user.email)
     setEditPhone(user.phone || "")
@@ -137,15 +141,36 @@ export default function UtilisateursPage() {
   const togglePermission = (module: string, action: keyof Omit<Permission, "module">) => setPermissions((current) => current.map((permission) => permission.module === module ? { ...permission, [action]: !permission[action] } : permission))
 
   const saveUser = async () => {
-    if (!selected) return
+    if (!selected || saving) return
     const payload: Record<string, unknown> = { name: editName, email: editEmail, phone: editPhone, role: editRole, isActive: editActive, permissions, posIds: editPosIds }
     if (editPassword.trim()) payload.password = editPassword.trim()
-    const response = await fetch(`/api/utilisateurs/${selected}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-    if (response.ok) { setMessage("Utilisateur mis à jour"); setEditPassword(""); await load() } else setError("Impossible d'enregistrer")
+    setSaving(true)
+    setSaveStatus(null)
+    setMessage("")
+    setError("")
+    try {
+      const response = await fetch(`/api/utilisateurs/${selected}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (response.ok) {
+        setEditPassword("")
+        await load()
+        setMessage("Utilisateur mis à jour")
+        setSaveStatus({ ok: true, text: `Modifications enregistrées à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` })
+      } else {
+        const body = await response.json().catch(() => null)
+        const text = response.status === 401 || response.status === 403 ? "Session expirée ou accès refusé : reconnectez-vous" : body?.error || "Impossible d'enregistrer"
+        setError(text)
+        setSaveStatus({ ok: false, text })
+      }
+    } catch {
+      setError("Connexion au serveur impossible : rien n'a été enregistré")
+      setSaveStatus({ ok: false, text: "Connexion au serveur impossible : rien n'a été enregistré" })
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Une seule session ouverte par compte : l'administrateur peut la libérer (appareil éteint sans déconnexion…)
@@ -451,9 +476,14 @@ export default function UtilisateursPage() {
               )
             })()}
 
-            <div className="mt-5 flex justify-end">
-              <button onClick={saveUser} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
-                <Save className="h-4 w-4" /> Enregistrer
+            <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
+              {saveStatus && (
+                <p role="status" className={`inline-flex items-center gap-1.5 text-sm font-medium ${saveStatus.ok ? "text-green-700" : "text-red-700"}`}>
+                  {saveStatus.ok ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />} {saveStatus.text}
+                </p>
+              )}
+              <button onClick={saveUser} disabled={saving} aria-busy={saving} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-wait disabled:opacity-60">
+                <Save className={`h-4 w-4 ${saving ? "animate-pulse" : ""}`} /> {saving ? "Enregistrement…" : "Enregistrer"}
               </button>
             </div>
           </section>
