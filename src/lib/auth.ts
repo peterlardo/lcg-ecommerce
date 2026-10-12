@@ -1,11 +1,17 @@
-import NextAuth from "next-auth"
+import NextAuth, { CredentialsSignin } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { getPrisma } from "./prisma"
-import { parseUserAgent, deviceFingerprint } from "./device"
+import { parseUserAgent } from "./device"
+import { SESSION_OPEN_CODE, SESSION_TOUCH_MS, closeUserSessions, deviceKey, openSessionElsewhere } from "./device-session"
 
 type Role = string
+
+/** Connexion refusée : le compte est déjà ouvert sur un autre appareil. */
+class SessionOpenError extends CredentialsSignin {
+  code = SESSION_OPEN_CODE
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(getPrisma()),
@@ -20,6 +26,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Mot de passe", type: "password" },
+        deviceId: { label: "Appareil", type: "text" },
       },
       async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) return null
@@ -72,7 +79,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
-        const fingerprint = deviceFingerprint(userAgent ?? "")
+        // Une seule session ouverte par compte : si le compte est ouvert sur un autre appareil, on refuse.
+        const fingerprint = deviceKey(credentials.deviceId, userAgent)
+        const elsewhere = await openSessionElsewhere(user.id, fingerprint, userAgent)
+        if (elsewhere) {
+          await getPrisma().loginLog.create({
+            data: {
+              userId: user.id,
+              email: user.email,
+              status: "BLOCKED",
+              method: "PASSWORD",
+              deviceName: clientInfo.deviceName,
+              deviceType: clientInfo.deviceType,
+              ip,
+              userAgent,
+            },
+          }).catch(() => {})
+          throw new SessionOpenError()
+        }
+        // Les sessions restées ouvertes ailleurs sans activité sont fermées : leur appareil sera déconnecté.
+        await closeUserSessions(user.id, fingerprint)
+
         let deviceSession = await getPrisma().userDeviceSession.findUnique({
           where: { userId_fingerprint: { userId: user.id, fingerprint } },
         })
@@ -126,7 +153,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       if (token.id) {
         try {
-          const fresh = await getPrisma().user.findUnique({ where: { id: token.id as string }, select: { updatedAt: true, role: true, isActive: true } })
+          const fresh = await getPrisma().user.findUnique({
+            where: { id: token.id as string },
+            select: {
+              updatedAt: true,
+              role: true,
+              isActive: true,
+              deviceSessions: { where: { sessionId: token.sessionId ?? "" }, select: { id: true, isActive: true, lastActiveAt: true } },
+            },
+          })
+          if (fresh && token.sessionId) {
+            const device = fresh.deviceSessions[0]
+            // Session fermée (déconnexion, libération par un administrateur, connexion ailleurs après inactivité)
+            if (!device || !device.isActive) return null
+            if (Date.now() - device.lastActiveAt.getTime() > SESSION_TOUCH_MS) {
+              await getPrisma().userDeviceSession.update({ where: { id: device.id }, data: { lastActiveAt: new Date() } })
+            }
+          }
           const freshAt = fresh ? fresh.updatedAt.getTime() : null
           if (fresh && (!token.authorAt || freshAt !== token.authorAt)) {
             token.role = fresh.role as Role

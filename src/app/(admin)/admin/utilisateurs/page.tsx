@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import Image from "next/image"
-import { Camera, Check, Eye, EyeOff, Plus, Save, ShieldCheck, UserPlus, X } from "lucide-react"
+import { Camera, Check, Eye, EyeOff, LogOut, Plus, Save, ShieldCheck, UserPlus, X } from "lucide-react"
 import Link from "next/link"
 
 const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "promotions", "rapports", "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b"]
@@ -11,7 +11,7 @@ const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes
 interface RoleProfile { id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean }
 interface Permission { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
 interface PointOfSale { id: string; name: string; code: string }
-interface User { id: string; name: string | null; email: string; phone: string | null; role: string; isActive: boolean; image: string | null; permissions: Permission[]; managedPointOfSales: PointOfSale[] }
+interface User { id: string; name: string | null; email: string; phone: string | null; role: string; isActive: boolean; image: string | null; permissions: Permission[]; managedPointOfSales: PointOfSale[]; openSession: { deviceName: string | null; deviceType: string | null; lastActiveAt: string } | null }
 const empty = { name: "", email: "", phone: "", password: "", role: "STOCK_MANAGER", image: "" }
 const emptyPermissions = () => modules.map((module) => ({ module, canView: false, canCreate: false, canEdit: false, canDelete: false }))
 
@@ -146,6 +146,15 @@ export default function UtilisateursPage() {
       body: JSON.stringify(payload),
     })
     if (response.ok) { setMessage("Utilisateur mis à jour"); setEditPassword(""); await load() } else setError("Impossible d'enregistrer")
+  }
+
+  // Une seule session ouverte par compte : l'administrateur peut la libérer (appareil éteint sans déconnexion…)
+  const releaseSession = async (user: User) => {
+    if (!confirm(`Libérer la session de ${user.name || user.email} ?\n\nL'appareil actuellement connecté sera déconnecté.`)) return
+    setError("")
+    setMessage("")
+    const response = await fetch(`/api/utilisateurs/${user.id}/sessions`, { method: "DELETE" })
+    if (response.ok) { setMessage("Session libérée : le compte peut se connecter sur un autre appareil"); await load() } else setError("Impossible de libérer la session")
   }
 
   const handleEditPhoto = async (file: File) => {
@@ -419,6 +428,28 @@ export default function UtilisateursPage() {
                 </table>
               </div>
             </div>
+
+            {(() => {
+              const user = users.find((u) => u.id === selected)
+              if (!user) return null
+              return (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">Session ouverte</p>
+                    <p className="text-sm text-muted-foreground">
+                      {user.openSession
+                        ? `${user.openSession.deviceName || "Appareil inconnu"} · dernière activité à ${new Date(user.openSession.lastActiveAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
+                        : "Aucune : ce compte n'est connecté nulle part"}
+                    </p>
+                  </div>
+                  {user.openSession && (
+                    <button type="button" onClick={() => releaseSession(user)} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-red-200 bg-card px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">
+                      <LogOut className="h-4 w-4" /> Libérer la session
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="mt-5 flex justify-end">
               <button onClick={saveUser} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">

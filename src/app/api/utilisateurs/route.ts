@@ -3,16 +3,27 @@ import bcrypt from "bcryptjs"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
+import { isSessionOpen } from "@/lib/device-session"
 
 export async function GET() {
   const forbidden = await requireManagementAccess(["ADMIN"])
   if (forbidden) return forbidden
   try {
-    const users = await getPrisma().user.findMany({ include: { permissions: true, managedPointOfSales: { select: { id: true, name: true, code: true } } }, orderBy: { createdAt: "desc" } })
+    const users = await getPrisma().user.findMany({
+      include: {
+        permissions: true,
+        managedPointOfSales: { select: { id: true, name: true, code: true } },
+        deviceSessions: { where: { isActive: true }, orderBy: { lastActiveAt: "desc" }, take: 1, select: { deviceName: true, deviceType: true, lastActiveAt: true, isActive: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    })
     return NextResponse.json(
-      users.map(({ password, ...user }) => {
+      users.map(({ password, deviceSessions, ...user }) => {
         void password // exclu volontairement de la réponse (jamais exposé)
-        return user
+        // session ouverte du compte (une seule à la fois), ou null
+        const session = deviceSessions[0]
+        const openSession = session && isSessionOpen(session) ? { deviceName: session.deviceName, deviceType: session.deviceType, lastActiveAt: session.lastActiveAt } : null
+        return { ...user, openSession }
       })
     )
   } catch (error) {

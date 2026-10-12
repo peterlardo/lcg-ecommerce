@@ -6,6 +6,22 @@ import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
+const DEVICE_KEY = "lcg-device-id"
+
+/** Identifiant de cet appareil, tiré au hasard une fois pour toutes : il distingue deux appareils du même modèle. */
+function getDeviceId(): string | undefined {
+  try {
+    let id = window.localStorage.getItem(DEVICE_KEY)
+    if (!id) {
+      id = crypto.randomUUID()
+      window.localStorage.setItem(DEVICE_KEY, id)
+    }
+    return id
+  } catch {
+    return undefined
+  }
+}
+
 export default function PersonnelLoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
@@ -22,11 +38,16 @@ export default function PersonnelLoginPage() {
       const result = await signIn("credentials", {
         email,
         password,
+        deviceId: getDeviceId() ?? "",
         redirect: false,
       })
 
       if (result?.error) {
-        setError("Email ou mot de passe incorrect")
+        setError(
+          result.code === "session_ouverte"
+            ? "Ce compte est déjà connecté sur un autre appareil. Déconnectez-le d'abord, ou demandez à un administrateur de libérer la session."
+            : "Email ou mot de passe incorrect"
+        )
         setLoading(false)
         return
       }

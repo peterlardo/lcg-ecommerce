@@ -61,6 +61,7 @@ const LOGIN_LABEL: Record<string, string> = {
   SUCCESS: "Connexion",
   FAILED: "Échec de connexion",
   LOGOUT: "Déconnexion",
+  BLOCKED: "Connexion refusée (compte déjà ouvert ailleurs)",
 }
 
 const SOURCE_LABEL: Record<string, string> = {
