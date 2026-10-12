@@ -40,7 +40,11 @@ const localBusinessJsonLd = {
 
 export default async function HomePage() {
   const allProducts = await getProducts()
-  const featuredProducts = allProducts.filter((p) => p.isFeatured).slice(0, 4)
+  // Tous les produits marqués « phare » : en couper après 4 masquait le dernier (Glaçon Creux).
+  const featuredProducts = allProducts.filter((p) => p.isFeatured)
+  // 4 par ligne quand le compte tombe juste, sinon 3 : la dernière ligne, centrée, ne laisse pas une carte isolée.
+  const featuredWidth =
+    featuredProducts.length % 4 === 0 ? "lg:w-[calc((100%-4.5rem)/4)]" : "lg:w-[calc((100%-3rem)/3)]"
 
   return (
     <div>
@@ -109,9 +113,11 @@ export default async function HomePage() {
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 flex flex-wrap justify-center gap-6">
             {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <div key={product.id} className={`grid w-full sm:w-[calc((100%-1.5rem)/2)] ${featuredWidth}`}>
+                <ProductCard product={product} />
+              </div>
             ))}
           </div>
           <div className="mt-8 text-center sm:hidden">
