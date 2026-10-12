@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { getPrisma } from "@/lib/prisma";
-import { hasPermission, isStaffRole, type PermissionAction } from "@/lib/permissions"
+import { baseRole, hasPermission, isStaffRole, type PermissionAction } from "@/lib/permissions"
 
 type Role = string
 
@@ -60,7 +60,8 @@ export async function requireManagementAccess(roles: Role[] = MANAGEMENT_ROLES, 
     return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
   }
 
-  if (role && roles.includes(role)) return null
+  // le responsable commercial passe partout où le commercial est admis
+  if (role && (roles.includes(role) || roles.includes(baseRole(role)))) return null
 
   const adminOnly = roles.length === 1 && roles[0] === "ADMIN"
   if (rule && !adminOnly && hasPermission(session.user, [...rule[0]], rule[1] ?? "view")) return null

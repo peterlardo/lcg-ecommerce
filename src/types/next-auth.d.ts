@@ -14,6 +14,8 @@ declare module "next-auth" {
       role: Role
       permissions: SessionPermission[]
       sessionId?: string
+      /** voit tous les clients et documents B2B, pas seulement les siens */
+      supervisesB2b?: boolean
     } & DefaultSession["user"]
   }
 }

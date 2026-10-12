@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "./prisma"
 import { B2B_SCOPE_USERS } from "./b2b"
+import { COMMERCIAL_MANAGER_ROLE } from "./permissions"
 
 // ─── ESPACE COMMERCIAL B2B ────────────────────────────────────
 // Règles communes au tableau de bord commercial, aux créances et aux encaissements
@@ -17,7 +18,7 @@ export type SessionUser = { id?: string; role?: string; supervisesB2b?: boolean 
 /** Admin, comptable ou superviseur : tout le portefeuille. Sinon le commercial ne voit que ses clients. */
 export function seesAllB2b(user: SessionUser): boolean {
   const role = user?.role
-  return (!!role && (B2B_SCOPE_USERS as readonly string[]).includes(role)) || user?.supervisesB2b === true
+  return (!!role && (B2B_SCOPE_USERS as readonly string[]).includes(role)) || role === COMMERCIAL_MANAGER_ROLE || user?.supervisesB2b === true
 }
 
 /** Filtre « clients de la portée » à poser sur la relation `client` d'un document ou d'un contrat. */

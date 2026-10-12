@@ -4,6 +4,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { getPrisma } from "./prisma"
 import { parseUserAgent } from "./device"
+import { COMMERCIAL_MANAGER_ROLE } from "./permissions"
 import { SESSION_OPEN_CODE, SESSION_TOUCH_MS, closeUserSessions, deviceKey, openSessionElsewhere } from "./device-session"
 
 type Role = string
@@ -188,6 +189,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.role = token.role as Role
         session.user.id = token.id as string
         session.user.sessionId = token.sessionId as string | undefined
+        // le responsable commercial supervise tout le portefeuille B2B
+        session.user.supervisesB2b = token.role === COMMERCIAL_MANAGER_ROLE
         session.user.permissions = (token.permissions || []) as { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }[]
       }
       return session

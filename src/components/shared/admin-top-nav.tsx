@@ -6,7 +6,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { formatPrice } from "@/lib/utils"
-import { canSeeModule, moduleOfPath } from "@/lib/permissions"
+import { canSeeModule, isCommercialManager, moduleOfPath } from "@/lib/permissions"
 import type { AppNotification } from "@/hooks/use-notifications"
 import {
   type LucideIcon,
@@ -139,7 +139,8 @@ const priorityLinks: NavLink[] = [
 ]
 const priorityHrefs = new Set(priorityLinks.flatMap((link) => [link.href, ...(link.children ?? []).map((child) => child.href)]))
 
-// Le responsable commercial a son propre menu, limité à ses modules : il remplace le menu général.
+// Le responsable commercial (profil RESPONSABLE_COMMERCIAL) a son propre menu, limité à ses modules :
+// il remplace le menu général. Les autres commerciaux gardent le menu général.
 const commercialLinks: NavLink[] = [
   { href: "/admin/commercial", label: "Tableau de bord", icon: BriefcaseBusiness },
   { href: "/admin/clients-b2b", label: "Clients B2B", icon: Building2 },
@@ -182,8 +183,9 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
   // Même règle que les API et l'écran « Utilisateurs » (src/lib/permissions.ts)
   const canSee = (module: string) => canSeeModule(session?.user, module)
 
-  const isCommercial = session?.user?.role === "COMMERCIAL"
-  // Le commercial garde, en plus de ses modules, les écrans que l'administrateur lui a cochés
+  // seul le responsable commercial a ce menu ; les autres commerciaux gardent le menu général
+  const isCommercial = isCommercialManager(session?.user?.role)
+  // Le responsable commercial garde, en plus de ses modules, les écrans que l'administrateur lui a cochés
   // expressément (commandes, rapports…) : ils se rangent dans le menu « Plus ».
   const granted = (module: string) => (session?.user?.permissions ?? []).some((p) => p.module === module && p.canView)
   const commercialExtras = navGroups

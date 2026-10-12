@@ -48,10 +48,31 @@ export const MODULE_ALIASES: Record<string, string> = { livreurs: "livraisons", 
 export const LEGACY_ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"]
 
 /**
- * Modules propres au responsable commercial : ils font partie de son rôle, il les voit toujours,
- * même si l'administrateur a coché ses droits un par un sans connaître ces écrans.
+ * Modules propres au responsable commercial (profil RESPONSABLE_COMMERCIAL) : ils font partie de son rôle,
+ * il les voit toujours. Les autres commerciaux gardent le menu général, selon les droits cochés sur leur fiche.
  */
 export const COMMERCIAL_MODULES = ["commercial", "clients-b2b", "b2b", "creances", "zone-commerciale"]
+
+/**
+ * Rôles commerciaux. RESPONSABLE_COMMERCIAL est un profil créé par l'administrateur : il a les écrans
+ * et les accès du commercial, et voit tout le portefeuille B2B (pas seulement ses propres clients).
+ */
+export const COMMERCIAL_MANAGER_ROLE = "RESPONSABLE_COMMERCIAL"
+export const COMMERCIAL_ROLES = ["COMMERCIAL", COMMERCIAL_MANAGER_ROLE]
+
+export function isCommercialRole(role: string | null | undefined): boolean {
+  return !!role && COMMERCIAL_ROLES.includes(role)
+}
+
+/** Le responsable commercial : son propre tableau de bord et son propre menu. */
+export function isCommercialManager(role: string | null | undefined): boolean {
+  return role === COMMERCIAL_MANAGER_ROLE
+}
+
+/** Rôle à comparer aux listes de rôles : le responsable commercial passe partout où le commercial passe. */
+export function baseRole<T extends string | null | undefined>(role: T): T | "COMMERCIAL" {
+  return role === COMMERCIAL_MANAGER_ROLE ? "COMMERCIAL" : role
+}
 
 /** Profils de caisse : ils reçoivent les commandes et sont seuls à établir l'état de caisse. */
 export const CASHIER_ROLES = ["CAISSE", "CAISSIERE", "CAISSIER", "CASHIER"]
@@ -78,7 +99,7 @@ export function isStaffRole(role: string | null | undefined): boolean {
 /** Le rôle peut-il recevoir ce module ? */
 export function moduleOpenTo(role: string | null | undefined, module: string): boolean {
   const reserved = MODULE_ROLES[module]
-  return !reserved || (!!role && reserved.includes(role))
+  return !reserved || (!!role && reserved.includes(baseRole(role) as string))
 }
 
 /** Module d'un écran d'administration à partir de son adresse (/admin/livreurs -> livraisons). */
@@ -115,7 +136,7 @@ export function canSeeModule(user: PermissionUser, module: string): boolean {
   if (!isStaffRole(role)) return false
   if (role === "ADMIN") return true
   if (!moduleOpenTo(role, module)) return false
-  if (role === "COMMERCIAL" && COMMERCIAL_MODULES.includes(module)) return true
+  if (isCommercialManager(role) && COMMERCIAL_MODULES.includes(module)) return true
   // La caisse tactile reste accessible aux profils de caisse même si « ventes » n'est pas coché
   if (isCashierRole(role) && module === "ventes") return true
   const permissions = user?.permissions ?? []

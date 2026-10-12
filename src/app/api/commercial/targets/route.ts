@@ -4,6 +4,7 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { logActivity } from "@/lib/activity"
 import { currentMonth } from "@/lib/commercial"
+import { isCommercialRole } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -66,7 +67,7 @@ export async function POST(req: Request) {
 
     const user = await getPrisma().user.findUnique({ where: { id: userId }, select: { id: true, name: true, role: true } })
     if (!user) return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 })
-    if (user.role !== "COMMERCIAL") return NextResponse.json({ error: "Seul un responsable commercial peut avoir un objectif" }, { status: 400 })
+    if (!isCommercialRole(user.role)) return NextResponse.json({ error: "Seul un responsable commercial peut avoir un objectif" }, { status: 400 })
 
     const target = await getPrisma().commercialTarget.upsert({
       where: { userId_yearMonth: { userId, yearMonth } },

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { Camera, Check, Eye, EyeOff, LogOut, Plus, Save, ShieldCheck, UserPlus, X } from "lucide-react"
 import Link from "next/link"
+import { isCommercialRole } from "@/lib/permissions"
 
 const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "promotions", "rapports", "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b", "commercial", "creances", "b2b"]
 const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", promotions: "Promotions", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", "etat-stock": "État de stock & caisse", clients: "Clients", "clients-b2b": "Clients B2B", commercial: "Tableau de bord commercial", creances: "Créances", b2b: "Devis, bons et factures B2B" }
@@ -500,7 +501,7 @@ export default function UtilisateursPage() {
               </div>
             </div>
 
-            {selectedUser.role === "COMMERCIAL" && (
+            {isCommercialRole(selectedUser.role) && (
               <div className="mt-5 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
                 <label className="min-w-0 flex-1 text-sm font-semibold text-foreground">
                   Objectif de chiffre d&apos;affaires{targetMonth ? ` — ${targetMonth.slice(5)}/${targetMonth.slice(0, 4)}` : " du mois"}
