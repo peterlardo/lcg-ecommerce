@@ -23,6 +23,14 @@ export async function POST(request: Request) {
       message,
     })
 
+    // Envoi email à contact@lcg.cg
+    try {
+      const { sendContactMessage } = await import("@/lib/mailer")
+      await sendContactMessage({ nom, telephone, email: email || "", objet: objet || "Question générale", message })
+    } catch (e) {
+      console.error("sendContactMessage import error:", e)
+    }
+
     return NextResponse.json(newMsg, { status: 201 })
   } catch (error) {
     console.error("Message error:", error)

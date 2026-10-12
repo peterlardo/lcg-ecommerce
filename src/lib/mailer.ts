@@ -99,8 +99,8 @@ function shell(title: string, badge: string, inner: string): string {
   <div style="margin:0; padding:0; background:#f4f7f6; font-family: Arial, Helvetica, sans-serif;">
     <div style="max-width: 640px; margin: 0 auto; padding: 24px 16px;">
       <div style="background: linear-gradient(135deg, #0f766e, #059669); border-radius: 12px 12px 0 0; padding: 24px 28px; color: #ffffff;">
-        <div style="font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">LCG · La Congolaise des Glaçons</div>
-        <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">97 Rue EWO, Ouenzé — Brazzaville · Tél : +242 XX XXX XXX</div>
+        <div style="font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">LCG — La Congolaise des Glacons</div>
+        <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">97 Rue EWO, Ouenzé - Brazzaville — Tél : +242 XX XXX XXX</div>
         <div style="display: inline-block; margin-top: 14px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35); border-radius: 999px; padding: 5px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">${badge}</div>
       </div>
       <div style="background: #ffffff; border-radius: 0 0 12px 12px; padding: 28px; border: 1px solid #e5e7eb; border-top: none;">
@@ -696,6 +696,45 @@ export async function sendPasswordResetEmail(email: string, token: string, baseU
     return true
   } catch (error) {
     console.error("Échec envoi email réinitialisation:", error)
+    return false
+  }
+}
+
+export interface ContactMailData {
+  nom: string
+  telephone: string
+  email: string
+  objet: string
+  message: string
+}
+
+export async function sendContactMessage(data: ContactMailData): Promise<boolean> {
+  try {
+    const transporter = getTransporter()
+    const to = process.env.CONTACT_TO || "contact@lcg.cg"
+    const subject = "Nouveau message de contact - " + (data.objet || "LCG")
+    const safe = (data.message || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    let inner = '<h1 style="margin:0;font-size:22px;color:#111827">Nouveau message depuis le formulaire de contact</h1>'
+    inner += '<p style="margin:6px 0 0;font-size:14px;color:#6b7280">Reçu le ' + formatDate(new Date().toISOString()) + '</p>'
+    inner += '<table style="width:100%;margin-top:20px;border-collapse:collapse">'
+    inner += infoRow('Nom', data.nom)
+    inner += infoRow('Téléphone', data.telephone)
+    inner += infoRow('Email', data.email || '-')
+    inner += infoRow('Objet', data.objet || '-')
+    inner += '</table>'
+    inner += '<div style="margin-top:20px;padding:16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px">'
+    inner += '<div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:8px">Message</div>'
+    inner += '<div style="font-size:14px;color:#1f2937;white-space:pre-wrap">' + safe + '</div>'
+    inner += '</div>'
+    await transporter.sendMail({
+      from: 'LCG Site <' + (process.env.SMTP_FROM || 'no-reply@lcg.cg') + '>',
+      to,
+      subject,
+      html: shell('CONTACT', 'Nouveau message', inner),
+    })
+    return true
+  } catch (e) {
+    console.error('sendContactMessage error', e)
     return false
   }
 }
