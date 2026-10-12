@@ -50,6 +50,13 @@ function getPeriodRange(period: string, now: Date) {
 
 const supplyTypes = ["IN", "PRODUCTION", "TRANSFER_IN", "RETURN"]
 
+// Une vente entre dans le chiffre d'affaires dès qu'elle est encaissée (ticket établi à la caisse),
+// et au plus tard quand la commande part en livraison. Ne compter que les commandes livrées laissait
+// de côté tout ce que la caisse encaisse sur place : ces commandes restent « envoyées à la caisse ».
+const REVENUE_STATUSES = ["OUT_FOR_DELIVERY", "DELIVERED"] as const
+const isRevenue = (o: { status: string; paymentStatus?: string | null }) =>
+  o.paymentStatus === "PAID" || (REVENUE_STATUSES as readonly string[]).includes(o.status)
+
 const orderSelect = {
   id: true,
   orderNumber: true,
@@ -306,7 +313,12 @@ export async function GET(request: Request) {
       }),
       getPrisma().order.groupBy({
         by: ["pointOfSaleId"],
-        where: { createdAt: { gte: periodFrom }, status: { in: ["OUT_FOR_DELIVERY", "DELIVERED"] }, ...comparisonOrderFilter },
+        where: {
+          AND: [
+            { createdAt: { gte: periodFrom }, status: { not: "CANCELLED" }, OR: [{ status: { in: [...REVENUE_STATUSES] } }, { paymentStatus: "PAID" }] },
+            comparisonOrderFilter,
+          ],
+        },
         _sum: { total: true },
         _count: { _all: true },
       }),
@@ -334,9 +346,9 @@ export async function GET(request: Request) {
     })
 
     const activeRecent = recentOrders.filter((o) => o.status !== "CANCELLED")
-    const activeRecentDelivered = activeRecent.filter((o) => ["OUT_FOR_DELIVERY", "DELIVERED"].includes(o.status))
+    const activeRecentDelivered = activeRecent.filter(isRevenue)
     const activeAll = allOrders.filter((o) => o.status !== "CANCELLED")
-    const activeAllDelivered = activeAll.filter((o) => ["OUT_FOR_DELIVERY", "DELIVERED"].includes(o.status))
+    const activeAllDelivered = activeAll.filter(isRevenue)
     const todayOrders = activeRecent.filter((o) => o.createdAt >= todayStart)
     const todayOrdersDelivered = activeRecentDelivered.filter((o) => o.createdAt >= todayStart)
     const todayInDelivery = todayOrders.filter((o) => o.status === "OUT_FOR_DELIVERY")

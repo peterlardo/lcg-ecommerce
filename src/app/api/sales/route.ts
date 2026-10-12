@@ -58,23 +58,30 @@ export async function GET() {
   const posFilter = await getUserPointOfSaleIds()
   const posIds = posFilter?.posIds ?? null
 
+  const selfId = session!.user!.id
   const sales = await getPrisma().order.findMany({
     where: {
-      notes: { startsWith: "Vente comptoir" },
-      // Filtre strict B2B : le comptable ne voit que les ventes comptoir
-      // rattachées à un client B2B.
-      ...(isComptableRole ? { b2bClientId: { not: null } } : {}),
-      ...(isComptableRole
-        ? {}
-        : isAdmin
-          ? posIds !== null
-            ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
-            : {}
-          : { userId: session!.user!.id }),
+      AND: [
+        // Une vente = une vente saisie au comptoir, ou une commande encaissée à la caisse (ticket établi).
+        // Sans la seconde, tout le parcours opérateur d'accueil -> caissière manquait à l'historique.
+        { OR: [{ notes: { startsWith: "Vente comptoir" } }, { ticketGenerated: true }] },
+        isComptableRole
+          ? // Filtre strict B2B : le comptable ne voit que les ventes rattachées à un client B2B.
+            { b2bClientId: { not: null } }
+          : isAdmin
+            ? posIds !== null
+              ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
+              : {}
+            : isCashierRole(session?.user?.role)
+              ? // la caissière : ses ventes et les commandes qu'un opérateur lui a transmises
+                { OR: [{ userId: selfId }, { cashierId: selfId }] }
+              : { userId: selfId },
+      ],
     },
     include: {
       pointOfSale: { select: { id: true, name: true, code: true } },
       user: { select: { id: true, name: true } },
+      cashier: { select: { id: true, name: true } },
       items: { include: { variant: { include: { product: true } } } },
     },
     orderBy: { createdAt: "desc" },
@@ -93,6 +100,8 @@ export async function GET() {
       notes: sale.notes,
       createdAt: sale.createdAt.toISOString(),
       seller: sale.user ? { id: sale.user.id, name: sale.user.name } : null,
+      // caissière qui a encaissé une commande transmise par un opérateur
+      cashier: sale.cashier ? { id: sale.cashier.id, name: sale.cashier.name } : null,
       pointOfSale: sale.pointOfSale,
       items: sale.items.map((item) => ({
         id: item.id,

@@ -1,36 +1,39 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds, seesOnlyOwnOrders } from "@/lib/api-auth"
+import { requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
+import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE", "OPERATEUR_ACCUEIL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE", "OPERATEUR_ACCUEIL", ...CASHIER_ROLES])
   if (forbidden) return forbidden
 
   const session = await auth()
   const role = session?.user?.role
   const selfId = session?.user?.id
 
-  const posFilter = await getUserPointOfSaleIds()
-  const posIds = posFilter?.posIds ?? null
-  const posClause =
-    posIds !== null
-      ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
-      : null
+  // Qui voit quoi (même règle que la liste des commandes) :
+  // - l'administrateur voit tous les tickets ;
+  // - un compte de caisse voit ses propres ventes et les commandes qu'un opérateur lui a transmises ;
+  // - les autres comptes voient les tickets dont ils sont l'auteur.
+  // Le point de vente n'entre pas en compte : un compte qui n'en gère aucun ne voyait aucun de ses tickets.
+  const scope =
+    role === "ADMIN"
+      ? []
+      : !selfId
+        ? [{ id: { in: [] as string[] } }]
+        : isCashierRole(role)
+          ? [{ OR: [{ userId: selfId }, { cashierId: selfId }] }]
+          : [{ userId: selfId }]
 
   const tickets = await getPrisma().order.findMany({
     where: {
       AND: [
         { OR: [{ notes: { startsWith: "Vente comptoir" } }, { ticketGenerated: true }] },
-        ...(posClause ? [posClause] : []),
-        ...(seesOnlyOwnOrders(role) && selfId
-          ? [{ userId: selfId }]
-          : role === "ADMIN" || !role || !selfId
-            ? []
-            : [{ OR: [{ NOT: { notes: { startsWith: "Vente comptoir" } } }, { userId: selfId }] }]),
+        ...scope,
       ],
     },
-include: { pointOfSale: { select: { name: true, code: true } }, user: { select: { name: true } }, items: { include: { variant: { include: { product: true } } } } },
+    include: { pointOfSale: { select: { name: true, code: true } }, user: { select: { name: true } }, items: { include: { variant: { include: { product: true } } } } },
     orderBy: { createdAt: "desc" },
   })
   return NextResponse.json(tickets.map((ticket) => ({

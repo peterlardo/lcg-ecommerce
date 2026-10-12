@@ -67,6 +67,7 @@ interface SaleHistoryItem {
   customerName: string
   customerPhone: string
   seller: { id: string; name: string | null } | null
+  cashier?: { id: string; name: string | null } | null
   paymentMethod: string
   paymentStatus: string
   status: string
@@ -1045,6 +1046,7 @@ export default function VentesPage() {
                     <p className="text-sm text-gray-500">
                       {sale.customerName}
                       {sale.seller?.name && <span className="ml-2 text-gray-400">· {sale.seller.name}</span>}
+                      {sale.cashier?.name && sale.cashier.id !== sale.seller?.id && <span className="ml-2 text-gray-400">· encaissée par {sale.cashier.name}</span>}
                       {sale.pointOfSale && <span className="ml-2 text-gray-400">· {sale.pointOfSale.name}</span>}
                     </p>
                   </div>
@@ -1094,6 +1096,7 @@ export default function VentesPage() {
                       <p><span className="text-gray-500">Client :</span> <span className="font-medium">{sale.customerName}</span></p>
                       {sale.customerPhone && <p><span className="text-gray-500">Téléphone :</span> <span className="font-medium">{sale.customerPhone}</span></p>}
                       {sale.seller?.name && <p><span className="text-gray-500">Vendeur :</span> <span className="font-medium">{sale.seller.name}</span></p>}
+                      {sale.cashier?.name && <p><span className="text-gray-500">Encaissée par :</span> <span className="font-medium">{sale.cashier.name}</span></p>}
                       <p><span className="text-gray-500">Paiement :</span> <span className="font-medium">{paymentLabels[sale.paymentMethod] || sale.paymentMethod}</span></p>
                       <p><span className="text-gray-500">Statut :</span> <span className="font-medium text-green-600">Payé</span></p>
                       {sale.pointOfSale && <p><span className="text-gray-500">Point de vente :</span> <span className="font-medium">{sale.pointOfSale.name} ({sale.pointOfSale.code})</span></p>}
