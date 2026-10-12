@@ -165,7 +165,7 @@ export function exportVentesPDF(data: VentesData) {
     head: [["Produit", "Qte", "Revenu"]],
     body: data.topProducts.map((p) => [p.name, String(p.quantity), fmt(p.revenue)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
   y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
@@ -178,7 +178,7 @@ export function exportVentesPDF(data: VentesData) {
     head: [["Methode", "Transactions", "Total"]],
     body: data.paymentBreakdown30.map((p) => [PAYMENT[p.method] ?? p.method, String(p.count), fmt(p.total)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
 
   finalizePDF(doc, "Rapport Ventes", "rapport-ventes-" + todayShort() + ".pdf")
@@ -227,7 +227,7 @@ export function exportStocksPDF(data: StocksData) {
     head: [["Categorie", "Stock total", "Variantes"]],
     body: data.stockByCategory.map((c) => [c.name, String(c.totalStock), String(c.variants)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
   y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
@@ -240,7 +240,7 @@ export function exportStocksPDF(data: StocksData) {
     head: [["Produit", "Format", "Categorie", "Stock"]],
     body: data.allStockVariants.map((v) => [v.productName, v.format, v.categoryName, String(v.stock)]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
 
   finalizePDF(doc, "Rapport Stocks", "rapport-stocks-" + todayShort() + ".pdf")
@@ -276,7 +276,7 @@ export function exportApproPDF(data: ApproData) {
     head: [["Type", "Quantite", "Mouvements"]],
     body: types.map((t) => [SUPPLY_LBL[t.type] ?? t.type, String(t.quantity), String(t.count)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
   y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
@@ -292,7 +292,7 @@ export function exportApproPDF(data: ApproData) {
       m.productName, m.format, SUPPLY_LBL[m.type] ?? m.type, "+" + m.quantity, m.reason || "-",
     ]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
 
   finalizePDF(doc, "Rapport Approvisionnements", "rapport-approvisionnements-" + todayShort() + ".pdf")
@@ -337,7 +337,7 @@ export function exportCommandesPDF(data: CommandesData) {
     head: [["Statut", "Commandes", "Total"]],
     body: data.ordersByStatus.map((s) => [STATUS_LBL[s.status] ?? s.status, String(s.count), fmt(s.total)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
   y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
@@ -350,7 +350,7 @@ export function exportCommandesPDF(data: CommandesData) {
     head: [["Jour", "Commandes", "Revenu"]],
     body: data.ordersByDay.map((d) => [d.name, String(d.commandes), fmt(d.revenu)]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
 
   finalizePDF(doc, "Rapport Commandes", "rapport-commandes-" + todayShort() + ".pdf")
@@ -396,7 +396,7 @@ export function exportReservationsPDF(data: ReservationsData) {
     head: [["Client", "Type", "Date", "Heure", "Statut"]],
     body: data.reservations.map((r) => [r.client, r.type, r.date, r.heure, STATUS_LBL[r.status] ?? r.status]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
 
   finalizePDF(doc, "Rapport Reservations", "rapport-reservations-" + todayShort() + ".pdf")
@@ -442,7 +442,7 @@ export function exportProductionPDF(data: ProductionData) {
     head: [["Jour", "Quantite produite"]],
     body: data.productionByDay.filter((d) => d.quantity > 0).map((d) => [d.name, String(d.quantity)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
   y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
@@ -457,7 +457,7 @@ export function exportProductionPDF(data: ProductionData) {
       new Date(m.createdAt).toLocaleDateString("fr-FR"), m.productName, m.format, "+" + m.quantity, m.reason || "-",
     ]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
 
   finalizePDF(doc, "Rapport Production", "rapport-production-" + todayShort() + ".pdf")
@@ -511,7 +511,7 @@ export function exportCaissePDF(data: CaisseData) {
       d.gap !== null ? (d.gap > 0 ? "+" : "") + fmt(d.gap) : "-",
     ]),
     styles: { fontSize: 8, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
 
   finalizePDF(doc, "Rapport Caisse", "rapport-caisse-" + todayShort() + ".pdf")
@@ -560,7 +560,7 @@ export function exportLotsPDF(data: LotsData) {
       l.expiryDate ? new Date(l.expiryDate).toLocaleDateString("fr-FR") : "-",
     ]),
     styles: { fontSize: 7, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
 
   finalizePDF(doc, "Rapport Lots", "rapport-lots-" + todayShort() + ".pdf")
@@ -736,7 +736,7 @@ export function exportClotureCaissePDF(data: ClotureReport) {
       ]),
       foot: [["Total", "", String(data.totals.items), "", fmt(data.soldByProduct.reduce((sum, row) => sum + row.amount, 0))]],
       styles: { fontSize: 8.5, textColor: [40, 40, 40] },
-      headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+      headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
       footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
     })
     y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
@@ -754,7 +754,7 @@ startY: y,
       : [["-", "", ""]],
     foot: [["TOTAL ENCAISSÉ", fmt(data.paymentBreakdown.reduce((sum, row) => sum + row.amount, 0)), ""]],
     styles: { fontSize: 8.5, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
     footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
   })
   y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
@@ -769,7 +769,7 @@ startY: y,
     body: [["1", "", "", ""], ["2", "", "", ""], ["3", "", "", ""]],
     foot: [["", "", "TOTAL DES SORTIES", ""]],
     styles: { fontSize: 8.5, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
     footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
   })
   y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
@@ -786,7 +786,7 @@ startY: y,
     body: [["10 000", "", ""], ["5 000", "", ""], ["2 000", "", ""], ["1 000", "", ""], ["500", "", ""]],
     foot: [["Sous-total billets", "", ""]],
     styles: { fontSize: 8.5, textColor: [40, 40, 40], cellPadding: 1.4 },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
     footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
   })
   const billetsFinalY = (doc as AutoTableDoc).lastAutoTable.finalY
@@ -799,7 +799,7 @@ startY: y,
     body: [["500", "", ""], ["100", "", ""], ["50", "", ""], ["25", "", ""], ["10 et moins", "", ""]],
     foot: [["Sous-total pièces", "", ""]],
     styles: { fontSize: 8.5, textColor: [40, 40, 40], cellPadding: 1.4 },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
     footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
   })
   y = Math.max(billetsFinalY, (doc as AutoTableDoc).lastAutoTable.finalY) + 5
@@ -828,7 +828,7 @@ startY: y,
       ["H. Fonds de caisse laissé pour le service suivant", ""],
     ],
     styles: { fontSize: 8.5, textColor: [40, 40, 40], cellPadding: 1.4 },
-    headStyles: { fillColor: [31, 79, 163], fontStyle: "bold" },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
   y = (doc as AutoTableDoc).lastAutoTable.finalY + 5
 
