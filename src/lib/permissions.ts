@@ -47,6 +47,12 @@ export const MODULE_ALIASES: Record<string, string> = { livreurs: "livraisons", 
 /** Rôles historiques de l'administration : sans aucun droit défini, ils voient tout le menu. */
 export const LEGACY_ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"]
 
+/**
+ * Modules propres au responsable commercial : ils font partie de son rôle, il les voit toujours,
+ * même si l'administrateur a coché ses droits un par un sans connaître ces écrans.
+ */
+export const COMMERCIAL_MODULES = ["commercial", "clients-b2b", "b2b", "creances", "zone-commerciale"]
+
 /** Profils de caisse : ils reçoivent les commandes et sont seuls à établir l'état de caisse. */
 export const CASHIER_ROLES = ["CAISSE", "CAISSIERE", "CAISSIER", "CASHIER"]
 
@@ -109,6 +115,7 @@ export function canSeeModule(user: PermissionUser, module: string): boolean {
   if (!isStaffRole(role)) return false
   if (role === "ADMIN") return true
   if (!moduleOpenTo(role, module)) return false
+  if (role === "COMMERCIAL" && COMMERCIAL_MODULES.includes(module)) return true
   // La caisse tactile reste accessible aux profils de caisse même si « ventes » n'est pas coché
   if (isCashierRole(role) && module === "ventes") return true
   const permissions = user?.permissions ?? []

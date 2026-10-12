@@ -183,7 +183,16 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
   const canSee = (module: string) => canSeeModule(session?.user, module)
 
   const isCommercial = session?.user?.role === "COMMERCIAL"
-  const groups = isCommercial ? commercialGroups : navGroups
+  // Le commercial garde, en plus de ses modules, les écrans que l'administrateur lui a cochés
+  // expressément (commandes, rapports…) : ils se rangent dans le menu « Plus ».
+  const granted = (module: string) => (session?.user?.permissions ?? []).some((p) => p.module === module && p.canView)
+  const commercialExtras = navGroups
+    .map((group) => ({
+      ...group,
+      links: group.links.filter((link) => link.href !== "/admin" && !commercialHrefs.has(link.href) && granted(moduleOfPath(link.href))),
+    }))
+    .filter((group) => group.links.length > 0)
+  const groups = isCommercial ? [...commercialGroups, ...commercialExtras] : navGroups
   const topLinks = isCommercial ? commercialLinks : priorityLinks
   const topHrefs = isCommercial ? commercialHrefs : priorityHrefs
 
