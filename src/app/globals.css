@@ -240,3 +240,17 @@
     opacity: 0.85;
   }
 }
+
+/* ─── IMPRESSION ───────────────────────────────────────────────
+   Sur le papier, il ne reste que le contenu de l'écran : ni menu, ni messagerie, ni notifications. */
+@media print {
+  .pos-touch {
+    background: #fff !important;
+  }
+  .pos-touch > :not(main) {
+    display: none !important;
+  }
+  .pos-touch > main {
+    padding: 0 !important;
+  }
+}

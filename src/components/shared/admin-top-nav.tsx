@@ -23,6 +23,7 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   Factory,
+  FileText,
   HandCoins,
   LayoutDashboard,
   LogOut,
@@ -67,6 +68,8 @@ const navGroups = [
     icon: BriefcaseBusiness,
     links: [
       { href: "/admin/commercial", label: "Tableau de bord commercial", icon: BriefcaseBusiness },
+      { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
+      { href: "/admin/bons-b2b", label: "Commandes, livraisons, factures", icon: ReceiptText },
       { href: "/admin/creances", label: "Créances", icon: HandCoins },
     ],
   },
@@ -135,6 +138,18 @@ const priorityLinks: NavLink[] = [
   { href: "/admin/etat-stock", label: "État de stock & caisse", icon: ClipboardCheck },
 ]
 const priorityHrefs = new Set(priorityLinks.flatMap((link) => [link.href, ...(link.children ?? []).map((child) => child.href)]))
+
+// Le responsable commercial a son propre menu, limité à ses modules : il remplace le menu général.
+const commercialLinks: NavLink[] = [
+  { href: "/admin/commercial", label: "Tableau de bord", icon: BriefcaseBusiness },
+  { href: "/admin/clients-b2b", label: "Clients B2B", icon: Building2 },
+  { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
+  { href: "/admin/bons-b2b", label: "Commandes, livraisons, factures", icon: ReceiptText },
+  { href: "/admin/creances", label: "Créances", icon: HandCoins },
+  { href: "/admin/zone-commerciale", label: "Zone commerciale", icon: Map },
+]
+const commercialGroups = [{ title: "Commercial", icon: BriefcaseBusiness, links: commercialLinks }]
+const commercialHrefs = new Set(commercialLinks.map((link) => link.href))
 const PLUS_INDEX = navGroups.length
 const SUBMENU_OFFSET = 100
 
@@ -166,6 +181,11 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
 
   // Même règle que les API et l'écran « Utilisateurs » (src/lib/permissions.ts)
   const canSee = (module: string) => canSeeModule(session?.user, module)
+
+  const isCommercial = session?.user?.role === "COMMERCIAL"
+  const groups = isCommercial ? commercialGroups : navGroups
+  const topLinks = isCommercial ? commercialLinks : priorityLinks
+  const topHrefs = isCommercial ? commercialHrefs : priorityHrefs
 
   // Certains écrans se pilotent depuis la permission d'un module voisin
   // (les livreurs sont gérés avec le module « livraisons »).
@@ -222,11 +242,11 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
 
   // Les éléments prioritaires sont affichés directement dans la barre ;
   // tous les autres sont masqués dans le menu « Plus ».
-  const plusSections = navGroups
+  const plusSections = groups
     .map((group) => ({
       title: group.title,
       links: group.links.filter((link) => {
-        if (priorityHrefs.has(link.href)) return false
+        if (topHrefs.has(link.href)) return false
         const activeModule = link.href === "/admin" ? "dashboard" : moduleOf(link.href)
         return canSee(activeModule)
       }),
@@ -235,7 +255,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
 
   // Sur mobile la barre de liens cède la place à un menu complet : on y liste
   // toutes les entrées (pas seulement celles du menu « Plus »).
-  const mobileSections = navGroups
+  const mobileSections = groups
     .map((group) => ({
       title: group.title,
       links: group.links.filter((link) =>
@@ -247,7 +267,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
   return (
     <header ref={navRef} className="sticky top-0 z-40 border-b border-[#123b82] bg-[#16489f] shadow-sm">
       <div className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-2 sm:gap-x-4 sm:px-4">
-        <Link href="/admin" className="flex shrink-0 items-center gap-2">
+        <Link href={isCommercial ? "/admin/commercial" : "/admin"} className="flex shrink-0 items-center gap-2">
           <Image
             src="/logo-lcg-white-hd.png"
             alt="LCG"
@@ -275,7 +295,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
           aria-label="Menu principal"
           className="hidden min-w-0 flex-1 flex-wrap items-center gap-1.5 lg:flex"
         >
-          {priorityLinks.map((link, linkIndex) => {
+          {topLinks.map((link, linkIndex) => {
             const activeModule = moduleOf(link.href)
             if (!canSee(activeModule)) return null
             const Icon = link.icon

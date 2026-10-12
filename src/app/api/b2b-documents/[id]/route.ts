@@ -23,7 +23,12 @@ function isP2002(error: unknown): error is { code: string } {
 async function getDocOrNull(id: string, userId: string, role: string, supervisesB2b: boolean) {
   const doc = await getPrisma().b2bDocument.findUnique({
     where: { id },
-    include: { items: { include: { productVariant: true } }, client: true },
+    include: {
+      items: { include: { productVariant: { include: { product: { select: { name: true } } } } }, orderBy: { createdAt: "asc" } },
+      client: true,
+      parent: { select: { id: true, reference: true, type: true } },
+      children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true } },
+    },
   })
   if (!doc) return { doc: null, status: 404 as const }
   if (role !== "ADMIN" && !supervisesB2b && doc.client?.commercialId !== userId) {
@@ -160,6 +165,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ document: updated })
   }
 
+  // Brouillon remis au client : le document passe à « envoyé » et n'est plus modifiable.
+  if (action === "send") {
+    if (doc.status !== "DRAFT") {
+      return NextResponse.json({ error: "Seul un brouillon peut être envoyé" }, { status: 400 })
+    }
+    const updated = await prisma.b2bDocument.update({ where: { id }, data: { status: "SENT" } })
+    await logActivity({ module: "b2b", action: "send", entity: "B2bDocument", entityId: id, summary: `Envoi ${updated.reference}` })
+    return NextResponse.json({ document: updated })
+  }
+
   if (action === "reject") {
     if (!REJECTABLE.includes(doc.status)) {
       return NextResponse.json({ error: "Ce document ne peut pas être rejeté" }, { status: 400 })
@@ -258,14 +273,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           data: { status: doc.type === "LIVRAISON" ? "DELIVERED" : "CONFIRMED" },
         })
 
-        await logActivity({
-          module: "b2b",
-          action: "transform",
-          entity: "B2bDocument",
-          entityId: created.id,
-          summary: `Transformation ${doc.reference} → ${created.reference}`,
-        })
         return created
+      })
+
+      // Hors transaction : le journal ouvre sa propre connexion, et attendrait indéfiniment
+      // celle que la transaction occupe si le serveur n'en a plus de libre.
+      await logActivity({
+        module: "b2b",
+        action: "transform",
+        entity: "B2bDocument",
+        entityId: created.id,
+        summary: `Transformation ${doc.reference} → ${created.reference}`,
       })
 
       return NextResponse.json({ document: created }, { status: 201 })

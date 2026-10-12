@@ -5,6 +5,7 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
 import { nextDocumentReference, PRIMARY_DOC_TYPES } from "@/lib/b2b"
 import { auth } from "@/lib/auth"
+import { clientDisplayName, seesAllB2b, type SessionUser } from "@/lib/commercial"
 
 export const dynamic = "force-dynamic"
 
@@ -69,7 +70,10 @@ export async function GET(req: Request) {
         take: 20,
         skip: (page - 1) * 20,
         include: {
-          client: { select: { id: true, companyName: true, tradeName: true } },
+          client: { select: { id: true, companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true } },
+          parent: { select: { id: true, reference: true, type: true } },
+          // document suivant de la chaîne (devis -> commande -> livraison -> facture), s'il existe
+          children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true } },
           _count: { select: { items: true } },
         },
       }),
@@ -78,7 +82,14 @@ export async function GET(req: Request) {
       getPrisma().b2bDocument.count({ where }),
     ])
 
-    return NextResponse.json({ documents, counts, total, page, types: PRIMARY_DOC_TYPES })
+    return NextResponse.json({
+      documents: documents.map((d) => ({ ...d, clientName: clientDisplayName(d.client) })),
+      counts,
+      total,
+      page,
+      perPage: 20,
+      types: PRIMARY_DOC_TYPES,
+    })
   } catch (error) {
     console.error("GET b2b-documents error:", error)
     return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
@@ -113,21 +124,43 @@ export async function POST(req: Request) {
     const prisma = getPrisma()
     const client = await prisma.client.findFirst({ where: { id: String(body.clientId), type: "B2B" } })
     if (!client) return NextResponse.json({ error: "Client B2B introuvable" }, { status: 404 })
+    if (!seesAllB2b(session?.user as SessionUser) && session?.user?.role !== "ADMIN" && client.commercialId !== selfId) {
+      return NextResponse.json({ error: "Ce client B2B ne vous est pas affecté" }, { status: 403 })
+    }
 
     const items = body.items.map((i) => {
       const item = i as { productVariantId?: unknown; quantity?: unknown; unitPrice?: unknown }
       return {
         productVariantId: String(item.productVariantId ?? ""),
-        quantity: Math.max(1, Number(item.quantity) || 1),
-        unitPrice: Math.max(0, Number(item.unitPrice) || 0),
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice ?? 0),
       }
     })
     if (items.some((i) => !i.productVariantId)) {
       return NextResponse.json({ error: "Article sans produit" }, { status: 400 })
     }
+    if (items.some((i) => !Number.isInteger(i.quantity) || i.quantity < 1)) {
+      return NextResponse.json({ error: "Les quantités doivent être des nombres entiers" }, { status: 400 })
+    }
+    if (items.some((i) => !Number.isFinite(i.unitPrice) || i.unitPrice < 0)) {
+      return NextResponse.json({ error: "Prix unitaire invalide" }, { status: 400 })
+    }
+    const known = await prisma.productVariant.count({ where: { id: { in: [...new Set(items.map((i) => i.productVariantId))] } } })
+    if (known !== new Set(items.map((i) => i.productVariantId)).size) {
+      return NextResponse.json({ error: "Produit introuvable" }, { status: 400 })
+    }
     const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-    const discount = Math.max(0, Number(body.discount ?? 0))
-    const notes = body.notes ? String(body.notes) : null
+    const discount = Number(body.discount ?? 0)
+    if (!Number.isFinite(discount) || discount < 0 || discount > subtotal) {
+      return NextResponse.json({ error: "Remise invalide" }, { status: 400 })
+    }
+    const notes = body.notes ? String(body.notes).slice(0, 2000) : null
+    // un devis porte une date de validité (30 jours par défaut)
+    const validUntilRaw = body.validUntil ? new Date(String(body.validUntil)) : null
+    if (validUntilRaw && Number.isNaN(validUntilRaw.getTime())) {
+      return NextResponse.json({ error: "Date de validité invalide" }, { status: 400 })
+    }
+    const validUntil = docType === "DEVIS" ? validUntilRaw ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
 
     // nextDocumentReference est count+1 : en cas de course (P2002), on régénère
     // la référence et on réessaie, sans bloquer.
@@ -144,6 +177,7 @@ export async function POST(req: Request) {
             discount,
             total: Math.max(0, subtotal - discount),
             notes,
+            validUntil,
             createdById: selfId,
             items: {
               create: items.map((i) => ({ productVariantId: i.productVariantId, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.unitPrice * i.quantity })),

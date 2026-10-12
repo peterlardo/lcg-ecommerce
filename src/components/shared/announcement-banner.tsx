@@ -87,7 +87,7 @@ export function AnnouncementBanner() {
   if (loading || announcements.length === 0) return null
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 print:hidden">
       {announcements.map((a) => (
         <div
           key={a.id}

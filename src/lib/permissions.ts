@@ -11,7 +11,7 @@ export const PERMISSION_MODULES = [
   "dashboard", "ventes", "tickets", "commandes", "caisse", "reservations",
   "stock", "etat-stock", "production", "lots", "tracabilite", "distribution", "livraisons",
   "points-de-vente", "produits", "promotions", "rapports",
-  "clients", "clients-b2b", "zone-commerciale", "commercial", "creances",
+  "clients", "clients-b2b", "zone-commerciale", "commercial", "creances", "b2b",
   "messages", "parametres", "controle-distant", "utilisateurs", "activite",
 ] as const
 
@@ -22,6 +22,7 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   livraisons: "Livraisons & livreurs", "points-de-vente": "Points de vente", produits: "Produits",
   promotions: "Promotions & coupons", rapports: "Rapports", clients: "Clients", "clients-b2b": "Clients B2B",
   "zone-commerciale": "Zone commerciale", commercial: "Tableau de bord commercial", creances: "Créances",
+  b2b: "Devis, bons et factures B2B",
   messages: "Messages", parametres: "Paramètres",
   "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", activite: "Journal d'activité",
 }
@@ -37,10 +38,11 @@ export const MODULE_ROLES: Record<string, string[]> = {
   "zone-commerciale": ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   commercial: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   creances: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
+  b2b: ["ADMIN", "COMMERCIAL"],
 }
 
 /** Écrans pilotés par le droit d'un module voisin. */
-export const MODULE_ALIASES: Record<string, string> = { livreurs: "livraisons", archives: "commandes" }
+export const MODULE_ALIASES: Record<string, string> = { livreurs: "livraisons", archives: "commandes", "devis-b2b": "b2b", "bons-b2b": "b2b" }
 
 /** Rôles historiques de l'administration : sans aucun droit défini, ils voient tout le menu. */
 export const LEGACY_ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"]
