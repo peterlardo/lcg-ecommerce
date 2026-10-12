@@ -30,6 +30,9 @@ export async function GET() {
     const stockSession = await auth()
     const movementWhere = saleMovementsFilter(stockSession?.user?.role, stockSession?.user?.id)
 
+    // 35 jours : couvre toujours le mois en cours et la semaine en cours
+    const movementsSince = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000)
+
     const [variants, movements, posStocks] = await Promise.all([
       getPrisma().productVariant.findMany({
         select: {
@@ -45,7 +48,9 @@ export async function GET() {
         },
       }),
       getPrisma().stockMovement.findMany({
-        where: movementWhere,
+        // Tout le mois en cours (l'écran en tire ses totaux du jour, de la semaine et du mois) :
+        // avec les 40 derniers mouvements seulement, ces totaux étaient tronqués dès qu'il y avait de l'activité.
+        where: { AND: [movementWhere, { createdAt: { gte: movementsSince } }] },
         select: {
           id: true,
           variantId: true,
@@ -57,9 +62,10 @@ export async function GET() {
           createdAt: true,
           variant: { select: { format: true, product: { select: { name: true } } } },
           pointOfSale: { select: { name: true, code: true } },
+          user: { select: { name: true } },
         },
         orderBy: { createdAt: "desc" },
-        take: 40,
+        take: 3000,
       }),
       getPrisma().pointOfSaleStock.findMany({
         where: { pointOfSale: { code: { in: OPERATIONAL_STOCK_CODES } } },
@@ -147,6 +153,8 @@ export async function GET() {
         createdAt: movement.createdAt.toISOString(),
         productName: movement.variant.product.name,
         format: movement.variant.format,
+        // qui a fait le mouvement (vente d'une caissière, production, entrée, transfert…)
+        userName: movement.user?.name ?? null,
       })),
     })
   } catch (error) {

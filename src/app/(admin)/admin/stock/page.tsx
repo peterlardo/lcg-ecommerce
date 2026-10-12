@@ -35,6 +35,7 @@ interface StockMovement {
   pointOfSaleId?: string | null
   pointOfSaleName?: string | null
   pointOfSaleCode?: string | null
+  userName?: string | null
 }
 
 interface StockLocation {
@@ -327,7 +328,7 @@ export default function StockPage() {
         <div className="space-y-2">
           {(payload?.movements ?? [])
             .filter((m) => !selectedLocationId || m.pointOfSaleId === selectedLocationId)
-            .slice(0, 8)
+            .slice(0, 30)
             .map((movement) => {
               const opt = movementOptions[movement.type]
               const Icon = opt?.icon ?? Package
@@ -337,7 +338,10 @@ export default function StockPage() {
                     <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${opt?.color ?? "bg-gray-100 text-gray-700"}`}>
                       <Icon className="h-3.5 w-3.5" />
                     </span>
-                    <span className="truncate font-medium text-gray-700">{movement.productName} ({movement.format})</span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-gray-700">{movement.productName} ({movement.format})</span>
+                      <span className="block truncate text-xs text-gray-500">{opt?.label ?? movement.type} · {movement.userName || "auteur non enregistré"}</span>
+                    </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 text-xs text-gray-500 sm:gap-3">
                     <span className="hidden sm:inline">{opt?.label ?? movement.type}</span>

@@ -98,8 +98,9 @@ export async function GET(request: Request) {
     const page = Math.max(1, Number(searchParams.get("page")) || 1)
     const perPage = Math.min(200, Math.max(10, Number(searchParams.get("perPage")) || 50))
 
-    const after: Date | undefined = /^\d{4}-\d{2}-\d{2}$/.test(from) ? new Date(`${from}T00:00:00`) : undefined
-    const before: Date | undefined = /^\d{4}-\d{2}-\d{2}$/.test(to) ? new Date(`${to}T23:59:59.999`) : undefined
+    // Brazzaville : UTC+1, sans heure d'été (le serveur, lui, est en UTC)
+    const after: Date | undefined = /^\d{4}-\d{2}-\d{2}$/.test(from) ? new Date(`${from}T00:00:00+01:00`) : undefined
+    const before: Date | undefined = /^\d{4}-\d{2}-\d{2}$/.test(to) ? new Date(`${to}T23:59:59.999+01:00`) : undefined
     const range = after || before ? { gte: after, lte: before } : undefined
     const inRange = (d: Date | null | undefined): boolean => {
       if (!d) return false
