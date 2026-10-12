@@ -138,3 +138,105 @@
     transform: translateX(0);
   }
 }
+
+/* ─── ÉCRAN TACTILE (POS) ──────────────────────────────────────
+   L'administration s'utilise au doigt, sur une caisse tactile : tout ce qui se touche fait au moins
+   44 px, le texte utile ne descend pas sous 14 px, les champs sont à 16 px, rien ne dépend du survol.
+   Ces règles s'appliquent à tout ce qui se trouve dans un élément `.pos-touch` (enveloppe de
+   l'administration et écran de connexion) : aucun écran n'a à les répéter. */
+@layer components {
+  .pos-touch {
+    /* le plus petit texte passe de 12 à 14 px, le texte courant de 14 à 16 px */
+    --text-xs: 0.875rem;
+    --text-xs--line-height: calc(1.25 / 0.875);
+    --text-sm: 1rem;
+    --text-sm--line-height: calc(1.5 / 1);
+    /* appui franc : ni zoom au double appui, ni voile gris sous le doigt */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Cibles tactiles. Une classe utilitaire plus grande (min-h-12…) garde la main. */
+  .pos-touch :where(
+    button,
+    [role="button"],
+    select,
+    textarea,
+    summary,
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"], [type="file"]),
+    a[class*="flex"]
+  ) {
+    min-height: 2.75rem;
+  }
+  /* Largeur : seulement pour les boutons-icônes et les petits boutons (croix, crayon, numéros de page…),
+     reconnus à leur petite marge ou à leur taille fixe. Un bouton à texte garde sa largeur naturelle :
+     lui imposer un minimum l'autoriserait à se tasser dans une rangée défilante (onglets de statut). */
+  .pos-touch :where(button, [role="button"], a):where(
+    [class~="p-1"], [class~="p-1.5"], [class~="p-2"], [class~="p-2.5"],
+    [class~="px-1.5"], [class~="px-2"], [class~="px-2.5"],
+    [class~="h-7"], [class~="h-8"], [class~="h-9"], [class~="w-7"], [class~="w-8"], [class~="w-9"]
+  ),
+  .pos-touch :where(a[class~="shrink-0"][class*="flex"]),
+  /* bouton sans marge horizontale : une icône seule (corbeille, croix…) */
+  .pos-touch :where(button):not([class*="px-"], [class~="w-full"], [class*="flex-1"], [class~="min-w-0"], [class~="h-5"]) {
+    min-width: 2.75rem;
+    flex-shrink: 0;
+  }
+  /* liens-icônes et liens d'action isolés (« Voir », crayon, corbeille…) : une vraie cible, contenu centré */
+  .pos-touch :where(a[class*="rounded"], a[class~="shrink-0"], a[class~="hover:underline"], a[class~="font-semibold"], a[class~="font-medium"]):not([class*="flex"], [class*="block"], [class*="grid"]) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+  }
+  .pos-touch :where(a[class~="shrink-0"], a[class~="hover:underline"]) {
+    min-width: 2.75rem;
+    flex-shrink: 0;
+  }
+  /* une case à cocher et son libellé forment une seule cible */
+  .pos-touch :where(label:has(> input[type="checkbox"], > input[type="radio"])) {
+    min-height: 2.75rem;
+  }
+  /* champs à 16 px : lisibles à bout de bras, et le navigateur ne zoome pas à la saisie */
+  .pos-touch :where(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea) {
+    font-size: 1rem;
+    /* un champ plus grand rétrécit dans sa colonne au lieu de faire déborder la page */
+    min-width: 0;
+  }
+}
+
+/* Cas où une classe utilitaire fixe une taille trop petite : ces règles passent devant. */
+.pos-touch [class*="min-w-[28px]"] {
+  min-width: 2.75rem;
+}
+.pos-touch input[type="checkbox"]:not(.sr-only, .hidden),
+.pos-touch input[type="radio"]:not(.sr-only, .hidden) {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+.pos-touch [class*="text-[9px]"],
+.pos-touch [class*="text-[10px]"],
+.pos-touch [class*="text-[11px]"],
+.pos-touch [class*="text-[12px]"] {
+  font-size: 0.8125rem;
+}
+/* interrupteurs (profils de rôles, paramètres) : leur forme est fixe, on les agrandit et on élargit leur zone d'appui */
+.pos-touch button[class~="h-5"][class*="rounded-full"] {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  transform: scale(1.5);
+  margin: 0.5rem 0.75rem;
+}
+.pos-touch button[class~="h-5"][class*="rounded-full"]::after {
+  content: "";
+  position: absolute;
+  inset: -0.5rem -0.25rem;
+}
+/* sans souris, ce qui n'apparaissait qu'au survol reste visible */
+@media (hover: none) {
+  .pos-touch [class*="group-hover:opacity-100"] {
+    opacity: 0.85;
+  }
+}

@@ -394,7 +394,7 @@ export default function ParametresPage() {
                       setDelivery(updated)
                       persistSettings("livraison", { delivery: updated })
                     }}
-                    className="ml-0.5 text-blue-400 hover:text-blue-700"
+                    className="ml-0.5 p-2 text-blue-400 hover:text-blue-700"
                   >
                     <X className="h-3 w-3" />
                   </button>

@@ -646,7 +646,7 @@ export default function ProductionPage() {
         <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <h2 className="text-xs font-semibold text-gray-900 sm:text-sm">{hasFilter ? "Lots filtrés" : "Tous les lots"} ({filteredLots.length})</h2>
-            <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input value={searchLot} onChange={(e) => setSearchLot(e.target.value)} aria-label="Rechercher un lot" className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none sm:w-56 sm:py-2 sm:text-sm" placeholder="Rechercher un lot..." />

@@ -62,7 +62,7 @@ export default function PersonnelLoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-[linear-gradient(170deg,#1F4FA3_0%,#17418A_55%,#123B82_100%)] px-4 py-10 sm:px-6">
+    <div className="pos-touch relative flex min-h-screen w-full flex-col items-center justify-center bg-[linear-gradient(170deg,#1F4FA3_0%,#17418A_55%,#123B82_100%)] px-4 py-10 sm:px-6">
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden="true"
