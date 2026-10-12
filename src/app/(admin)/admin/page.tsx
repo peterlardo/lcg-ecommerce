@@ -530,7 +530,7 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <section className="rounded-xl border border-border bg-white p-3 shadow-card-soft sm:p-5 text-foreground">
+      <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-semibold text-foreground">Ventes en temps réel</h2>
@@ -540,7 +540,7 @@ export default function DashboardPage() {
             <select
               value={realTimeScope}
               onChange={(e) => { setRealTimeScope(e.target.value as any); setRealTimePage(1) }}
-              className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-medium text-foreground outline-none focus:ring-2 focus:ring-white/40"
+              className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/30"
             >
               <option value="formats">Ventes par format de produit</option>
               <option value="commandees">Ventes commandées</option>
@@ -549,7 +549,7 @@ export default function DashboardPage() {
             </select>
             <button
               onClick={() => { setRealTimePage(1); void loadRealTime() }}
-              className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-medium text-foreground hover:bg-white/20"
+              className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
             >
               Actualiser
             </button>
@@ -559,64 +559,64 @@ export default function DashboardPage() {
           {realTimeScope === 'formats' && (
             <div className="space-y-2">
               {(realTimeFormats as any[]).slice((realTimePage-1)*RT_PER_PAGE, realTimePage*RT_PER_PAGE).map((f:any, i:number) => (
-                <div key={i} className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2.5 text-sm">
+                <div key={i} className="flex items-center justify-between rounded-lg bg-muted px-3 py-2.5 text-sm">
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-white">{f.format || 'Sans format'}</p>
-                    <p className="text-xs text-white/90">{f.count} ligne(s) · {f.qty} unité(s)</p>
+                    <p className="truncate font-medium text-foreground">{f.format || 'Sans format'}</p>
+                    <p className="text-xs text-muted-foreground">{f.count} ligne(s) · {f.qty} unité(s)</p>
                   </div>
-                  <span className="text-sm font-semibold text-white">{formatPrice(f.total||0)}</span>
+                  <span className="text-sm font-semibold text-foreground">{formatPrice(f.total||0)}</span>
                 </div>
               ))}
               {!realTimeLoading && (realTimeFormats as any[]).length === 0 && (
-                <p className="py-6 text-center text-sm text-white/90">Aucune donnée pour le moment.</p>
+                <p className="py-6 text-center text-sm text-muted-foreground">Aucune donnée pour le moment.</p>
               )}
             </div>
           )}
           {realTimeScope === 'commandees' && (
             <div className="space-y-2">
               {(realTimeCommandees as any[]).slice((realTimePage-1)*RT_PER_PAGE, realTimePage*RT_PER_PAGE).map((o:any) => (
-                <div key={o.id} className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2.5 text-sm">
+                <div key={o.id} className="flex items-center justify-between rounded-lg bg-muted px-3 py-2.5 text-sm">
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-white">{o.orderNumber}</p>
-                    <p className="text-xs text-white/90">{o.customerName} · {new Date(o.createdAt).toLocaleString('fr-FR')}</p>
+                    <p className="truncate font-medium text-foreground">{o.orderNumber}</p>
+                    <p className="text-xs text-muted-foreground">{o.customerName} · {new Date(o.createdAt).toLocaleString('fr-FR')}</p>
                   </div>
-                  <span className="text-sm font-semibold text-white">{formatPrice(o.total||0)}</span>
+                  <span className="text-sm font-semibold text-foreground">{formatPrice(o.total||0)}</span>
                 </div>
               ))}
               {!realTimeLoading && (realTimeCommandees as any[]).length === 0 && (
-                <p className="py-6 text-center text-sm text-white/90">Aucune commande trouvée.</p>
+                <p className="py-6 text-center text-sm text-muted-foreground">Aucune commande trouvée.</p>
               )}
             </div>
           )}
           {realTimeScope === 'vendeurs' && (
             <div className="space-y-2">
               {(realTimeVendeurs as any[]).slice((realTimePage-1)*RT_PER_PAGE, realTimePage*RT_PER_PAGE).map((v:any) => (
-                <div key={v.key} className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2.5 text-sm">
+                <div key={v.key} className="flex items-center justify-between rounded-lg bg-muted px-3 py-2.5 text-sm">
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-white">{v.name || 'Vendeur inconnu'}</p>
-                    <p className="text-xs text-white/90">{v.count} vente(s) · {v.qty} unité(s)</p>
+                    <p className="truncate font-medium text-foreground">{v.name || 'Vendeur inconnu'}</p>
+                    <p className="text-xs text-muted-foreground">{v.count} vente(s) · {v.qty} unité(s)</p>
                   </div>
-                  <span className="text-sm font-semibold text-white">{formatPrice(v.total||0)}</span>
+                  <span className="text-sm font-semibold text-foreground">{formatPrice(v.total||0)}</span>
                 </div>
               ))}
               {!realTimeLoading && (realTimeVendeurs as any[]).length === 0 && (
-                <p className="py-6 text-center text-sm text-white/90">Aucun vendeur avec des ventes.</p>
+                <p className="py-6 text-center text-sm text-muted-foreground">Aucun vendeur avec des ventes.</p>
               )}
             </div>
           )}
           {realTimeScope === 'operateurs' && (
             <div className="space-y-2">
               {(realTimeOperateurs as any[]).slice((realTimePage-1)*RT_PER_PAGE, realTimePage*RT_PER_PAGE).map((op:any) => (
-                <div key={op.key} className="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2.5 text-sm">
+                <div key={op.key} className="flex items-center justify-between rounded-lg bg-muted px-3 py-2.5 text-sm">
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-white">{op.name || 'Opérateur inconnu'}</p>
-                    <p className="text-xs text-white/90">{op.count} vente(s) · {op.qty} unité(s)</p>
+                    <p className="truncate font-medium text-foreground">{op.name || 'Opérateur inconnu'}</p>
+                    <p className="text-xs text-muted-foreground">{op.count} vente(s) · {op.qty} unité(s)</p>
                   </div>
-                  <span className="text-sm font-semibold text-white">{formatPrice(op.total||0)}</span>
+                  <span className="text-sm font-semibold text-foreground">{formatPrice(op.total||0)}</span>
                 </div>
               ))}
               {!realTimeLoading && (realTimeOperateurs as any[]).length === 0 && (
-                <p className="py-6 text-center text-sm text-white/90">Aucun opérateur avec des ventes.</p>
+                <p className="py-6 text-center text-sm text-muted-foreground">Aucun opérateur avec des ventes.</p>
               )}
             </div>
           )}
