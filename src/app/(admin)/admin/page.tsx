@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   AlertCircle,
@@ -194,6 +195,11 @@ export default function DashboardPage() {
 
   const role = session?.user?.role
   const isAdmin = role === "ADMIN"
+  // Le responsable commercial a son propre tableau de bord (clients B2B, devis, créances)
+  const router = useRouter()
+  useEffect(() => {
+    if (role === "COMMERCIAL") router.replace("/admin/commercial")
+  }, [role, router])
   const userPermissions = session?.user?.permissions ?? []
   const visibleModules = isAdmin ? [] : userPermissions.filter((p) => p.canView).map((p) => p.module)
 

@@ -11,7 +11,7 @@ export const PERMISSION_MODULES = [
   "dashboard", "ventes", "tickets", "commandes", "caisse", "reservations",
   "stock", "etat-stock", "production", "lots", "tracabilite", "distribution", "livraisons",
   "points-de-vente", "produits", "promotions", "rapports",
-  "clients", "clients-b2b", "zone-commerciale",
+  "clients", "clients-b2b", "zone-commerciale", "commercial", "creances",
   "messages", "parametres", "controle-distant", "utilisateurs", "activite",
 ] as const
 
@@ -21,7 +21,8 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   production: "Production", lots: "Lots", tracabilite: "Traçabilité", distribution: "Distribution",
   livraisons: "Livraisons & livreurs", "points-de-vente": "Points de vente", produits: "Produits",
   promotions: "Promotions & coupons", rapports: "Rapports", clients: "Clients", "clients-b2b": "Clients B2B",
-  "zone-commerciale": "Zone commerciale", messages: "Messages", parametres: "Paramètres",
+  "zone-commerciale": "Zone commerciale", commercial: "Tableau de bord commercial", creances: "Créances",
+  messages: "Messages", parametres: "Paramètres",
   "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", activite: "Journal d'activité",
 }
 
@@ -34,6 +35,8 @@ export const MODULE_ROLES: Record<string, string[]> = {
   activite: ["ADMIN"],
   clients: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   "zone-commerciale": ["ADMIN", "COMMERCIAL", "COMPTABLE"],
+  commercial: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
+  creances: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
 }
 
 /** Écrans pilotés par le droit d'un module voisin. */

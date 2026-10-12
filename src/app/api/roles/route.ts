@@ -6,7 +6,7 @@ const MODULES = [
   "dashboard", "ventes", "tickets", "commandes", "stock", "caisse",
   "production", "distribution", "livraisons",
   "reservations", "points-de-vente", "produits", "promotions", "rapports",
-  "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b",
+  "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b", "commercial", "creances",
 ]
 
 export async function GET() {

@@ -15,6 +15,7 @@ import {
   BadgePercent,
   BarChart3,
   Bell,
+  BriefcaseBusiness,
   Bike,
   Building2,
   CalendarRange,
@@ -22,6 +23,7 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   Factory,
+  HandCoins,
   LayoutDashboard,
   LogOut,
   Map,
@@ -58,6 +60,14 @@ const navGroups = [
       { href: "/admin/archives", label: "Archives", icon: Archive },
       { href: "/admin/caisse", label: "Caisse", icon: CircleDollarSign },
       { href: "/admin/clients-b2b", label: "Clients B2B", icon: Building2 },
+    ],
+  },
+  {
+    title: "Commercial",
+    icon: BriefcaseBusiness,
+    links: [
+      { href: "/admin/commercial", label: "Tableau de bord commercial", icon: BriefcaseBusiness },
+      { href: "/admin/creances", label: "Créances", icon: HandCoins },
     ],
   },
   {

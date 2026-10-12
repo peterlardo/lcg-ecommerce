@@ -5,8 +5,8 @@ import Image from "next/image"
 import { Camera, Check, Eye, EyeOff, LogOut, Plus, Save, ShieldCheck, UserPlus, X } from "lucide-react"
 import Link from "next/link"
 
-const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "promotions", "rapports", "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b"]
-const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", promotions: "Promotions", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", "etat-stock": "État de stock & caisse", clients: "Clients", "clients-b2b": "Clients B2B" }
+const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "promotions", "rapports", "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b", "commercial", "creances"]
+const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", promotions: "Promotions", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", "etat-stock": "État de stock & caisse", clients: "Clients", "clients-b2b": "Clients B2B", commercial: "Tableau de bord commercial", creances: "Créances" }
 
 interface RoleProfile { id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean }
 interface Permission { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
@@ -39,6 +39,11 @@ export default function UtilisateursPage() {
   const [error, setError] = useState("")
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
+  // objectif de chiffre d'affaires du mois en cours, par commercial
+  const [targets, setTargets] = useState<Record<string, number>>({})
+  const [targetMonth, setTargetMonth] = useState("")
+  const [targetInput, setTargetInput] = useState("")
+  const [targetSaving, setTargetSaving] = useState(false)
   // retour affiché à côté du bouton « Enregistrer » (le bandeau du haut de page est hors de vue à cet endroit)
   const [saveStatus, setSaveStatus] = useState<{ ok: boolean; text: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -124,9 +129,50 @@ export default function UtilisateursPage() {
     else { setMessage("Utilisateur créé"); setForm(empty); setCreatePermissions(emptyPermissions()); setCreatePosIds([]); setShowCreate(false); await load() }
   }
 
+  useEffect(() => {
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const res = await fetch("/api/commercial/targets", { signal: controller.signal })
+        if (!res.ok) return
+        const data = await res.json()
+        if (controller.signal.aborted) return
+        setTargetMonth(data.month ?? "")
+        setTargets(Object.fromEntries((data.targets ?? []).map((t: { userId: string; targetAmount: number }) => [t.userId, t.targetAmount])))
+      } catch {}
+    }
+    void init()
+    return () => controller.abort()
+  }, [])
+
+  const saveTarget = async (user: User) => {
+    if (targetSaving) return
+    const amount = Number(targetInput || 0)
+    if (!Number.isFinite(amount) || amount < 0) { setError("Objectif invalide"); return }
+    setTargetSaving(true)
+    setError("")
+    setMessage("")
+    try {
+      const res = await fetch("/api/commercial/targets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, yearMonth: targetMonth || undefined, targetAmount: amount }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { setError(data?.error || "Impossible d'enregistrer l'objectif"); return }
+      setTargets((current) => ({ ...current, [user.id]: amount }))
+      setMessage(`Objectif de ${user.name || user.email} enregistré`)
+    } catch {
+      setError("Connexion au serveur impossible : objectif non enregistré")
+    } finally {
+      setTargetSaving(false)
+    }
+  }
+
   const selectUser = (user: User) => {
     setSelected(user.id)
     setSaveStatus(null)
+    setTargetInput(targets[user.id] ? String(targets[user.id]) : "")
     setEditName(user.name || "")
     setEditEmail(user.email)
     setEditPhone(user.phone || "")
@@ -453,6 +499,27 @@ export default function UtilisateursPage() {
                 </table>
               </div>
             </div>
+
+            {selectedUser.role === "COMMERCIAL" && (
+              <div className="mt-5 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                <label className="min-w-0 flex-1 text-sm font-semibold text-foreground">
+                  Objectif de chiffre d&apos;affaires{targetMonth ? ` — ${targetMonth.slice(5)}/${targetMonth.slice(0, 4)}` : " du mois"}
+                  <input
+                    type="number"
+                    min={0}
+                    step="1000"
+                    value={targetInput}
+                    onChange={(e) => setTargetInput(e.target.value)}
+                    placeholder="Ex. 5000000"
+                    className="mt-1 block w-full max-w-xs rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal"
+                  />
+                  <span className="mt-1 block text-sm font-normal text-muted-foreground">En FCFA. Saisissez 0 pour ne pas afficher d&apos;objectif sur son tableau de bord.</span>
+                </label>
+                <button type="button" onClick={() => saveTarget(selectedUser)} disabled={targetSaving} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60">
+                  <Save className="h-4 w-4" /> {targetSaving ? "Enregistrement…" : "Enregistrer l'objectif"}
+                </button>
+              </div>
+            )}
 
             {(() => {
               const user = users.find((u) => u.id === selected)
