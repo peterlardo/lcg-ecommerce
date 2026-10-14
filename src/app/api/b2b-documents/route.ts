@@ -77,6 +77,22 @@ export async function GET(req: Request) {
       where.children = { none: { status: { not: "CANCELLED" } } }
     }
 
+    if (available) {
+      // liste du formulaire de bon de commande : une seule requête, articles compris, pour que le devis
+      // choisi remplisse le formulaire sans nouvel aller-retour vers le serveur
+      const quotes = await getPrisma().b2bDocument.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: perPage,
+        select: {
+          id: true, reference: true, status: true, clientId: true, total: true, discount: true, notes: true, validUntil: true, createdAt: true,
+          client: { select: { companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true } },
+          items: { select: { productVariantId: true, quantity: true, unitPrice: true }, orderBy: { createdAt: "asc" } },
+        },
+      })
+      return NextResponse.json({ documents: quotes.map(({ client, ...q }) => ({ ...q, clientName: clientDisplayName(client) })), total: quotes.length })
+    }
+
     const [documents, counts, total] = await Promise.all([
       getPrisma().b2bDocument.findMany({
         where,

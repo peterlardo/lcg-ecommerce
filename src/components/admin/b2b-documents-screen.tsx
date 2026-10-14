@@ -52,6 +52,10 @@ interface QuoteOption {
   total: number
   status: string
   validUntil: string | null
+  createdAt: string
+  discount: number
+  notes: string | null
+  items: { productVariantId: string | null; quantity: number; unitPrice: number }[]
   /** date de validité dépassée (calculée à la lecture) */
   expired: boolean
 }
@@ -130,7 +134,6 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [quotes, setQuotes] = useState<QuoteOption[]>([])
   const [quotesLoaded, setQuotesLoaded] = useState(false)
   const [quoteId, setQuoteId] = useState("")
-  const [quoteLoading, setQuoteLoading] = useState(false)
   // lu par l'effet du contrat : les prix d'un devis repris ne sont pas recalculés
   const quoteRef = useRef("")
   const fromQuotes = creatable === "COMMANDE"
@@ -185,9 +188,10 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     return () => controller.abort()
   }, [creating, clients.length, session?.user?.id, session?.user?.role])
 
-  // devis encore ouverts, relus à chaque ouverture du formulaire de bon de commande
+  // devis encore ouverts : lus dès l'arrivée sur l'écran (la liste est prête quand on ouvre le formulaire),
+  // puis relus à chaque ouverture et après chaque création
   useEffect(() => {
-    if (!creating || !fromQuotes) return
+    if (!fromQuotes) return
     const controller = new AbortController()
     const init = async () => {
       try {
@@ -203,7 +207,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     }
     void init()
     return () => controller.abort()
-  }, [creating, fromQuotes])
+  }, [creating, fromQuotes, reload])
 
   // contrat du client choisi dans le formulaire : seul un contrat actif et dans sa période s'applique
   useEffect(() => {
@@ -262,7 +266,6 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const openCreate = () => {
     setCreating(true)
     setQuoteId("")
-    setQuotesLoaded(false)
     quoteRef.current = ""
     setClientId("")
     setContract(null)
@@ -273,9 +276,10 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   }
 
   /** Reprend un devis : client, articles, prix, remise et remarques, tout reste modifiable. */
-  const chooseQuote = async (id: string) => {
+  const chooseQuote = (id: string) => {
     setFormError("")
-    if (!id) {
+    const quote = quotes.find((q) => q.id === id)
+    if (!quote) {
       quoteRef.current = ""
       setQuoteId("")
       setLines([EMPTY_LINE])
@@ -283,23 +287,13 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
       setNotes("")
       return
     }
-    setQuoteLoading(true)
-    try {
-      const res = await fetch(`/api/b2b-documents/${id}`)
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !data?.document) { setFormError(data?.error || "Lecture du devis impossible"); return }
-      const quote = data.document as { clientId: string; discount: number; notes: string | null; items: { productVariantId: string | null; quantity: number; unitPrice: number }[] }
-      quoteRef.current = id
-      setQuoteId(id)
-      setClientId(quote.clientId)
-      setLines(quote.items.filter((i) => i.productVariantId).map((i) => ({ variantId: i.productVariantId as string, quantity: String(i.quantity), unitPrice: String(i.unitPrice) })))
-      setDiscount(String(quote.discount ?? 0))
-      setNotes(quote.notes ?? "")
-    } catch {
-      setFormError("Connexion au serveur impossible")
-    } finally {
-      setQuoteLoading(false)
-    }
+    quoteRef.current = id
+    setQuoteId(id)
+    setClientId(quote.clientId)
+    const lines = quote.items.filter((i) => i.productVariantId).map((i) => ({ variantId: i.productVariantId as string, quantity: String(i.quantity), unitPrice: String(i.unitPrice) }))
+    setLines(lines.length ? lines : [EMPTY_LINE])
+    setDiscount(String(quote.discount ?? 0))
+    setNotes(quote.notes ?? "")
   }
 
   const submitCreate = async (e: React.FormEvent) => {
@@ -527,20 +521,23 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
             {fromQuotes && (
               <label className="mb-4 block text-sm font-medium text-gray-700">
                 Devis à reprendre
-                <select value={quoteId} onChange={(e) => void chooseQuote(e.target.value)} disabled={quoteLoading} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 disabled:opacity-60">
+                <select value={quoteId} onChange={(e) => chooseQuote(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5">
                   <option value="">{quotesLoaded ? "Aucun : commande sans devis" : "Chargement des devis…"}</option>
                   {quotes
                     // client déjà choisi : seulement ses devis
                     .filter((q) => quoteId || !clientId || q.clientId === clientId)
                     .map((q) => (
                       <option key={q.id} value={q.id}>
-                        {`${q.reference} · ${q.clientName} · ${formatPrice(q.total)} · ${STATUS_LABEL[q.status]?.label.toLowerCase() ?? q.status}${q.expired ? " · validité dépassée" : ""}`}
+                        {`${q.reference} — ${q.clientName} — ${formatPrice(q.total)}${q.status === "DRAFT" ? "" : ` (${STATUS_LABEL[q.status]?.label.toLowerCase() ?? q.status})`}${q.expired ? " — validité dépassée" : ""}`}
                       </option>
                     ))}
                 </select>
                 <span className="mt-1 block text-xs font-normal text-gray-500">
                   {quoteId
-                    ? "Articles, prix et remise repris du devis : vous pouvez encore les modifier. Le devis passera à « Confirmé »."
+                    ? (() => {
+                        const q = quotes.find((x) => x.id === quoteId)
+                        return `${q ? `Devis du ${formatDate(q.createdAt)}, ${q.items.length} article${q.items.length > 1 ? "s" : ""}. ` : ""}Articles, prix et remise repris du devis : vous pouvez encore les modifier. Le devis passera à « Confirmé ».`
+                      })()
                     : quotesLoaded && quotes.length === 0
                       ? "Aucun devis en attente de commande."
                       : "Les devis déjà transformés, refusés ou annulés ne sont pas proposés."}
