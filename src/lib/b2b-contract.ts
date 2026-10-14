@@ -32,6 +32,24 @@ export function contractDiscount(
   return Math.round((base * percent) / 100)
 }
 
+interface CatalogueProduct {
+  name: string
+  isActive?: boolean
+  variants: { id: string; format: string; price: number }[]
+}
+
+/**
+ * Articles proposés dans les devis et les contrats : produits actifs seulement, rangés par nom puis par format
+ * (1kg, 2kg, 5kg), libellé « Produit — format ».
+ */
+export function productOptions(products: CatalogueProduct[]): { id: string; label: string; price: number }[] {
+  const byText = (a: string, b: string) => a.localeCompare(b, "fr", { numeric: true, sensitivity: "base" })
+  return products
+    .filter((p) => p.isActive !== false)
+    .sort((a, b) => byText(a.name, b.name))
+    .flatMap((p) => [...p.variants].sort((a, b) => byText(a.format, b.format)).map((v) => ({ id: v.id, label: `${p.name} — ${v.format}`, price: v.price })))
+}
+
 export interface ContractItemInput {
   productVariantId: string
   unitPrice: number

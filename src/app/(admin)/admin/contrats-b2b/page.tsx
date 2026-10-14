@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react"
 import { AlertCircle, Check, ChevronDown, FileSignature, Pause, Pencil, Play, Plus, Search, Trash2, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { isCommercialRole } from "@/lib/permissions"
+import { productOptions } from "@/lib/b2b-contract"
 
 // Contrats commerciaux B2B : conditions négociées avec un client (délai de paiement, remise, prix par article).
 // Un seul contrat actif par client. Portage de contrats-b2b.php (lcgapp3).
@@ -149,8 +150,7 @@ export default function ContratsB2bPage() {
         if (controller.signal.aborted) return
         if (clientsRes.ok) setClients(await clientsRes.json())
         if (productsRes.ok) {
-          const products = (await productsRes.json()) as { name: string; variants: { id: string; format: string; price: number }[] }[]
-          setVariants(products.flatMap((p) => p.variants.map((v) => ({ id: v.id, label: `${p.name} — ${v.format}`, price: v.price }))))
+          setVariants(productOptions(await productsRes.json()))
         }
       } catch {}
     }
@@ -457,10 +457,16 @@ export default function ContratsB2bPage() {
               </div>
               {form.lines.length === 0 && <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-500">Aucun prix négocié : le client paie les prix publics{Number(form.discountPercent) > 0 ? `, moins ${form.discountPercent} %` : ""}.</p>}
               <div className="space-y-2">
+                {/* une ligne par article à partir de 768 px ; en dessous, le produit prend toute la largeur */}
+                {form.lines.length > 0 && (
+                  <div aria-hidden="true" className="hidden gap-2 px-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid md:grid-cols-[1fr_8rem_9rem_2.75rem]">
+                    <span>Produit</span><span className="text-right">Prix public</span><span>Prix négocié</span><span />
+                  </div>
+                )}
                 {form.lines.map((line, index) => {
                   const variant = variants.find((v) => v.id === line.variantId)
                   return (
-                    <div key={index} className="grid grid-cols-[1fr_auto] gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2.5 sm:grid-cols-[1fr_9rem_9rem_auto] sm:items-center">
+                    <div key={index} className="grid grid-cols-[1fr_auto] gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2.5 md:grid-cols-[1fr_8rem_9rem_2.75rem] md:items-center">
                       <select
                         value={line.variantId}
                         onChange={(e) => {
@@ -468,16 +474,19 @@ export default function ContratsB2bPage() {
                           setLine(index, { variantId: e.target.value, unitPrice: line.unitPrice || (next ? String(next.price) : "") })
                         }}
                         aria-label="Produit"
-                        className="col-span-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 sm:col-span-1"
+                        className="col-span-2 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 md:col-span-1"
                       >
-                        <option value="">Produit…</option>
-                        {variants.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                        {/* article du contrat qui n'est plus au catalogue chargé */}
+                        <option value="">{variants.length ? "Choisir un produit…" : "Chargement des produits…"}</option>
+                        {variants.map((v) => <option key={v.id} value={v.id}>{`${v.label} · ${formatPrice(v.price)}`}</option>)}
+                        {/* article du contrat qui n'est plus au catalogue (produit désactivé) */}
                         {line.variantId && !variant && <option value={line.variantId}>{editing?.items.find((i) => i.productVariantId === line.variantId)?.name ?? "Produit"}</option>}
                       </select>
-                      <p className="text-sm text-gray-500 sm:text-right">{variant ? `Public : ${formatPrice(variant.price)}` : ""}</p>
-                      <input type="number" min={0} step={1} value={line.unitPrice} onChange={(e) => setLine(index, { unitPrice: e.target.value })} aria-label="Prix négocié" placeholder="Prix négocié" className="col-start-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 sm:col-start-auto" />
-                      <button type="button" onClick={() => set({ lines: form.lines.filter((_, i) => i !== index) })} aria-label="Retirer l'article" className="justify-self-end rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600">
+                      <p className="hidden text-right text-sm text-gray-500 md:block">{variant ? formatPrice(variant.price) : ""}</p>
+                      <label className="text-xs font-medium text-gray-600 md:contents">
+                        <span className="md:sr-only">Prix négocié (FCFA){variant ? ` · public ${formatPrice(variant.price)}` : ""}</span>
+                        <input type="number" min={0} step={1} value={line.unitPrice} onChange={(e) => setLine(index, { unitPrice: e.target.value })} placeholder="Prix" className="mt-1 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base font-normal text-gray-900 md:mt-0" />
+                      </label>
+                      <button type="button" onClick={() => set({ lines: form.lines.filter((_, i) => i !== index) })} aria-label="Retirer l'article" className="self-end justify-self-end rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 md:self-center">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>

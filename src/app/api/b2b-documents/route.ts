@@ -21,6 +21,11 @@ const REF_PREFIX: Record<string, string> = {
 
 const DOCUMENT_STATUSES = ["DRAFT", "SENT", "CONFIRMED", "REJECTED", "DELIVERED", "INVOICED", "CANCELLED"]
 
+/** Devis qu'on peut encore reprendre dans un bon de commande : ni refusé, ni annulé, ni déjà transformé. */
+const OPEN_QUOTE_STATUSES = ["DRAFT", "SENT", "CONFIRMED"] as const
+
+class QuoteAlreadyUsedError extends Error {}
+
 function isP2002(error: unknown): error is { code: string } {
   return !!error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002"
 }
@@ -40,6 +45,9 @@ export async function GET(req: Request) {
     const status = url.searchParams.get("status")?.toUpperCase() ?? ""
     const q = url.searchParams.get("q")?.trim()
     const page = url.searchParams.get("page") === null ? 1 : Number(url.searchParams.get("page"))
+    // « available=1 » : devis encore disponibles pour un bon de commande (liste du formulaire, sans pagination utile)
+    const available = url.searchParams.get("available") === "1"
+    const perPage = available ? 200 : 20
 
     if (type && !PRIMARY_DOC_TYPES.includes(type as (typeof PRIMARY_DOC_TYPES)[number])) {
       return NextResponse.json({ error: "Type de document invalide" }, { status: 400 })
@@ -63,13 +71,18 @@ export async function GET(req: Request) {
     if (role !== "ADMIN" && !supervisesB2b) {
       where.client = { is: { commercialId: selfId } }
     }
+    if (available) {
+      where.type = "DEVIS"
+      if (!status) where.status = { in: [...OPEN_QUOTE_STATUSES] }
+      where.children = { none: { status: { not: "CANCELLED" } } }
+    }
 
     const [documents, counts, total] = await Promise.all([
       getPrisma().b2bDocument.findMany({
         where,
         orderBy: { createdAt: "desc" },
-        take: 20,
-        skip: (page - 1) * 20,
+        take: perPage,
+        skip: (page - 1) * perPage,
         include: {
           client: { select: { id: true, companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true } },
           parent: { select: { id: true, reference: true, type: true } },
@@ -88,7 +101,7 @@ export async function GET(req: Request) {
       counts,
       total,
       page,
-      perPage: 20,
+      perPage,
       types: PRIMARY_DOC_TYPES,
     })
   } catch (error) {
@@ -171,6 +184,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Remise invalide" }, { status: 400 })
     }
     const notes = body.notes ? String(body.notes).slice(0, 2000) : null
+
+    // Bon de commande repris d'un devis : même client, devis encore ouvert et pas déjà transformé.
+    let parent: { id: string; reference: string } | null = null
+    if (body.parentId) {
+      if (docType !== "COMMANDE") return NextResponse.json({ error: "Seul un bon de commande se crée à partir d'un devis" }, { status: 400 })
+      const quote = await prisma.b2bDocument.findUnique({
+        where: { id: String(body.parentId) },
+        select: { id: true, reference: true, type: true, status: true, clientId: true, _count: { select: { children: { where: { status: { not: "CANCELLED" } } } } } },
+      })
+      if (!quote || quote.type !== "DEVIS") return NextResponse.json({ error: "Devis introuvable" }, { status: 404 })
+      if (quote.clientId !== client.id) return NextResponse.json({ error: "Ce devis est celui d'un autre client" }, { status: 400 })
+      if (!(OPEN_QUOTE_STATUSES as readonly string[]).includes(quote.status)) return NextResponse.json({ error: "Ce devis est refusé ou annulé" }, { status: 400 })
+      if (quote._count.children > 0) return NextResponse.json({ error: `Le devis ${quote.reference} a déjà son bon de commande` }, { status: 400 })
+      parent = { id: quote.id, reference: quote.reference }
+    }
     // un devis porte une date de validité (30 jours par défaut)
     const validUntilRaw = body.validUntil ? new Date(String(body.validUntil)) : null
     if (validUntilRaw && Number.isNaN(validUntilRaw.getTime())) {
@@ -182,35 +210,48 @@ export async function POST(req: Request) {
     // la référence et on réessaie, sans bloquer.
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const reference = await nextDocumentReference(prisma, REF_PREFIX[docType] as "DEV" | "BC" | "BL" | "FAC")
-        const document = await prisma.b2bDocument.create({
-          data: {
-            type: docType as Prisma.B2bDocumentCreateInput["type"],
-            reference,
-            clientId: String(body.clientId),
-            status: "DRAFT",
-            subtotal,
-            discount,
-            total: Math.max(0, subtotal - discount),
-            notes,
-            validUntil,
-            createdById: selfId,
-            items: {
-              create: items.map((i) => ({ productVariantId: i.productVariantId, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.unitPrice * i.quantity })),
+        const document = await prisma.$transaction(async (tx) => {
+          // revérifié dans la transaction : deux commandes du même devis ne doivent pas passer ensemble
+          if (parent && (await tx.b2bDocument.count({ where: { parentId: parent.id, status: { not: "CANCELLED" } } })) > 0) {
+            throw new QuoteAlreadyUsedError()
+          }
+          const reference = await nextDocumentReference(tx, REF_PREFIX[docType] as "DEV" | "BC" | "BL" | "FAC")
+          const created = await tx.b2bDocument.create({
+            data: {
+              type: docType as Prisma.B2bDocumentCreateInput["type"],
+              reference,
+              clientId: String(body.clientId),
+              ...(parent ? { parentId: parent.id } : {}),
+              status: "DRAFT",
+              subtotal,
+              discount,
+              total: Math.max(0, subtotal - discount),
+              notes,
+              validUntil,
+              createdById: selfId,
+              items: {
+                create: items.map((i) => ({ productVariantId: i.productVariantId, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.unitPrice * i.quantity })),
+              },
             },
-          },
-          include: { client: true, items: { include: { productVariant: true } } },
+            include: { client: true, items: { include: { productVariant: true } } },
+          })
+          // le devis repris est accepté par le client
+          if (parent) await tx.b2bDocument.update({ where: { id: parent.id }, data: { status: "CONFIRMED" } })
+          return created
         })
         await logActivity({
           module: "b2b",
           action: "create",
           entity: "B2bDocument",
           entityId: document.id,
-          summary: `Création ${document.type} ${document.reference}`,
+          summary: `Création ${document.type} ${document.reference}${parent ? ` à partir de ${parent.reference}` : ""}`,
         })
         return NextResponse.json({ document, contractDiscount: autoDiscount && discount > 0 }, { status: 201 })
       } catch (error) {
         if (isP2002(error) && attempt < 2) continue
+        if (error instanceof QuoteAlreadyUsedError) {
+          return NextResponse.json({ error: `Le devis ${parent?.reference} a déjà son bon de commande` }, { status: 400 })
+        }
         throw error
       }
     }

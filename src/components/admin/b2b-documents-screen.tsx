@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { AlertCircle, ArrowRight, Check, ChevronLeft, ChevronRight, FileText, Plus, Printer, Search, Send, Trash2, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
-import { contractDiscount } from "@/lib/b2b-contract"
+import { contractDiscount, productOptions } from "@/lib/b2b-contract"
 
 // Écran commun aux devis et aux bons B2B (commande, livraison, facture) : liste, création, suite de la chaîne
 // devis -> bon de commande -> bon de livraison -> facture. Portage de devis-b2b.php et bons-b2b.php (lcgapp3).
@@ -41,6 +41,19 @@ interface ClientOption {
   tradeName: string | null
   contactName: string | null
   isActive: boolean
+}
+
+/** Devis encore ouvert, qu'un bon de commande peut reprendre. */
+interface QuoteOption {
+  id: string
+  reference: string
+  clientId: string
+  clientName: string
+  total: number
+  status: string
+  validUntil: string | null
+  /** date de validité dépassée (calculée à la lecture) */
+  expired: boolean
 }
 
 interface VariantOption {
@@ -113,6 +126,14 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [notes, setNotes] = useState("")
   const [formError, setFormError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  // bon de commande : devis repris (ses articles, prix et remise remplissent le formulaire)
+  const [quotes, setQuotes] = useState<QuoteOption[]>([])
+  const [quotesLoaded, setQuotesLoaded] = useState(false)
+  const [quoteId, setQuoteId] = useState("")
+  const [quoteLoading, setQuoteLoading] = useState(false)
+  // lu par l'effet du contrat : les prix d'un devis repris ne sont pas recalculés
+  const quoteRef = useRef("")
+  const fromQuotes = creatable === "COMMANDE"
 
   useEffect(() => {
     const controller = new AbortController()
@@ -156,14 +177,33 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
         if (controller.signal.aborted) return
         if (clientsRes.ok) setClients(await clientsRes.json())
         if (productsRes.ok) {
-          const products = (await productsRes.json()) as { name: string; variants: { id: string; format: string; price: number }[] }[]
-          setVariants(products.flatMap((p) => p.variants.map((v) => ({ id: v.id, label: `${p.name} — ${v.format}`, price: v.price }))))
+          setVariants(productOptions(await productsRes.json()))
         }
       } catch {}
     }
     void init()
     return () => controller.abort()
   }, [creating, clients.length, session?.user?.id, session?.user?.role])
+
+  // devis encore ouverts, relus à chaque ouverture du formulaire de bon de commande
+  useEffect(() => {
+    if (!creating || !fromQuotes) return
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const res = await fetch("/api/b2b-documents?available=1", { signal: controller.signal })
+        const data = await res.json().catch(() => null)
+        if (controller.signal.aborted) return
+        if (res.ok) {
+          const now = Date.now()
+          setQuotes((data?.documents ?? []).map((q: Omit<QuoteOption, "expired">) => ({ ...q, expired: q.validUntil !== null && new Date(q.validUntil).getTime() < now })))
+        }
+      } catch {}
+      if (!controller.signal.aborted) setQuotesLoaded(true)
+    }
+    void init()
+    return () => controller.abort()
+  }, [creating, fromQuotes])
 
   // contrat du client choisi dans le formulaire : seul un contrat actif et dans sa période s'applique
   useEffect(() => {
@@ -187,6 +227,8 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
       } catch {}
       if (controller.signal.aborted) return
       setContract(next)
+      // les prix d'un devis repris restent ceux du devis
+      if (quoteRef.current) return
       // les articles déjà choisis prennent les prix de ce client
       setLines((current) => current.map((l) => {
         if (!l.variantId) return l
@@ -219,12 +261,45 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
 
   const openCreate = () => {
     setCreating(true)
+    setQuoteId("")
+    setQuotesLoaded(false)
+    quoteRef.current = ""
     setClientId("")
     setContract(null)
     setLines([EMPTY_LINE])
     setDiscount("")
     setNotes("")
     setFormError("")
+  }
+
+  /** Reprend un devis : client, articles, prix, remise et remarques, tout reste modifiable. */
+  const chooseQuote = async (id: string) => {
+    setFormError("")
+    if (!id) {
+      quoteRef.current = ""
+      setQuoteId("")
+      setLines([EMPTY_LINE])
+      setDiscount("")
+      setNotes("")
+      return
+    }
+    setQuoteLoading(true)
+    try {
+      const res = await fetch(`/api/b2b-documents/${id}`)
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.document) { setFormError(data?.error || "Lecture du devis impossible"); return }
+      const quote = data.document as { clientId: string; discount: number; notes: string | null; items: { productVariantId: string | null; quantity: number; unitPrice: number }[] }
+      quoteRef.current = id
+      setQuoteId(id)
+      setClientId(quote.clientId)
+      setLines(quote.items.filter((i) => i.productVariantId).map((i) => ({ variantId: i.productVariantId as string, quantity: String(i.quantity), unitPrice: String(i.unitPrice) })))
+      setDiscount(String(quote.discount ?? 0))
+      setNotes(quote.notes ?? "")
+    } catch {
+      setFormError("Connexion au serveur impossible")
+    } finally {
+      setQuoteLoading(false)
+    }
   }
 
   const submitCreate = async (e: React.FormEvent) => {
@@ -242,11 +317,12 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // remise non saisie : le serveur applique celle du contrat
-        body: JSON.stringify({ type: creatable, clientId, items, ...(discount === "" ? {} : { discount: discountValue }), notes }),
+        body: JSON.stringify({ type: creatable, clientId, items, ...(discount === "" ? {} : { discount: discountValue }), notes, ...(quoteId ? { parentId: quoteId } : {}) }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) { setFormError(data?.error || "Création impossible"); return }
-      setMessage(`${TYPE_LABEL[creatable].one} ${data.document.reference} créé en brouillon.`)
+      const quoteRefLabel = quotes.find((q) => q.id === quoteId)?.reference
+      setMessage(`${TYPE_LABEL[creatable].one} ${data.document.reference} créé en brouillon${quoteRefLabel ? ` à partir du devis ${quoteRefLabel}` : ""}.`)
       setCreating(false)
       setType(creatable)
       setPage(1)
@@ -448,11 +524,37 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
               <button type="button" onClick={() => setCreating(false)} aria-label="Fermer" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><X className="h-5 w-5" /></button>
             </div>
 
+            {fromQuotes && (
+              <label className="mb-4 block text-sm font-medium text-gray-700">
+                Devis à reprendre
+                <select value={quoteId} onChange={(e) => void chooseQuote(e.target.value)} disabled={quoteLoading} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 disabled:opacity-60">
+                  <option value="">{quotesLoaded ? "Aucun : commande sans devis" : "Chargement des devis…"}</option>
+                  {quotes
+                    // client déjà choisi : seulement ses devis
+                    .filter((q) => quoteId || !clientId || q.clientId === clientId)
+                    .map((q) => (
+                      <option key={q.id} value={q.id}>
+                        {`${q.reference} · ${q.clientName} · ${formatPrice(q.total)} · ${STATUS_LABEL[q.status]?.label.toLowerCase() ?? q.status}${q.expired ? " · validité dépassée" : ""}`}
+                      </option>
+                    ))}
+                </select>
+                <span className="mt-1 block text-xs font-normal text-gray-500">
+                  {quoteId
+                    ? "Articles, prix et remise repris du devis : vous pouvez encore les modifier. Le devis passera à « Confirmé »."
+                    : quotesLoaded && quotes.length === 0
+                      ? "Aucun devis en attente de commande."
+                      : "Les devis déjà transformés, refusés ou annulés ne sont pas proposés."}
+                </span>
+              </label>
+            )}
+
             <label className="block text-sm font-medium text-gray-700">
               Client B2B
-              <select value={clientId} onChange={(e) => setClientId(e.target.value)} required className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5">
+              <select value={clientId} onChange={(e) => setClientId(e.target.value)} required disabled={Boolean(quoteId)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 disabled:bg-gray-50 disabled:text-gray-700">
                 <option value="">Choisir un client…</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.tradeName || c.contactName || "Client"}</option>)}
+                {/* client du devis absent de la liste (client désactivé, par exemple) */}
+                {clientId && !clients.some((c) => c.id === clientId) && <option value={clientId}>{quotes.find((q) => q.id === quoteId)?.clientName ?? "Client"}</option>}
               </select>
             </label>
             {clients.length === 0 && <p className="mt-1 text-sm text-amber-700">Aucun client B2B disponible : créez-le d&apos;abord dans l&apos;écran Clients B2B.</p>}
@@ -473,29 +575,44 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                 </button>
               </div>
               <div className="space-y-2">
+                {/* Une ligne par article à partir de 768 px ; en dessous, le produit prend toute la largeur
+                    (sinon son nom était coupé). Les titres restent visibles une fois les cases remplies. */}
+                <div aria-hidden="true" className="hidden gap-2 px-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid md:grid-cols-[1fr_6rem_8rem_7rem_2.75rem]">
+                  <span>Produit</span><span>Quantité</span><span>Prix unitaire</span><span>Total</span><span />
+                </div>
                 {lines.map((line, index) => (
-                  <div key={index} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2.5 sm:grid-cols-[1fr_6rem_8rem_8rem_auto] sm:items-center">
+                  <div key={index} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2.5 md:grid-cols-[1fr_6rem_8rem_7rem_2.75rem] md:items-center">
                     <select
                       value={line.variantId}
                       onChange={(e) => {
                         const variant = variants.find((v) => v.id === e.target.value)
-// prix proposé : celui du contrat du client, à défaut le prix public
+                        // prix proposé : celui du contrat du client, à défaut le prix public
                         updateLine(index, { variantId: e.target.value, unitPrice: variant ? String(activeContract?.prices.get(variant.id) ?? variant.price) : "" })
                       }}
                       aria-label="Produit"
-                      className="col-span-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 sm:col-span-1"
+                      className="col-span-2 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 md:col-span-1"
                     >
-                      <option value="">Produit…</option>
-                      {variants.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                      <option value="">{variants.length ? "Choisir un produit…" : "Chargement des produits…"}</option>
+                      {/* le prix figure dans la liste : celui du contrat du client s'il en a un, sinon le prix public */}
+                      {variants.map((v) => <option key={v.id} value={v.id}>{`${v.label} · ${formatPrice(activeContract?.prices.get(v.id) ?? v.price)}${activeContract?.prices.has(v.id) ? " (contrat)" : ""}`}</option>)}
                     </select>
-                    <input type="number" min={1} step={1} value={line.quantity} onChange={(e) => updateLine(index, { quantity: e.target.value })} aria-label="Quantité" placeholder="Qté" className="rounded-lg border border-gray-300 bg-white px-3 py-2.5" />
-                    <input type="number" min={0} step={1} value={line.unitPrice} onChange={(e) => updateLine(index, { unitPrice: e.target.value })} aria-label="Prix unitaire" placeholder="Prix unitaire" className="rounded-lg border border-gray-300 bg-white px-3 py-2.5" />
-                    <p className="whitespace-nowrap text-right text-sm font-semibold text-gray-900 sm:text-left">{formatPrice((Number(line.quantity) || 0) * (Number(line.unitPrice) || 0))}</p>
+                    <label className="text-xs font-medium text-gray-600 md:contents">
+                      <span className="md:sr-only">Quantité</span>
+                      <input type="number" min={1} step={1} value={line.quantity} onChange={(e) => updateLine(index, { quantity: e.target.value })} placeholder="Qté" className="mt-1 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base font-normal text-gray-900 md:mt-0" />
+                    </label>
+                    <label className="text-xs font-medium text-gray-600 md:contents">
+                      <span className="md:sr-only">Prix unitaire (FCFA)</span>
+                      <input type="number" min={0} step={1} value={line.unitPrice} onChange={(e) => updateLine(index, { unitPrice: e.target.value })} placeholder="Prix" className="mt-1 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base font-normal text-gray-900 md:mt-0" />
+                    </label>
+                    <p className="self-center whitespace-nowrap text-sm font-semibold text-gray-900">
+                      <span className="font-normal text-gray-600 md:hidden">Total : </span>
+                      {formatPrice((Number(line.quantity) || 0) * (Number(line.unitPrice) || 0))}
+                    </p>
                     <button type="button" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} disabled={lines.length === 1} aria-label="Retirer l'article" className="justify-self-end rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30">
                       <Trash2 className="h-4 w-4" />
                     </button>
                     {activeContract?.prices.has(line.variantId) && (
-                      <p className="col-span-2 text-xs font-medium text-blue-700 sm:col-span-5">
+                      <p className="col-span-2 text-xs font-medium text-blue-700 md:col-span-5">
                         Prix du contrat : {formatPrice(activeContract.prices.get(line.variantId) ?? 0)}
                         {Number(line.unitPrice) !== activeContract.prices.get(line.variantId) ? " (prix modifié à la main)" : ""}
                       </p>
