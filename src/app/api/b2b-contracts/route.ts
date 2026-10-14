@@ -4,7 +4,8 @@ import { getPrisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
 import { auth } from "@/lib/auth"
-import { B2B_SCOPE_USERS } from "@/lib/b2b"
+import { b2bClientScope, clientDisplayName, seesAllB2b, type SessionUser } from "@/lib/commercial"
+import { CONTRACT_STATUSES, isContractApplicable, parseContractFields, parseContractItems } from "@/lib/b2b-contract"
 
 export const dynamic = "force-dynamic"
 
@@ -12,33 +13,6 @@ export const dynamic = "force-dynamic"
 const ALLOWED = ["ADMIN", "COMMERCIAL"]
 /** Lecture : le responsable comptable (B2B_SCOPE_USERS) voit aussi les contrats. */
 const READ_ALLOWED = ["ADMIN", "COMMERCIAL", "COMPTABLE"]
-
-const CONTRACT_STATUSES = ["ACTIVE", "SUSPENDED", "EXPIRED"]
-
-function parseItems(raw: unknown): { items: { productVariantId: string; unitPrice: number }[] } | { error: string } {
-  if (!Array.isArray(raw) || raw.length === 0) return { error: "Ajoutez au moins un article" }
-  const items: { productVariantId: string; unitPrice: number }[] = []
-  const seen = new Set<string>()
-  for (const it of raw) {
-    const item = it as { productVariantId?: unknown; unitPrice?: unknown }
-    const productVariantId = String(item.productVariantId ?? "")
-    if (!productVariantId) return { error: "Article sans produit" }
-    if (seen.has(productVariantId)) return { error: "Article en double" }
-    seen.add(productVariantId)
-    const unitPrice = Number(item.unitPrice ?? 0)
-    if (!Number.isFinite(unitPrice) || unitPrice < 0) return { error: "Prix unitaire invalide" }
-    items.push({ productVariantId, unitPrice })
-  }
-  return { items }
-}
-
-/** Coercition stricte : absent → défaut, présent → nombre fini ≥ 0, sinon erreur. */
-function parseAmount(raw: unknown, field: string, def: number): { value: number } | { error: string } {
-  if (raw === undefined || raw === null || raw === "") return { value: def }
-  const n = Number(raw)
-  if (!Number.isFinite(n) || n < 0) return { error: `Valeur invalide : ${field}` }
-  return { value: n }
-}
 
 function isP2002(error: unknown): error is { code: string } {
   return !!error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002"
@@ -50,33 +24,57 @@ export async function GET(req: Request) {
 
   try {
     const session = await auth()
-    const role = session?.user?.role
-    const selfId = session?.user?.id
-    const supervisesB2b = (session?.user as { supervisesB2b?: boolean } | undefined)?.supervisesB2b === true
 
     const url = new URL(req.url)
     const clientId = url.searchParams.get("clientId")?.trim() || undefined
     const status = url.searchParams.get("status")?.toUpperCase() ?? ""
-    if (status && !CONTRACT_STATUSES.includes(status)) {
+    if (status && !(CONTRACT_STATUSES as readonly string[]).includes(status)) {
       return NextResponse.json({ error: "Statut de contrat invalide" }, { status: 400 })
     }
 
-    const where: Prisma.B2bContractWhereInput = {}
+    // ADMIN, COMPTABLE et responsable commercial voient tout ; un commercial, les contrats de SES clients.
+    const where: Prisma.B2bContractWhereInput = { client: { is: b2bClientScope(session?.user as SessionUser) } }
     if (clientId) where.clientId = clientId
     if (status) where.status = status as Prisma.B2bContractWhereInput["status"]
-    // ADMIN et COMPTABLE voient tout ; un COMMERCIAL limité à SES clients sauf
-    // s'il supervise les clients B2B (supervisesB2b).
-    const seesAll = !!role && (B2B_SCOPE_USERS as readonly string[]).includes(role)
-    if (!seesAll && !supervisesB2b) where.client = { is: { commercialId: selfId } }
 
-    const contracts = await getPrisma().b2bContract.findMany({
+    const rows = await getPrisma().b2bContract.findMany({
       where,
       orderBy: [{ startsAt: "desc" }],
       include: {
-        client: { select: { id: true, companyName: true, tradeName: true } },
-        items: { include: { productVariant: { select: { id: true, format: true } } } },
+        client: { select: { id: true, companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true } },
+        items: {
+          include: { productVariant: { select: { id: true, format: true, unit: true, price: true, product: { select: { name: true } } } } },
+        },
       },
     })
+
+    const now = new Date()
+    const contracts = rows.map((c) => ({
+      id: c.id,
+      clientId: c.clientId,
+      clientName: clientDisplayName(c.client),
+      status: c.status,
+      /** actif et dans sa période : c'est lui qui fixe les prix des devis du client */
+      applicable: isContractApplicable(c, now),
+      startsAt: c.startsAt.toISOString(),
+      endsAt: c.endsAt?.toISOString() ?? null,
+      paymentTermsDays: c.paymentTermsDays,
+      minOrderAmount: c.minOrderAmount,
+      deliveryFrequency: c.deliveryFrequency,
+      discountPercent: c.discountPercent ?? 0,
+      notes: c.notes,
+      itemCount: c.items.length,
+      items: c.items
+        .map((i) => ({
+          productVariantId: i.productVariantId,
+          name: i.productVariant?.product?.name ?? "Produit",
+          format: i.productVariant?.format ?? "",
+          unit: i.productVariant?.unit ?? null,
+          publicPrice: i.productVariant?.price ?? null,
+          unitPrice: i.unitPrice,
+        }))
+        .sort((a, b) => `${a.name} ${a.format}`.localeCompare(`${b.name} ${b.format}`, "fr")),
+    }))
     return NextResponse.json({ contracts, clientId: clientId ?? null, count: contracts.length })
   } catch (error) {
     console.error("GET b2b-contracts error:", error)
@@ -91,9 +89,7 @@ export async function POST(req: Request) {
   try {
     const session = await auth()
     const selfId = session?.user?.id
-    const role = session?.user?.role
     if (!selfId) return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
-    const supervisesB2b = (session?.user as { supervisesB2b?: boolean } | undefined)?.supervisesB2b === true
 
     let body: Record<string, unknown>
     try {
@@ -105,58 +101,50 @@ export async function POST(req: Request) {
     const clientId = body.clientId ? String(body.clientId) : ""
     if (!clientId) return NextResponse.json({ error: "Choisissez un client B2B" }, { status: 400 })
 
-    const status = body.status ? String(body.status).toUpperCase() : "ACTIVE"
-    if (!CONTRACT_STATUSES.includes(status)) {
-      return NextResponse.json({ error: "Statut de contrat invalide" }, { status: 400 })
-    }
-
-    const parsed = parseItems(body.items)
+    const parsedFields = parseContractFields(body)
+    if ("error" in parsedFields) return NextResponse.json({ error: parsedFields.error }, { status: 400 })
+    const fields = parsedFields.fields
+    const parsed = parseContractItems(body.items)
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
     const prisma = getPrisma()
     const client = await prisma.client.findFirst({ where: { id: clientId, type: "B2B" } })
     if (!client) return NextResponse.json({ error: "Client B2B introuvable" }, { status: 404 })
-    // Portée propriétaire (alignée sur GET/PATCH/DELETE) : hors ADMIN/COMPTABLE et
-    // sans supervisesB2b, un COMMERCIAL ne crée que sur SES clients.
-    const seesAll = !!role && (B2B_SCOPE_USERS as readonly string[]).includes(role)
-    if (!seesAll && !supervisesB2b && client.commercialId !== selfId) {
-      return NextResponse.json({ error: "Non autorisé" }, { status: 403 })
+    // Même portée que la lecture : un commercial ne crée de contrat que pour SES clients.
+    if (!seesAllB2b(session?.user as SessionUser) && client.commercialId !== selfId) {
+      return NextResponse.json({ error: "Ce client B2B ne vous est pas affecté" }, { status: 403 })
     }
 
-    const startsAt = body.startsAt ? new Date(String(body.startsAt)) : new Date()
-    if (Number.isNaN(startsAt.getTime())) {
-      return NextResponse.json({ error: "Date de début invalide" }, { status: 400 })
-    }
-    const endsAt = body.endsAt ? new Date(String(body.endsAt)) : null
-    if (endsAt && Number.isNaN(endsAt.getTime())) {
-      return NextResponse.json({ error: "Date de fin invalide" }, { status: 400 })
+    const status = fields.status ?? "ACTIVE"
+    const startsAt = fields.startsAt ?? new Date()
+    const endsAt = fields.endsAt ?? null
+    if (endsAt && endsAt < startsAt) {
+      return NextResponse.json({ error: "La date de fin doit être postérieure à la date de début" }, { status: 400 })
     }
 
-    const terms = parseAmount(body.paymentTermsDays, "paymentTermsDays", 30)
-    if ("error" in terms) return NextResponse.json({ error: terms.error }, { status: 400 })
-    const minOrder = parseAmount(body.minOrderAmount, "minOrderAmount", 0)
-    if ("error" in minOrder) return NextResponse.json({ error: minOrder.error }, { status: 400 })
-    const discount = parseAmount(body.discountPercent, "discountPercent", 0)
-    if ("error" in discount) return NextResponse.json({ error: discount.error }, { status: 400 })
+    if (parsed.items.length > 0) {
+      const known = await prisma.productVariant.count({ where: { id: { in: parsed.items.map((i) => i.productVariantId) } } })
+      if (known !== parsed.items.length) return NextResponse.json({ error: "Produit introuvable" }, { status: 400 })
+    }
 
-    // Garde « 1 ACTIVE max / client » : un second contrat actif est refusé.
+    // Un seul contrat actif par client : le suivant doit attendre que le premier soit suspendu.
     if (status === "ACTIVE") {
       const active = await prisma.b2bContract.findFirst({ where: { clientId, status: "ACTIVE" } })
-      if (active) return NextResponse.json({ error: "Ce client a déjà un contrat actif" }, { status: 400 })
+      if (active) return NextResponse.json({ error: "Ce client a déjà un contrat actif : modifiez-le ou suspendez-le d'abord" }, { status: 400 })
     }
 
     try {
       const contract = await prisma.b2bContract.create({
         data: {
           clientId,
-          status: status as Prisma.B2bContractCreateInput["status"],
+          status,
           startsAt,
           endsAt,
-          paymentTermsDays: terms.value,
-          minOrderAmount: minOrder.value,
-          deliveryFrequency: body.deliveryFrequency ? String(body.deliveryFrequency) : null,
-          discountPercent: discount.value,
-          notes: body.notes ? String(body.notes) : null,
+          paymentTermsDays: fields.paymentTermsDays ?? 30,
+          minOrderAmount: fields.minOrderAmount ?? 0,
+          deliveryFrequency: fields.deliveryFrequency ?? null,
+          discountPercent: fields.discountPercent ?? 0,
+          notes: fields.notes ?? null,
           createdById: selfId,
           items: { create: parsed.items },
         },
@@ -167,7 +155,7 @@ export async function POST(req: Request) {
         action: "create",
         entity: "B2bContract",
         entityId: contract.id,
-        summary: `Création contrat B2B ${contract.id}`,
+        summary: `Contrat B2B créé pour ${clientDisplayName(contract.client)}`,
       })
       return NextResponse.json({ contract }, { status: 201 })
     } catch (error) {

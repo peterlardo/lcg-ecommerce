@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { AlertCircle, ArrowRight, Check, ChevronLeft, ChevronRight, FileText, Plus, Printer, Search, Send, Trash2, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
+import { contractDiscount } from "@/lib/b2b-contract"
 
 // Écran commun aux devis et aux bons B2B (commande, livraison, facture) : liste, création, suite de la chaîne
 // devis -> bon de commande -> bon de livraison -> facture. Portage de devis-b2b.php et bons-b2b.php (lcgapp3).
@@ -46,6 +47,15 @@ interface VariantOption {
   id: string
   label: string
   price: number
+}
+
+/** Contrat en cours du client choisi : ses prix négociés et sa remise sont proposés dans le formulaire. */
+interface ClientContract {
+  clientId: string
+  discountPercent: number
+  minOrderAmount: number
+  paymentTermsDays: number
+  prices: Map<string, number>
 }
 
 interface DraftLine {
@@ -97,6 +107,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [clients, setClients] = useState<ClientOption[]>([])
   const [variants, setVariants] = useState<VariantOption[]>([])
   const [clientId, setClientId] = useState("")
+  const [contract, setContract] = useState<ClientContract | null>(null)
   const [lines, setLines] = useState<DraftLine[]>([EMPTY_LINE])
   const [discount, setDiscount] = useState("")
   const [notes, setNotes] = useState("")
@@ -154,9 +165,54 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     return () => controller.abort()
   }, [creating, clients.length, session?.user?.id, session?.user?.role])
 
+  // contrat du client choisi dans le formulaire : seul un contrat actif et dans sa période s'applique
+  useEffect(() => {
+    if (!creating || !clientId) return
+    const controller = new AbortController()
+    const init = async () => {
+      let next: ClientContract | null = null
+      try {
+        const res = await fetch(`/api/b2b-contracts?clientId=${encodeURIComponent(clientId)}&status=ACTIVE`, { signal: controller.signal })
+        const data = await res.json().catch(() => null)
+        const found = res.ok ? (data?.contracts ?? []).find((c: { applicable: boolean }) => c.applicable) : null
+        if (found) {
+          next = {
+            clientId,
+            discountPercent: Number(found.discountPercent) || 0,
+            minOrderAmount: Number(found.minOrderAmount) || 0,
+            paymentTermsDays: Number(found.paymentTermsDays) || 0,
+            prices: new Map((found.items ?? []).map((i: { productVariantId: string; unitPrice: number }) => [i.productVariantId, i.unitPrice])),
+          }
+        }
+      } catch {}
+      if (controller.signal.aborted) return
+      setContract(next)
+      // les articles déjà choisis prennent les prix de ce client
+      setLines((current) => current.map((l) => {
+        if (!l.variantId) return l
+        const price = next?.prices.get(l.variantId) ?? variants.find((v) => v.id === l.variantId)?.price
+        return price === undefined ? l : { ...l, unitPrice: String(price) }
+      }))
+    }
+    void init()
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seul le changement de client relance la lecture du contrat
+  }, [creating, clientId])
+
   const totalPages = Math.max(1, Math.ceil(total / 20))
   const subtotal = useMemo(() => lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0), [lines])
-  const discountValue = Number(discount) || 0
+  // contrat du client actuellement choisi (celui d'un client précédent ne compte plus)
+  const activeContract = contract && contract.clientId === clientId ? contract : null
+  // Remise : laissée vide, c'est celle du contrat (même calcul que le serveur) ; saisie, elle la remplace.
+  const autoDiscount = useMemo(
+    () => contractDiscount(
+      activeContract?.discountPercent,
+      lines.filter((l) => l.variantId).map((l) => ({ productVariantId: l.variantId, lineTotal: (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0) })),
+      new Set(activeContract?.prices.keys() ?? []),
+    ),
+    [activeContract, lines],
+  )
+  const discountValue = discount === "" ? autoDiscount : Number(discount) || 0
 
   const changeType = (next: DocType) => { setType(next); setStatus(""); setPage(1); setLoading(true) }
   const updateLine = (index: number, patch: Partial<DraftLine>) => setLines((current) => current.map((l, i) => (i === index ? { ...l, ...patch } : l)))
@@ -164,6 +220,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const openCreate = () => {
     setCreating(true)
     setClientId("")
+    setContract(null)
     setLines([EMPTY_LINE])
     setDiscount("")
     setNotes("")
@@ -184,7 +241,8 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
       const res = await fetch("/api/b2b-documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: creatable, clientId, items, discount: discountValue, notes }),
+        // remise non saisie : le serveur applique celle du contrat
+        body: JSON.stringify({ type: creatable, clientId, items, ...(discount === "" ? {} : { discount: discountValue }), notes }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) { setFormError(data?.error || "Création impossible"); return }
@@ -398,6 +456,14 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
               </select>
             </label>
             {clients.length === 0 && <p className="mt-1 text-sm text-amber-700">Aucun client B2B disponible : créez-le d&apos;abord dans l&apos;écran Clients B2B.</p>}
+            {activeContract && (
+              <p className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                Contrat en cours : {activeContract.prices.size} prix négocié{activeContract.prices.size > 1 ? "s" : ""}
+                {activeContract.discountPercent > 0 ? ` · remise ${activeContract.discountPercent} %` : ""}
+                {` · paiement à ${activeContract.paymentTermsDays} jour${activeContract.paymentTermsDays > 1 ? "s" : ""}`}
+                {activeContract.minOrderAmount > 0 ? ` · commande minimum ${formatPrice(activeContract.minOrderAmount)}` : ""}
+              </p>
+            )}
 
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between">
@@ -413,7 +479,8 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                       value={line.variantId}
                       onChange={(e) => {
                         const variant = variants.find((v) => v.id === e.target.value)
-                        updateLine(index, { variantId: e.target.value, unitPrice: variant ? String(variant.price) : "" })
+// prix proposé : celui du contrat du client, à défaut le prix public
+                        updateLine(index, { variantId: e.target.value, unitPrice: variant ? String(activeContract?.prices.get(variant.id) ?? variant.price) : "" })
                       }}
                       aria-label="Produit"
                       className="col-span-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 sm:col-span-1"
@@ -427,6 +494,12 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                     <button type="button" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} disabled={lines.length === 1} aria-label="Retirer l'article" className="justify-self-end rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30">
                       <Trash2 className="h-4 w-4" />
                     </button>
+                    {activeContract?.prices.has(line.variantId) && (
+                      <p className="col-span-2 text-xs font-medium text-blue-700 sm:col-span-5">
+                        Prix du contrat : {formatPrice(activeContract.prices.get(line.variantId) ?? 0)}
+                        {Number(line.unitPrice) !== activeContract.prices.get(line.variantId) ? " (prix modifié à la main)" : ""}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -435,7 +508,14 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block text-sm font-medium text-gray-700">
                 Remise (FCFA)
-                <input type="number" min={0} step={1} value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5" />
+                <input type="number" min={0} step={1} value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder={autoDiscount > 0 ? String(autoDiscount) : "0"} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5" />
+                {activeContract && activeContract.discountPercent > 0 && (
+                  <span className="mt-1 block text-xs font-normal text-gray-600">
+                    {discount === ""
+                      ? `Remise du contrat (${activeContract.discountPercent} %) appliquée automatiquement. Saisissez un montant pour la remplacer, 0 pour ne pas en faire.`
+                      : `Remise saisie à la main. Videz le champ pour revenir à celle du contrat (${activeContract.discountPercent} %).`}
+                  </span>
+                )}
               </label>
               <label className="block text-sm font-medium text-gray-700">
                 Remarques
@@ -445,9 +525,13 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
 
             <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm">
               <p className="flex justify-between text-gray-600"><span>Sous-total</span><span>{formatPrice(subtotal)}</span></p>
-              {discountValue > 0 && <p className="flex justify-between text-gray-600"><span>Remise</span><span>− {formatPrice(discountValue)}</span></p>}
+              {discountValue > 0 && <p className="flex justify-between text-gray-600"><span>{discount === "" ? `Remise du contrat (${activeContract?.discountPercent} %)` : "Remise"}</span><span>− {formatPrice(discountValue)}</span></p>}
               <p className="mt-1 flex justify-between text-lg font-bold text-gray-900"><span>Total</span><span>{formatPrice(Math.max(0, subtotal - discountValue))}</span></p>
             </div>
+
+            {activeContract && activeContract.minOrderAmount > 0 && subtotal > 0 && subtotal - discountValue < activeContract.minOrderAmount && (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Le contrat prévoit une commande minimum de {formatPrice(activeContract.minOrderAmount)} : ce document est en dessous.</p>
+            )}
 
             {formError && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</p>}
 

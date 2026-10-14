@@ -6,7 +6,7 @@ import { Camera, Check, Eye, EyeOff, LogOut, Plus, Save, ShieldCheck, UserPlus, 
 import Link from "next/link"
 import { isCommercialRole } from "@/lib/permissions"
 
-const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "promotions", "rapports", "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b", "commercial", "creances", "b2b"]
+const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "promotions", "rapports", "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b", "commercial", "creances", "b2b", "contrats"]
 const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", promotions: "Promotions", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", "etat-stock": "État de stock & caisse", clients: "Clients", "clients-b2b": "Clients B2B", commercial: "Tableau de bord commercial", creances: "Créances", b2b: "Devis, bons et factures B2B" }
 
 interface RoleProfile { id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean }

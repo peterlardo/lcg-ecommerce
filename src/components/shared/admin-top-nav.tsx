@@ -6,7 +6,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { formatPrice } from "@/lib/utils"
-import { canSeeModule, isCommercialManager, moduleOfPath } from "@/lib/permissions"
+import { canSeeModule, isCommercialManager, isCommercialRole, moduleOfPath } from "@/lib/permissions"
 import type { AppNotification } from "@/hooks/use-notifications"
 import {
   type LucideIcon,
@@ -23,6 +23,7 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   Factory,
+  FileSignature,
   FileText,
   HandCoins,
   LayoutDashboard,
@@ -35,8 +36,10 @@ import {
   ScanBarcode,
   ShieldCheck,
   ShoppingCart,
+  Tags,
   TicketCheck,
   Truck,
+  UserPlus,
   Users,
   Warehouse,
   X,
@@ -68,9 +71,12 @@ const navGroups = [
     icon: BriefcaseBusiness,
     links: [
       { href: "/admin/commercial", label: "Tableau de bord commercial", icon: BriefcaseBusiness },
+      { href: "/admin/nouveau-client", label: "Nouveau client", icon: UserPlus },
       { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
       { href: "/admin/bons-b2b", label: "Commandes, livraisons, factures", icon: ReceiptText },
       { href: "/admin/creances", label: "Créances", icon: HandCoins },
+      { href: "/admin/contrats-b2b", label: "Contrats B2B", icon: FileSignature },
+      { href: "/admin/tarifs-b2b", label: "Tarifs B2B", icon: Tags },
     ],
   },
   {
@@ -137,20 +143,33 @@ const priorityLinks: NavLink[] = [
   { href: "/admin/rapports", label: "Rapports", icon: BarChart3 },
   { href: "/admin/etat-stock", label: "État de stock & caisse", icon: ClipboardCheck },
 ]
+const newClientLink: NavLink = { href: "/admin/nouveau-client", label: "Nouveau client", icon: UserPlus }
 const priorityHrefs = new Set(priorityLinks.flatMap((link) => [link.href, ...(link.children ?? []).map((child) => child.href)]))
 
 // Le responsable commercial (profil RESPONSABLE_COMMERCIAL) a son propre menu, limité à ses modules :
 // il remplace le menu général. Les autres commerciaux gardent le menu général.
 const commercialLinks: NavLink[] = [
   { href: "/admin/commercial", label: "Tableau de bord", icon: BriefcaseBusiness },
+  { href: "/admin/nouveau-client", label: "Nouveau client", icon: UserPlus },
   { href: "/admin/clients-b2b", label: "Clients B2B", icon: Building2 },
   { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
   { href: "/admin/bons-b2b", label: "Commandes, livraisons, factures", icon: ReceiptText },
   { href: "/admin/creances", label: "Créances", icon: HandCoins },
+  {
+    href: "/admin/contrats-b2b",
+    label: "Contrats et tarifs",
+    icon: FileSignature,
+    children: [
+      { href: "/admin/contrats-b2b", label: "Contrats", icon: FileSignature },
+      { href: "/admin/tarifs-b2b", label: "Tarifs", icon: Tags },
+    ],
+  },
   { href: "/admin/zone-commerciale", label: "Zone commerciale", icon: Map },
 ]
-const commercialGroups = [{ title: "Commercial", icon: BriefcaseBusiness, links: commercialLinks }]
-const commercialHrefs = new Set(commercialLinks.map((link) => link.href))
+// à plat pour le menu du téléphone : un lien à sous-menu y est remplacé par ses sous-liens
+const commercialFlatLinks = commercialLinks.flatMap((link) => link.children ?? [link])
+const commercialGroups = [{ title: "Commercial", icon: BriefcaseBusiness, links: commercialFlatLinks }]
+const commercialHrefs = new Set(commercialFlatLinks.map((link) => link.href))
 const PLUS_INDEX = navGroups.length
 const SUBMENU_OFFSET = 100
 
@@ -195,8 +214,11 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
     }))
     .filter((group) => group.links.length > 0)
   const groups = isCommercial ? [...commercialGroups, ...commercialExtras] : navGroups
-  const topLinks = isCommercial ? commercialLinks : priorityLinks
-  const topHrefs = isCommercial ? commercialHrefs : priorityHrefs
+  // Les commerciaux (menu général) ont « Nouveau client » en accès direct, en tête de la barre :
+  // c'est leur geste le plus fréquent sur le terrain, il ne doit pas être rangé dans « Plus ».
+  const fieldCommercial = !isCommercial && isCommercialRole(session?.user?.role)
+  const topLinks = isCommercial ? commercialLinks : fieldCommercial ? [newClientLink, ...priorityLinks] : priorityLinks
+  const topHrefs = isCommercial ? commercialHrefs : fieldCommercial ? new Set([newClientLink.href, ...priorityHrefs]) : priorityHrefs
 
   // Certains écrans se pilotent depuis la permission d'un module voisin
   // (les livreurs sont gérés avec le module « livraisons »).

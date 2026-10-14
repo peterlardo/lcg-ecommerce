@@ -11,7 +11,7 @@ export const PERMISSION_MODULES = [
   "dashboard", "ventes", "tickets", "commandes", "caisse", "reservations",
   "stock", "etat-stock", "production", "lots", "tracabilite", "distribution", "livraisons",
   "points-de-vente", "produits", "promotions", "rapports",
-  "clients", "clients-b2b", "zone-commerciale", "commercial", "creances", "b2b",
+  "clients", "clients-b2b", "nouveau-client", "zone-commerciale", "commercial", "creances", "b2b", "contrats",
   "messages", "parametres", "controle-distant", "utilisateurs", "activite",
 ] as const
 
@@ -21,8 +21,9 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   production: "Production", lots: "Lots", tracabilite: "Traçabilité", distribution: "Distribution",
   livraisons: "Livraisons & livreurs", "points-de-vente": "Points de vente", produits: "Produits",
   promotions: "Promotions & coupons", rapports: "Rapports", clients: "Clients", "clients-b2b": "Clients B2B",
+  "nouveau-client": "Nouveau client (B2B / B2C)",
   "zone-commerciale": "Zone commerciale", commercial: "Tableau de bord commercial", creances: "Créances",
-  b2b: "Devis, bons et factures B2B",
+  b2b: "Devis, bons et factures B2B", contrats: "Contrats et tarifs B2B",
   messages: "Messages", parametres: "Paramètres",
   "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", activite: "Journal d'activité",
 }
@@ -35,14 +36,16 @@ export const MODULE_ROLES: Record<string, string[]> = {
   utilisateurs: ["ADMIN"],
   activite: ["ADMIN"],
   clients: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
+  "nouveau-client": ["ADMIN", "COMMERCIAL"],
   "zone-commerciale": ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   commercial: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   creances: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   b2b: ["ADMIN", "COMMERCIAL"],
+  contrats: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
 }
 
 /** Écrans pilotés par le droit d'un module voisin. */
-export const MODULE_ALIASES: Record<string, string> = { livreurs: "livraisons", archives: "commandes", "devis-b2b": "b2b", "bons-b2b": "b2b" }
+export const MODULE_ALIASES: Record<string, string> = { livreurs: "livraisons", archives: "commandes", "devis-b2b": "b2b", "bons-b2b": "b2b", "contrats-b2b": "contrats", "tarifs-b2b": "contrats" }
 
 /** Rôles historiques de l'administration : sans aucun droit défini, ils voient tout le menu. */
 export const LEGACY_ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"]
@@ -51,13 +54,15 @@ export const LEGACY_ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "
  * Modules propres au responsable commercial (profil RESPONSABLE_COMMERCIAL) : ils font partie de son rôle,
  * il les voit toujours. Les autres commerciaux gardent le menu général, selon les droits cochés sur leur fiche.
  */
-export const COMMERCIAL_MODULES = ["commercial", "clients-b2b", "b2b", "creances", "zone-commerciale"]
+export const COMMERCIAL_MODULES = ["commercial", "nouveau-client", "clients-b2b", "b2b", "contrats", "creances", "zone-commerciale"]
 
 /**
  * Rôles commerciaux. RESPONSABLE_COMMERCIAL est un profil créé par l'administrateur : il a les écrans
  * et les accès du commercial, et voit tout le portefeuille B2B (pas seulement ses propres clients).
  */
 export const COMMERCIAL_MANAGER_ROLE = "RESPONSABLE_COMMERCIAL"
+/** Écran d'inscription d'un client (B2B ou B2C) : ouvert d'office aux commerciaux et à leur responsable. */
+export const NEW_CLIENT_MODULE = "nouveau-client"
 export const COMMERCIAL_ROLES = ["COMMERCIAL", COMMERCIAL_MANAGER_ROLE]
 
 export function isCommercialRole(role: string | null | undefined): boolean {
@@ -137,6 +142,8 @@ export function canSeeModule(user: PermissionUser, module: string): boolean {
   if (role === "ADMIN") return true
   if (!moduleOpenTo(role, module)) return false
   if (isCommercialManager(role) && COMMERCIAL_MODULES.includes(module)) return true
+  // Inscrire un client fait partie du métier : tout commercial a l'écran « Nouveau client », quels que soient les droits cochés
+  if (isCommercialRole(role) && module === NEW_CLIENT_MODULE) return true
   // La caisse tactile reste accessible aux profils de caisse même si « ventes » n'est pas coché
   if (isCashierRole(role) && module === "ventes") return true
   const permissions = user?.permissions ?? []
