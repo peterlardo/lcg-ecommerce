@@ -86,6 +86,7 @@ export async function GET(req: Request) {
         take: perPage,
         select: {
           id: true, reference: true, status: true, clientId: true, total: true, discount: true, notes: true, validUntil: true, createdAt: true,
+          deliveryTerms: true, requestedDeliveryDate: true,
           client: { select: { companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true } },
           items: { select: { productVariantId: true, quantity: true, unitPrice: true }, orderBy: { createdAt: "asc" } },
         },
@@ -201,6 +202,16 @@ export async function POST(req: Request) {
     }
     const notes = body.notes ? String(body.notes).slice(0, 2000) : null
 
+    // Livraison souhaitée : lieu et conditions (texte libre), date (pas dans le passé, jour de Brazzaville)
+    const deliveryTerms = body.deliveryTerms ? String(body.deliveryTerms).trim().slice(0, 500) || null : null
+    let requestedDeliveryDate: Date | null = null
+    if (body.requestedDeliveryDate) {
+      requestedDeliveryDate = new Date(String(body.requestedDeliveryDate))
+      if (Number.isNaN(requestedDeliveryDate.getTime())) return NextResponse.json({ error: "Date de livraison invalide" }, { status: 400 })
+      const day = (d: Date) => new Date(d.getTime() + 60 * 60 * 1000).toISOString().slice(0, 10)
+      if (day(requestedDeliveryDate) < day(new Date())) return NextResponse.json({ error: "La date de livraison souhaitée est déjà passée" }, { status: 400 })
+    }
+
     // Bon de commande repris d'un devis : même client, devis encore ouvert et pas déjà transformé.
     let parent: { id: string; reference: string } | null = null
     if (body.parentId) {
@@ -244,6 +255,8 @@ export async function POST(req: Request) {
               total: Math.max(0, subtotal - discount),
               notes,
               validUntil,
+              deliveryTerms,
+              requestedDeliveryDate,
               createdById: selfId,
               items: {
                 create: items.map((i) => ({ productVariantId: i.productVariantId, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.unitPrice * i.quantity })),

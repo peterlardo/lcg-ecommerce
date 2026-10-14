@@ -28,6 +28,8 @@ interface DocumentDetail {
   total: number
   notes: string | null
   validUntil: string | null
+  deliveryTerms: string | null
+  requestedDeliveryDate: string | null
   createdAt: string
   cancelReason: string | null
   parent: { id: string; reference: string; type: DocType } | null
@@ -149,7 +151,8 @@ export default function B2bDocumentPage() {
                 <p key={child.id} className="mt-1">Suivi par : {TYPE_LABEL[child.type].one.toLowerCase()} <span className="font-mono">{child.reference}</span></p>
               ))}
               {doc.type === "DEVIS" && doc.validUntil && <p className="mt-1">Valable jusqu&apos;au {formatDate(doc.validUntil)}</p>}
-              {!doc.parent && doc.children.length === 0 && !(doc.type === "DEVIS" && doc.validUntil) && <p className="mt-1 text-gray-500">—</p>}
+              {doc.requestedDeliveryDate && doc.type !== "FACTURE" && <p className="mt-1">Livraison souhaitée le {formatDate(doc.requestedDeliveryDate)}</p>}
+              {!doc.parent && doc.children.length === 0 && !(doc.type === "DEVIS" && doc.validUntil) && !doc.requestedDeliveryDate && <p className="mt-1 text-gray-500">—</p>}
             </div>
           </section>
 
@@ -187,6 +190,13 @@ export default function B2bDocumentPage() {
               <p className="flex justify-between py-1 text-gray-700"><span>Sous-total</span><span>{formatPrice(doc.subtotal)}</span></p>
               {doc.discount > 0 && <p className="flex justify-between py-1 text-gray-700"><span>Remise</span><span>− {formatPrice(doc.discount)}</span></p>}
               <p className="flex justify-between border-t-2 border-gray-900 py-2 text-lg font-bold"><span>Total</span><span>{formatPrice(doc.total)}</span></p>
+            </div>
+          )}
+
+          {doc.deliveryTerms && doc.type !== "FACTURE" && (
+            <div className="mt-4 rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Livraison</p>
+              <p className="mt-1 whitespace-pre-line">{doc.deliveryTerms}</p>
             </div>
           )}
 

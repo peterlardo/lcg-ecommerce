@@ -259,6 +259,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             discount: doc.discount,
             total: doc.total,
             notes: doc.notes,
+            deliveryTerms: doc.deliveryTerms,
+            requestedDeliveryDate: doc.requestedDeliveryDate,
             createdById: selfId,
             ...(toType === "LIVRAISON" ? { deliveredAt: new Date() } : {}),
             ...(toType === "FACTURE" ? { invoicedAt: new Date() } : {}),
