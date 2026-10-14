@@ -443,7 +443,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
           <ul className="divide-y divide-gray-100">
             {documents.map((doc) => {
               const next = doc.children[0]
-              const canTransform = Boolean(TYPE_LABEL[doc.type].next) && !next && (doc.status === "CONFIRMED" || doc.status === "DRAFT")
+              const canTransform = Boolean(TYPE_LABEL[doc.type].next) && !next && (doc.status === "CONFIRMED" || doc.status === "DRAFT" || doc.status === "SENT")
               const open = doc.status === "DRAFT" || doc.status === "SENT"
               return (
                 <li key={doc.id} className="flex flex-col gap-3 p-3 sm:p-4 lg:flex-row lg:items-center lg:justify-between">

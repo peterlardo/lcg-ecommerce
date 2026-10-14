@@ -57,10 +57,10 @@ function SaveBtn({ section, label, saving, saved, onSave }: { section: string; l
 
 export default function ParametresPage() {
   const [general, setGeneral] = useState<GeneralSettings>({
-    companyName: "LCG - Les Glaçons du Congo",
+    companyName: "LCG — La Congolaise des Glaçons",
     email: "contact@lcg.cg",
     phone: "+242 06 739 49 49",
-    address: "15 Avenue de la République, Brazzaville, Congo",
+    address: "97 Rue EWO, Ouenzé — Brazzaville, République du Congo",
     website: "https://lcg.cg",
   })
 

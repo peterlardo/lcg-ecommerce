@@ -209,8 +209,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     const toType = nextType[doc.type]
     if (!toType) return NextResponse.json({ error: "Impossible de transformer ce statut" }, { status: 400 })
-    if (doc.status !== "CONFIRMED" && doc.status !== "DRAFT") {
-      return NextResponse.json({ error: "Le document doit être DRAFT ou CONFIRMED pour être transformé" }, { status: 400 })
+    // un document envoyé au client se transforme aussi (même règle que le formulaire de bon de commande)
+    if (doc.status !== "CONFIRMED" && doc.status !== "DRAFT" && doc.status !== "SENT") {
+      return NextResponse.json({ error: "Le document doit être en brouillon, envoyé ou confirmé pour être transformé" }, { status: 400 })
     }
     if (doc.items.some((i) => !i.productVariantId)) {
       return NextResponse.json({ error: "Un article est sans produit" }, { status: 400 })
