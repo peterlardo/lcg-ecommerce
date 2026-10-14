@@ -44,7 +44,7 @@ const slides = [
       </>
     ),
     description:
-      "Chaque lot de glaçons est rigoureusement testé en laboratoire pour garantir la pureté, l&apos;hygiène et la conformité aux normes les plus exigeantes avant d&apos;arriver chez vous.",
+      "Chaque lot de glaçons est rigoureusement testé en laboratoire pour garantir la pureté, l'hygiène et la conformité aux normes les plus exigeantes avant d'arriver chez vous.",
     cta: { href: "/a-propos", label: "Notre processus" },
     ctaSecondary: { href: "/produits", label: "Voir nos glaçons" },
   },

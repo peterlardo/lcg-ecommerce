@@ -3,7 +3,8 @@ import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
-import { nextDocumentReference, PRIMARY_DOC_TYPES } from "@/lib/b2b"
+import { applicableContract, nextDocumentReference, PRIMARY_DOC_TYPES } from "@/lib/b2b"
+import { contractDiscount } from "@/lib/b2b-contract"
 import { auth } from "@/lib/auth"
 import { clientDisplayName, seesAllB2b, type SessionUser } from "@/lib/commercial"
 
@@ -128,29 +129,44 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Ce client B2B ne vous est pas affecté" }, { status: 403 })
     }
 
-    const items = body.items.map((i) => {
+    const rawItems = body.items.map((i) => {
       const item = i as { productVariantId?: unknown; quantity?: unknown; unitPrice?: unknown }
+      const priced = item.unitPrice !== undefined && item.unitPrice !== null && item.unitPrice !== ""
       return {
         productVariantId: String(item.productVariantId ?? ""),
         quantity: Number(item.quantity),
-        unitPrice: Number(item.unitPrice ?? 0),
+        // sans prix saisi : tarif du contrat du client, à défaut prix catalogue (voir plus bas)
+        unitPrice: priced ? Number(item.unitPrice) : null,
       }
     })
-    if (items.some((i) => !i.productVariantId)) {
+    if (rawItems.some((i) => !i.productVariantId)) {
       return NextResponse.json({ error: "Article sans produit" }, { status: 400 })
     }
-    if (items.some((i) => !Number.isInteger(i.quantity) || i.quantity < 1)) {
+    if (rawItems.some((i) => !Number.isInteger(i.quantity) || i.quantity < 1)) {
       return NextResponse.json({ error: "Les quantités doivent être des nombres entiers" }, { status: 400 })
     }
-    if (items.some((i) => !Number.isFinite(i.unitPrice) || i.unitPrice < 0)) {
+    if (rawItems.some((i) => i.unitPrice !== null && (!Number.isFinite(i.unitPrice) || i.unitPrice < 0))) {
       return NextResponse.json({ error: "Prix unitaire invalide" }, { status: 400 })
     }
-    const known = await prisma.productVariant.count({ where: { id: { in: [...new Set(items.map((i) => i.productVariantId))] } } })
-    if (known !== new Set(items.map((i) => i.productVariantId)).size) {
+    const variantIds = [...new Set(rawItems.map((i) => i.productVariantId))]
+    const variants = await prisma.productVariant.findMany({ where: { id: { in: variantIds } }, select: { id: true, price: true } })
+    if (variants.length !== variantIds.length) {
       return NextResponse.json({ error: "Produit introuvable" }, { status: 400 })
     }
+    // Contrat applicable du client : ses prix négociés et sa remise s'appliquent quand rien n'est saisi.
+    const contract = await applicableContract(prisma, client.id)
+    const negotiated = new Map((contract?.items ?? []).map((i) => [i.productVariantId, i.unitPrice]))
+    const catalogue = new Map(variants.map((v) => [v.id, v.price]))
+    const items = rawItems.map((i) => ({
+      ...i,
+      unitPrice: i.unitPrice ?? negotiated.get(i.productVariantId) ?? catalogue.get(i.productVariantId) ?? 0,
+    }))
     const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-    const discount = Number(body.discount ?? 0)
+    // Remise : celle saisie si le champ est renseigné, sinon celle du contrat (sur les lignes sans prix négocié).
+    const autoDiscount = body.discount === undefined || body.discount === null || body.discount === ""
+    const discount = autoDiscount
+      ? contractDiscount(contract?.discountPercent, items.map((i) => ({ productVariantId: i.productVariantId, lineTotal: i.unitPrice * i.quantity })), new Set(negotiated.keys()))
+      : Number(body.discount)
     if (!Number.isFinite(discount) || discount < 0 || discount > subtotal) {
       return NextResponse.json({ error: "Remise invalide" }, { status: 400 })
     }
@@ -192,7 +208,7 @@ export async function POST(req: Request) {
           entityId: document.id,
           summary: `Création ${document.type} ${document.reference}`,
         })
-        return NextResponse.json({ document }, { status: 201 })
+        return NextResponse.json({ document, contractDiscount: autoDiscount && discount > 0 }, { status: 201 })
       } catch (error) {
         if (isP2002(error) && attempt < 2) continue
         throw error

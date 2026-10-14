@@ -3,6 +3,7 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
 import { getPrisma } from "@/lib/prisma"
 import { geocodeAddress } from "@/lib/geocode"
+import { findDuplicates, type DuplicateCandidate } from "@/lib/client-duplicates"
 
 async function geocodeAndStore(clientId: string, address: string | null, city: string | null) {
   const query = [address, city].filter(Boolean).join(", ")
@@ -115,14 +116,43 @@ export async function POST(request: Request) {
       isActive: body.isActive !== false,
     }
 
+    // Écran « Nouveau client » : il demande un contrôle des doublons avant d'écrire. Sans `force`, un client
+    // de même téléphone, même e-mail ou même nom fait échouer la création et renvoie les fiches trouvées.
+    if (body.checkDuplicates === true && body.force !== true) {
+      const existing = await getPrisma().client.findMany({
+        select: {
+          id: true, type: true, companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true,
+          phone: true, email: true, city: true, isActive: true, commercial: { select: { name: true } },
+        },
+      })
+      const duplicates = findDuplicates(data as DuplicateCandidate, existing)
+      if (duplicates.length) {
+        return NextResponse.json(
+          { error: "Un client qui ressemble à celui-ci existe déjà dans la base.", duplicates },
+          { status: 409 }
+        )
+      }
+    }
+
+    // Position relevée sur place (téléphone du commercial) : elle prime sur le géocodage de l'adresse.
+    const lat = typeof body.latitude === "number" ? body.latitude : null
+    const lng = typeof body.longitude === "number" ? body.longitude : null
+    const hasPosition = lat !== null && lng !== null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0)
+    if (hasPosition) {
+      data.latitude = lat
+      data.longitude = lng
+    }
+
+    // Un commercial inscrit par défaut ses clients à son nom ; l'administrateur et le responsable commercial
+    // choisissent le commercial attitré (ou n'en mettent pas).
     const commercialId =
-      body.commercialId?.trim() ||
+      (typeof body.commercialId === "string" && body.commercialId.trim()) ||
       (session?.user?.role === "COMMERCIAL" ? session.user.id : null)
     if (commercialId) data.commercialId = commercialId
 
     const client = await getPrisma().client.create({ data })
 
-    void geocodeAndStore(client.id, client.address, client.city)
+    if (!hasPosition) void geocodeAndStore(client.id, client.address, client.city)
 
     await logActivity({ module: "clients", action: "Création", entity: "client", entityId: client.id, summary: `Client ${client.companyName || [client.firstName, client.lastName].filter(Boolean).join(" ") || client.email || client.id} créé (${type})` })
     return NextResponse.json(client, { status: 201 })
