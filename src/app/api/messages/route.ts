@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 import { getMessages, addMessage } from "@/data/store"
+import { requireModuleAccess } from "@/lib/api-auth"
 
+// Lecture réservée au personnel qui a le droit « messages » : ils contiennent noms, téléphones et e-mails.
+// L'envoi (POST) reste ouvert : c'est le formulaire de contact du site.
 export async function GET() {
+  const forbidden = await requireModuleAccess("messages")
+  if (forbidden) return forbidden
   const messages = await getMessages()
   return NextResponse.json(messages)
 }

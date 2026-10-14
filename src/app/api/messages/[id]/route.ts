@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
 import { getMessageById, markMessageAsRead, deleteMessage } from "@/data/store"
+import { requireModuleAccess } from "@/lib/api-auth"
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/messages/[id]">) {
+  const forbidden = await requireModuleAccess("messages")
+  if (forbidden) return forbidden
   const { id } = await ctx.params
   const msg = await getMessageById(id)
   if (!msg) {
@@ -11,6 +14,8 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/messages/[id]">
 }
 
 export async function PATCH(_req: Request, ctx: RouteContext<"/api/messages/[id]">) {
+  const forbidden = await requireModuleAccess("messages", "edit")
+  if (forbidden) return forbidden
   const { id } = await ctx.params
   const success = await markMessageAsRead(id)
   if (!success) {
@@ -20,6 +25,8 @@ export async function PATCH(_req: Request, ctx: RouteContext<"/api/messages/[id]
 }
 
 export async function DELETE(_req: Request, ctx: RouteContext<"/api/messages/[id]">) {
+  const forbidden = await requireModuleAccess("messages", "delete")
+  if (forbidden) return forbidden
   const { id } = await ctx.params
   const success = await deleteMessage(id)
   if (!success) {

@@ -712,15 +712,17 @@ export async function sendContactMessage(data: ContactMailData): Promise<boolean
   try {
     const transporter = getTransporter()
     const to = process.env.CONTACT_TO || "contact@lcg.cg"
-    const subject = "Nouveau message de contact - " + (data.objet || "LCG")
-    const safe = (data.message || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    // tout ce qui vient du visiteur est échappé : sinon il pourrait glisser des liens ou du HTML dans l'e-mail
+    const esc = (v: string | undefined) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+    const subject = "Nouveau message de contact - " + String(data.objet || "LCG").replace(/[\r\n]+/g, " ").slice(0, 120)
+    const safe = esc(data.message)
     let inner = '<h1 style="margin:0;font-size:22px;color:#111827">Nouveau message depuis le formulaire de contact</h1>'
     inner += '<p style="margin:6px 0 0;font-size:14px;color:#6b7280">Reçu le ' + formatDate(new Date().toISOString()) + '</p>'
     inner += '<table style="width:100%;margin-top:20px;border-collapse:collapse">'
-    inner += infoRow('Nom', data.nom)
-    inner += infoRow('Téléphone', data.telephone)
-    inner += infoRow('Email', data.email || '-')
-    inner += infoRow('Objet', data.objet || '-')
+    inner += infoRow('Nom', esc(data.nom))
+    inner += infoRow('Téléphone', esc(data.telephone))
+    inner += infoRow('Email', esc(data.email) || '-')
+    inner += infoRow('Objet', esc(data.objet) || '-')
     inner += '</table>'
     inner += '<div style="margin-top:20px;padding:16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px">'
     inner += '<div style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:8px">Message</div>'
