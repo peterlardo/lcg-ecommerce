@@ -106,6 +106,8 @@ export async function GET(req: Request) {
           // document suivant de la chaîne (devis -> commande -> livraison -> facture), s'il existe
           children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true } },
           _count: { select: { items: true } },
+          // factures : règlements validés, pour afficher « payée / reste à payer » dans la liste
+          payments: { where: { validationStatus: "VALIDATED" }, select: { amount: true } },
         },
       }),
       // Même portée que la liste : un COMMERCIAL ne voit PAS l'agrégat global.
@@ -114,7 +116,11 @@ export async function GET(req: Request) {
     ])
 
     return NextResponse.json({
-      documents: documents.map((d) => ({ ...d, clientName: clientDisplayName(d.client) })),
+      documents: documents.map(({ payments, ...d }) => ({
+        ...d,
+        clientName: clientDisplayName(d.client),
+        paid: Math.round(payments.reduce((s, p) => s + p.amount, 0) * 100) / 100,
+      })),
       counts,
       total,
       page,

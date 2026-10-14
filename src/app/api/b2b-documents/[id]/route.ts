@@ -5,6 +5,7 @@ import { logActivity } from "@/lib/activity"
 import { nextDocumentReference } from "@/lib/b2b"
 import { auth } from "@/lib/auth"
 import { COMPTOIR_CODE, consumePointOfSaleStockTx, ensureOperationalStockLocations } from "@/lib/stock-service"
+import { DEFAULT_PAYMENT_TERMS_DAYS } from "@/lib/commercial"
 
 export const dynamic = "force-dynamic"
 
@@ -26,7 +27,7 @@ async function getDocOrNull(id: string, userId: string, role: string, supervises
     include: {
       items: { include: { productVariant: { include: { product: { select: { name: true } } } } }, orderBy: { createdAt: "asc" } },
       client: true,
-      parent: { select: { id: true, reference: true, type: true } },
+      parent: { select: { id: true, reference: true, type: true, deliveredAt: true, createdAt: true } },
       children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true } },
     },
   })
@@ -52,7 +53,49 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     (session.user as { supervisesB2b?: boolean }).supervisesB2b === true
   )
   if (!doc) return NextResponse.json({ error: status === 404 ? "Introuvable" : "Non autorisé" }, { status })
-  return NextResponse.json({ document: doc })
+
+  // qui a établi le document, et le commercial attitré du client
+  const people = await getPrisma().user.findMany({
+    where: { id: { in: [doc.createdById, doc.client?.commercialId].filter((x): x is string => Boolean(x)) } },
+    select: { id: true, name: true },
+  })
+  const nameOf = (userId: string | null | undefined) => people.find((p) => p.id === userId)?.name ?? null
+
+  // Facture : échéance (délai du contrat actif du client, 30 jours à défaut — même règle que les créances)
+  // et état du paiement (seuls les règlements validés comptent comme payés).
+  let invoice = null
+  if (doc.type === "FACTURE") {
+    const [contract, payments] = await Promise.all([
+      doc.clientId
+        ? getPrisma().b2bContract.findFirst({ where: { clientId: doc.clientId, status: "ACTIVE" }, orderBy: { startsAt: "desc" }, select: { paymentTermsDays: true } })
+        : null,
+      getPrisma().customerPayment.findMany({
+        where: { b2bDocumentId: doc.id },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, amount: true, method: true, validationStatus: true, notes: true, createdAt: true },
+      }),
+    ])
+    const termsDays = Math.max(0, contract?.paymentTermsDays ?? DEFAULT_PAYMENT_TERMS_DAYS)
+    const issuedAt = doc.invoicedAt ?? doc.createdAt
+    const dueDate = new Date(issuedAt.getTime() + termsDays * 24 * 60 * 60 * 1000)
+    const round2 = (n: number) => Math.round(n * 100) / 100
+    const paid = round2(payments.filter((p) => p.validationStatus === "VALIDATED").reduce((s, p) => s + p.amount, 0))
+    const pending = round2(payments.filter((p) => p.validationStatus === "PENDING").reduce((s, p) => s + p.amount, 0))
+    const balance = round2(Math.max(0, doc.total - paid))
+    invoice = {
+      termsDays,
+      fromContract: Boolean(contract),
+      dueDate: dueDate.toISOString(),
+      paid,
+      pending,
+      balance,
+      paymentStatus: doc.status === "CANCELLED" ? "CANCELLED" : balance <= 0.005 ? "PAID" : paid > 0 ? "PARTIAL" : "UNPAID",
+      overdue: balance > 0.005 && dueDate < new Date(),
+      payments: payments.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() })),
+    }
+  }
+
+  return NextResponse.json({ document: doc, invoice, createdByName: nameOf(doc.createdById), commercialName: nameOf(doc.client?.commercialId) })
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

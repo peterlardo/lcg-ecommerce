@@ -31,6 +31,8 @@ interface B2bDocument {
   validUntil: string | null
   requestedDeliveryDate: string | null
   createdAt: string
+  /** règlements validés (factures) */
+  paid?: number
   parent: LinkedDoc | null
   children: LinkedDoc[]
   _count: { items: number }
@@ -504,6 +506,13 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_LABEL[doc.status]?.className ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LABEL[doc.status]?.label ?? doc.status}</span>
                       {doc.parent && <span className="text-xs text-gray-500">issu de {doc.parent.reference}</span>}
                       {next && <span className="text-xs text-gray-500">→ {next.reference}</span>}
+                      {doc.type === "FACTURE" && doc.status === "INVOICED" && (() => {
+                        // état du paiement : seuls les règlements validés comptent
+                        const paid = doc.paid ?? 0
+                        const rest = Math.max(0, doc.total - paid)
+                        const state = rest <= 0.005 ? { label: "Payée", className: "bg-green-100 text-green-700" } : paid > 0 ? { label: `Reste ${formatPrice(rest)}`, className: "bg-amber-100 text-amber-800" } : { label: "Non payée", className: "bg-rose-100 text-rose-700" }
+                        return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${state.className}`}>{state.label}</span>
+                      })()}
                     </div>
                     <p className="mt-1 text-sm font-medium text-gray-800">{doc.clientName}</p>
                     <p className="text-xs text-gray-500">
