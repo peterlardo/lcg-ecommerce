@@ -38,7 +38,9 @@ export async function GET(request: Request) {
     } else if (type === "B2B" || type === "B2C") {
       where.type = type
     }
-    if (commercialId) where.commercialId = commercialId
+    // « none » : clients sans commercial attitré
+    if (commercialId === "none") where.commercialId = null
+    else if (commercialId) where.commercialId = commercialId
     if (active === "true") where.isActive = true
     if (active === "false") where.isActive = false
 

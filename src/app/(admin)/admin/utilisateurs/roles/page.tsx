@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Users, Save, ChevronDown, ChevronUp, ArrowLeft, Plus, Trash2, X } from "lucide-react"
 import Link from "next/link"
+import { PERMISSION_MODULE_LABELS } from "@/lib/permissions"
 
 interface RoleProfile {
   id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean; userCount: number
@@ -16,13 +17,7 @@ interface RoleData {
   role: string; permissions: RolePermission[]
 }
 
-const moduleLabels: Record<string, string> = {
-  dashboard: "Tableau de bord", ventes: "Ventes", tickets: "Tickets", commandes: "Commandes", stock: "Stock", caisse: "Caisse",
-  production: "Production", distribution: "Distribution", livraisons: "Livraisons",
-  reservations: "Réservations", "points-de-vente": "Points de vente", produits: "Produits", promotions: "Promotions & Coupons", rapports: "Rapports",
-  "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", "etat-stock": "État de stock & caisse",
-  clients: "Clients", "clients-b2b": "Clients B2B", commercial: "Tableau de bord commercial", creances: "Créances", b2b: "Devis, bons et factures B2B",
-}
+const moduleLabels = PERMISSION_MODULE_LABELS
 
 export default function RolesPage() {
   const [profiles, setProfiles] = useState<RoleProfile[]>([])

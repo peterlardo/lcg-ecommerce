@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { getPrisma } from "@/lib/prisma"
+import { COMMERCIAL_ROLES } from "@/lib/permissions"
 
 export async function GET() {
   const forbidden = await requireManagementAccess(["ADMIN", "COMMERCIAL", "COMPTABLE"])
   if (forbidden) return forbidden
 
   try {
+    // le responsable commercial a aussi son portefeuille : il figure dans la liste
     const commerciaux = await getPrisma().user.findMany({
-      where: { role: { in: ["COMMERCIAL", "ADMIN"] }, isActive: true },
+      where: { role: { in: [...COMMERCIAL_ROLES, "ADMIN"] }, isActive: true },
       orderBy: { name: "asc" },
       select: {
         id: true,

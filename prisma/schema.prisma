@@ -22,6 +22,7 @@ enum PaymentMethod {
   CARD
   MOBILE_MONEY
   CASH_ON_DELIVERY
+  BANK_TRANSFER
 }
 
 enum PaymentStatus {
@@ -765,6 +766,7 @@ enum B2bDocumentType {
   COMMANDE
   LIVRAISON
   FACTURE
+  AVOIR
 }
 
 enum B2bDocumentStatus {
@@ -792,6 +794,7 @@ enum PaymentPromiseStatus {
 enum PaymentValidationStatus {
   PENDING
   VALIDATED
+  REJECTED
 }
 
 enum PaymentReminderType {
@@ -829,6 +832,8 @@ model B2bDocument {
   cancelledAt DateTime?
   cancelledById String?
   cancelReason String?
+  emailedAt DateTime?
+  emailedTo String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([type])
@@ -911,13 +916,28 @@ model CustomerPayment {
   orderId String?
   amount Float
   method PaymentMethod
+  /// n° de transaction Mobile Money, de virement ou de chèque
+  reference String?
   notes String?
   customerName String?
+  /// qui a saisi le règlement
+  receivedById String?
   validationStatus PaymentValidationStatus @default(PENDING)
   validatedById String?
+  validatedAt DateTime?
+  rejectReason String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([b2bDocumentId])
+  @@index([createdAt])
+}
+
+/// Réglages de l'administration (Paramètres), une ligne par rubrique : general, delivery, payment, notifications, bank.
+model AppSetting {
+  key String @id
+  value Json
+  updatedById String?
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 model PaymentReminder {

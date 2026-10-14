@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { Camera, Check, Eye, EyeOff, LogOut, Plus, Save, ShieldCheck, UserPlus, X } from "lucide-react"
 import Link from "next/link"
-import { isCommercialRole } from "@/lib/permissions"
+import { isCommercialRole, PERMISSION_MODULES, PERMISSION_MODULE_LABELS } from "@/lib/permissions"
 
-const modules = ["dashboard", "ventes", "tickets", "commandes", "stock", "caisse", "production", "distribution", "livraisons", "reservations", "points-de-vente", "produits", "promotions", "rapports", "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b", "commercial", "creances", "b2b", "contrats"]
-const labels: Record<string, string> = { dashboard: "Dashboard", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes", stock: "Stock", caisse: "Caisse", production: "Production", distribution: "Distribution", livraisons: "Livraisons", reservations: "Pré-commandes", "points-de-vente": "Points de vente", produits: "Produits", promotions: "Promotions", rapports: "Rapports", "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", "etat-stock": "État de stock & caisse", clients: "Clients", "clients-b2b": "Clients B2B", commercial: "Tableau de bord commercial", creances: "Créances", b2b: "Devis, bons et factures B2B" }
+// liste commune (permissions.ts) : un module absent d'ici voyait ses droits effacés à chaque enregistrement de la fiche
+const modules: string[] = [...PERMISSION_MODULES]
+const labels = PERMISSION_MODULE_LABELS
 
 interface RoleProfile { id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean }
 interface Permission { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }

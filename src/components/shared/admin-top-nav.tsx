@@ -13,6 +13,7 @@ import {
   Activity,
   Archive,
   BadgePercent,
+  Banknote,
   BarChart3,
   Bell,
   BriefcaseBusiness,
@@ -75,6 +76,7 @@ const navGroups = [
       { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
       { href: "/admin/bons-b2b", label: "Commandes, livraisons, factures", icon: ReceiptText },
       { href: "/admin/creances", label: "Créances", icon: HandCoins },
+      { href: "/admin/encaissements", label: "Encaissements", icon: Banknote },
       { href: "/admin/contrats-b2b", label: "Contrats B2B", icon: FileSignature },
       { href: "/admin/tarifs-b2b", label: "Tarifs B2B", icon: Tags },
     ],
@@ -151,10 +153,26 @@ const priorityHrefs = new Set(priorityLinks.flatMap((link) => [link.href, ...(li
 const commercialLinks: NavLink[] = [
   { href: "/admin/commercial", label: "Tableau de bord", icon: BriefcaseBusiness },
   { href: "/admin/nouveau-client", label: "Nouveau client", icon: UserPlus },
-  { href: "/admin/clients-b2b", label: "Clients B2B", icon: Building2 },
+  {
+    href: "/admin/clients-b2b",
+    label: "Clients",
+    icon: Building2,
+    children: [
+      { href: "/admin/clients-b2b", label: "Clients B2B (zone)", icon: Building2 },
+      { href: "/admin/clients", label: "Portefeuille et attribution", icon: Users },
+    ],
+  },
   { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
   { href: "/admin/bons-b2b", label: "Commandes, livraisons, factures", icon: ReceiptText },
-  { href: "/admin/creances", label: "Créances", icon: HandCoins },
+  {
+    href: "/admin/creances",
+    label: "Créances",
+    icon: HandCoins,
+    children: [
+      { href: "/admin/creances", label: "Créances", icon: HandCoins },
+      { href: "/admin/encaissements", label: "Encaissements", icon: Banknote },
+    ],
+  },
   {
     href: "/admin/contrats-b2b",
     label: "Contrats et tarifs",

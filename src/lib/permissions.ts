@@ -11,9 +11,12 @@ export const PERMISSION_MODULES = [
   "dashboard", "ventes", "tickets", "commandes", "caisse", "reservations",
   "stock", "etat-stock", "production", "lots", "tracabilite", "distribution", "livraisons",
   "points-de-vente", "produits", "promotions", "rapports",
-  "clients", "clients-b2b", "nouveau-client", "zone-commerciale", "commercial", "creances", "b2b", "contrats",
+  "clients", "clients-b2b", "nouveau-client", "zone-commerciale", "commercial", "creances", "encaissements", "b2b", "contrats",
   "messages", "parametres", "controle-distant", "utilisateurs", "activite",
 ] as const
+
+/** Profils de caisse : ils reçoivent les commandes et sont seuls à établir l'état de caisse. */
+export const CASHIER_ROLES = ["CAISSE", "CAISSIERE", "CAISSIER", "CASHIER"]
 
 export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   dashboard: "Tableau de bord", ventes: "Ventes", tickets: "Tickets de vente", commandes: "Commandes",
@@ -23,6 +26,7 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   promotions: "Promotions & coupons", rapports: "Rapports", clients: "Clients", "clients-b2b": "Clients B2B",
   "nouveau-client": "Nouveau client (B2B / B2C)",
   "zone-commerciale": "Zone commerciale", commercial: "Tableau de bord commercial", creances: "Créances",
+  encaissements: "Encaissements (règlements reçus)",
   b2b: "Devis, bons et factures B2B", contrats: "Contrats et tarifs B2B",
   messages: "Messages", parametres: "Paramètres",
   "controle-distant": "Contrôle distant", utilisateurs: "Utilisateurs", activite: "Journal d'activité",
@@ -40,6 +44,8 @@ export const MODULE_ROLES: Record<string, string[]> = {
   "zone-commerciale": ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   commercial: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   creances: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
+  // la caisse valide les règlements saisis par les commerciaux
+  encaissements: ["ADMIN", "COMMERCIAL", "COMPTABLE", ...CASHIER_ROLES],
   b2b: ["ADMIN", "COMMERCIAL"],
   contrats: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
 }
@@ -54,7 +60,7 @@ export const LEGACY_ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "
  * Modules propres au responsable commercial (profil RESPONSABLE_COMMERCIAL) : ils font partie de son rôle,
  * il les voit toujours. Les autres commerciaux gardent le menu général, selon les droits cochés sur leur fiche.
  */
-export const COMMERCIAL_MODULES = ["commercial", "nouveau-client", "clients-b2b", "b2b", "contrats", "creances", "zone-commerciale"]
+export const COMMERCIAL_MODULES = ["commercial", "nouveau-client", "clients", "clients-b2b", "b2b", "contrats", "creances", "encaissements", "zone-commerciale"]
 
 /**
  * Rôles commerciaux. RESPONSABLE_COMMERCIAL est un profil créé par l'administrateur : il a les écrans
@@ -74,13 +80,15 @@ export function isCommercialManager(role: string | null | undefined): boolean {
   return role === COMMERCIAL_MANAGER_ROLE
 }
 
+/** Qui répartit le portefeuille de clients entre les commerciaux : l'administrateur et le responsable commercial. */
+export function canAssignClients(user: { role?: string | null; supervisesB2b?: boolean } | null | undefined): boolean {
+  return user?.role === "ADMIN" || isCommercialManager(user?.role) || user?.supervisesB2b === true
+}
+
 /** Rôle à comparer aux listes de rôles : le responsable commercial passe partout où le commercial passe. */
 export function baseRole<T extends string | null | undefined>(role: T): T | "COMMERCIAL" {
   return role === COMMERCIAL_MANAGER_ROLE ? "COMMERCIAL" : role
 }
-
-/** Profils de caisse : ils reçoivent les commandes et sont seuls à établir l'état de caisse. */
-export const CASHIER_ROLES = ["CAISSE", "CAISSIERE", "CAISSIER", "CASHIER"]
 
 export const PASSWORD_MIN_LENGTH = 6
 

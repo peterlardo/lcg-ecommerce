@@ -1,7 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useSession } from "next-auth/react"
+import { canAssignClients } from "@/lib/permissions"
+import { normalizePhone } from "@/lib/client-duplicates"
 import {
   Users,
   Search,
@@ -91,6 +93,30 @@ export default function ClientsPage() {
   const [error, setError] = useState("")
   const [toast, setToast] = useState("")
 
+  // répartition du portefeuille : administrateur et responsable commercial
+  const canAssign = canAssignClients(session?.user as { role?: string; supervisesB2b?: boolean } | undefined)
+  const [selection, setSelection] = useState<Set<string>>(new Set())
+  const [assignTo, setAssignTo] = useState("")
+  const [assigning, setAssigning] = useState(false)
+
+  // doublons possibles : même téléphone (9 derniers chiffres) parmi les clients affichés
+  const duplicatePhones = useMemo(() => {
+    const seen = new Map<string, number>()
+    for (const c of clients) {
+      const p = normalizePhone(c.phone)
+      if (p.length >= 8) seen.set(p, (seen.get(p) ?? 0) + 1)
+    }
+    return new Set([...seen].filter(([, n]) => n > 1).map(([p]) => p))
+  }, [clients])
+
+  const toggleSelected = (id: string) =>
+    setSelection((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
   const loadClients = useCallback(async () => {
     setLoading(true)
     try {
@@ -101,7 +127,10 @@ export default function ClientsPage() {
       if (activeFilter !== "tous") params.set("active", activeFilter)
       const res = await fetch(`/api/clients?${params.toString()}`)
       if (!res.ok) throw new Error("load")
-      setClients(await res.json())
+      const list: Client[] = await res.json()
+      setClients(list)
+      // la sélection ne garde que des clients encore affichés
+      setSelection((current) => new Set(list.filter((c) => current.has(c.id)).map((c) => c.id)))
     } catch {
       setError("Impossible de charger les clients.")
     } finally {
@@ -195,6 +224,33 @@ export default function ClientsPage() {
     }
   }
 
+  async function assignSelection() {
+    if (assigning || selection.size === 0) return
+    setAssigning(true)
+    setError("")
+    try {
+      const res = await fetch("/api/clients/attribution", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientIds: [...selection], commercialId: assignTo === "none" ? null : assignTo }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || "Attribution impossible.")
+        return
+      }
+      const who = assignTo === "none" ? "personne (non assignés)" : commerciaux.find((c) => c.id === assignTo)?.name || "le commercial choisi"
+      setToast(`${data.updated} client${data.updated > 1 ? "s" : ""} attribué${data.updated > 1 ? "s" : ""} à ${who}.`)
+      setSelection(new Set())
+      loadClients()
+      setTimeout(() => setToast(""), 3000)
+    } catch {
+      setError("Erreur réseau.")
+    } finally {
+      setAssigning(false)
+    }
+  }
+
   async function remove(c: Client) {
     if (!confirm(`Supprimer le client « ${displayName(c)} » ?`)) return
     try {
@@ -274,6 +330,7 @@ export default function ClientsPage() {
             className={`${inputCls} pl-9 pr-8 appearance-none bg-white w-full sm:w-auto max-w-full`}
           >
             <option value="tous">Tous les commerciaux</option>
+            <option value="none">Non assignés</option>
             {commerciaux.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name || c.email}
@@ -307,13 +364,33 @@ export default function ClientsPage() {
         </div>
       ) : (
         <div className="space-y-2 sm:space-y-3">
+          {canAssign && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 sm:px-4">
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-gray-700">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-primary"
+                  checked={selection.size > 0 && selection.size === clients.length}
+                  ref={(el) => { if (el) el.indeterminate = selection.size > 0 && selection.size < clients.length }}
+                  onChange={() => setSelection(selection.size === clients.length ? new Set() : new Set(clients.map((c) => c.id)))}
+                />
+                Tout sélectionner ({clients.length} affiché{clients.length > 1 ? "s" : ""})
+              </label>
+              <p className="text-sm text-gray-500">Cochez des clients pour les attribuer à un commercial.</p>
+            </div>
+          )}
           {clients.map((c) => (
             <div
               key={c.id}
-              className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4"
+              className={`bg-white rounded-xl border p-3 sm:p-4 ${selection.has(c.id) ? "border-primary ring-1 ring-primary/30" : "border-gray-200"}`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {canAssign && (
+                    <label className="-m-2 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center" aria-label={`Sélectionner ${displayName(c)}`}>
+                      <input type="checkbox" className="h-5 w-5 accent-primary" checked={selection.has(c.id)} onChange={() => toggleSelected(c.id)} />
+                    </label>
+                  )}
                   <div
                     className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm flex-shrink-0 ${
                       c.type === "B2B"
@@ -344,6 +421,16 @@ export default function ClientsPage() {
                       {!c.isActive && (
                         <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-500">
                           Inactif
+                        </span>
+                      )}
+                      {duplicatePhones.has(normalizePhone(c.phone)) && (
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800" title="Un autre client affiché a le même numéro de téléphone">
+                          Doublon possible
+                        </span>
+                      )}
+                      {c.type === "B2B" && !c.commercial && (
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+                          Non assigné
                         </span>
                       )}
                     </div>
@@ -394,6 +481,34 @@ export default function ClientsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {canAssign && selection.size > 0 && (
+        <div className="sticky bottom-3 z-40 flex flex-col gap-2 rounded-xl border border-primary/30 bg-white p-3 shadow-lg sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-gray-900">
+            {selection.size} client{selection.size > 1 ? "s" : ""} sélectionné{selection.size > 1 ? "s" : ""}
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select value={assignTo} onChange={(e) => setAssignTo(e.target.value)} className={`${inputCls} min-h-11 bg-white sm:w-64`} aria-label="Commercial à qui attribuer">
+              <option value="">Attribuer à…</option>
+              {commerciaux.map((c) => (
+                <option key={c.id} value={c.id}>{c.name || c.email}</option>
+              ))}
+              <option value="none">Personne (retirer le commercial)</option>
+            </select>
+            <button
+              type="button"
+              onClick={assignSelection}
+              disabled={!assignTo || assigning}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            >
+              <Briefcase className="h-4 w-4" /> {assigning ? "Attribution…" : "Attribuer"}
+            </button>
+            <button type="button" onClick={() => setSelection(new Set())} className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              Désélectionner
+            </button>
+          </div>
         </div>
       )}
 

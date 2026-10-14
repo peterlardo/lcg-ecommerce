@@ -272,6 +272,11 @@ function getTransporter() {
   return { sendMail: deliver }
 }
 
+/** Envoi d'un e-mail déjà mis en forme (documents B2B adressés aux clients). Lève une erreur en cas d'échec. */
+export async function sendPreparedEmail(mail: { to: string; subject: string; html: string; fromName?: string }): Promise<void> {
+  await deliver({ from: `"${(mail.fromName ?? "LCG").replace(/["<>\r\n]/g, "")}" <${senderAddress()}>`, to: mail.to, subject: mail.subject.replace(/[\r\n]+/g, " "), html: mail.html })
+}
+
 export async function sendOrderEmail(data: OrderMailData): Promise<boolean> {
   try {
     await getTransporter().sendMail({

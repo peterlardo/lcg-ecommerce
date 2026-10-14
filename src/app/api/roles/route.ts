@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess } from "@/lib/api-auth"
+import { PERMISSION_MODULES } from "@/lib/permissions"
 
-const MODULES = [
-  "dashboard", "ventes", "tickets", "commandes", "stock", "caisse",
-  "production", "distribution", "livraisons",
-  "reservations", "points-de-vente", "produits", "promotions", "rapports",
-  "controle-distant", "utilisateurs", "etat-stock", "clients", "clients-b2b", "commercial", "creances", "b2b", "contrats",
-]
+// liste commune : l'enregistrement d'un rôle efface les droits des modules absents de cette liste
+const MODULES: string[] = [...PERMISSION_MODULES]
 
 export async function GET() {
   const forbidden = await requireManagementAccess(["ADMIN"])

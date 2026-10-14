@@ -9,6 +9,16 @@ interface GeneralSettings {
   phone: string
   address: string
   website: string
+  legal: string
+}
+
+interface BankSettings {
+  bankName: string
+  accountHolder: string
+  accountNumber: string
+  mtnMoney: string
+  airtelMoney: string
+  instructions: string
 }
 
 interface DeliverySettings {
@@ -59,16 +69,29 @@ export default function ParametresPage() {
   const [general, setGeneral] = useState<GeneralSettings>({
     companyName: "LCG — La Congolaise des Glaçons",
     email: "contact@lcg.cg",
-    phone: "+242 06 739 49 49",
+    phone: "+242 06 739 49 49 · +242 05 607 91 91",
     address: "97 Rue EWO, Ouenzé — Brazzaville, République du Congo",
     website: "https://lcg.cg",
+    legal: "",
   })
 
+  // valeurs réelles chargées depuis le serveur : rien de fictif affiché avant le chargement
   const [delivery, setDelivery] = useState<DeliverySettings>({
-    deliveryFee: 1500,
-    freeDeliveryThreshold: 15000,
-    zones: ["Brazzaville Centre", "Brazzaville Nord", "Brazzaville Sud", "Pointe-Noire"],
+    deliveryFee: 0,
+    freeDeliveryThreshold: 0,
+    zones: [],
   })
+
+  const [bank, setBank] = useState<BankSettings>({
+    bankName: "",
+    accountHolder: "",
+    accountNumber: "",
+    mtnMoney: "",
+    airtelMoney: "",
+    instructions: "",
+  })
+  const [loaded, setLoaded] = useState(false)
+  const [saveError, setSaveError] = useState("")
 
   const [payment, setPayment] = useState<PaymentSettings>({
     card: true,
@@ -90,30 +113,37 @@ export default function ParametresPage() {
 
   useEffect(() => {
     fetch("/api/settings")
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((s) => {
         if (s.general) setGeneral(s.general)
         if (s.delivery) setDelivery(s.delivery)
         if (s.payment) setPayment(s.payment)
         if (s.notifications) setNotifications(s.notifications)
+        if (s.bank) setBank(s.bank)
+        setLoaded(true)
       })
-      .catch(() => {})
+      .catch(() => setSaveError("Paramètres illisibles : rechargez la page avant d'enregistrer."))
   }, [])
 
   const persistSettings = async (section: string, data: Record<string, unknown>) => {
+    // enregistrer avant le chargement écraserait les vraies valeurs par celles affichées par défaut
+    if (!loaded) return
     setSaving(section)
     setSaved(null)
+    setSaveError("")
     try {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ section, data }),
       })
-      if (!res.ok) throw new Error("Erreur")
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(res.status === 403 ? "Vous n'avez pas le droit de modifier les paramètres." : body?.error || "Enregistrement impossible.")
       setSaved(section)
       setTimeout(() => setSaved(null), 2500)
-    } catch {
+    } catch (e) {
       setSaved(null)
+      setSaveError(e instanceof Error ? e.message : "Enregistrement impossible.")
     } finally {
       setSaving(null)
     }
@@ -125,6 +155,7 @@ export default function ParametresPage() {
     else if (section === "livraison") payload.delivery = delivery
     else if (section === "paiement") payload.payment = payment
     else if (section === "notifications") payload.notifications = notifications
+    else if (section === "reglement") payload.bank = bank
     persistSettings(section, payload)
   }
 
@@ -265,6 +296,10 @@ export default function ParametresPage() {
         <Settings className="h-5 w-5 text-gray-400" />
       </div>
 
+      {saveError && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{saveError}</div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
         <div className="flex items-center justify-between gap-2 mb-4">
           <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Paramètres généraux</h3>
@@ -336,7 +371,22 @@ export default function ParametresPage() {
               className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
             />
           </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Mentions légales (pied des devis, bons et factures)
+            </label>
+            <input
+              type="text"
+              value={general.legal}
+              onChange={(e) =>
+                setGeneral((prev) => ({ ...prev, legal: e.target.value }))
+              }
+              placeholder="Forme, capital, RCCM, NIU"
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+            />
+          </div>
         </div>
+        <p className="mt-3 text-xs text-gray-500">Le nom, l&apos;adresse, le téléphone, le site et les mentions légales s&apos;impriment en tête et en pied des documents B2B.</p>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
@@ -344,6 +394,9 @@ export default function ParametresPage() {
           <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Paramètres de livraison</h3>
           <SaveBtn section="livraison" saving={saving} saved={saved} onSave={handleSave} />
         </div>
+        <p className="mb-4 text-xs text-gray-500">
+          Les frais s&apos;appliquent aux commandes de la boutique en ligne dès l&apos;enregistrement. 0 = livraison gratuite.
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -480,6 +533,46 @@ export default function ParametresPage() {
               </button>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Coordonnées de règlement (factures)</h3>
+          <SaveBtn section="reglement" saving={saving} saved={saved} onSave={handleSave} />
+        </div>
+        <p className="mb-4 text-xs text-gray-500">
+          Imprimées sur les factures et dans les factures envoyées par e-mail, dès qu&apos;un compte ou un numéro est saisi. Laissez vide ce que LCG n&apos;utilise pas.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[
+            { key: "bankName" as const, label: "Banque", placeholder: "Nom de la banque" },
+            { key: "accountHolder" as const, label: "Titulaire du compte", placeholder: "Raison sociale du titulaire" },
+            { key: "accountNumber" as const, label: "RIB ou IBAN", placeholder: "Code banque, guichet, n° de compte, clé" },
+            { key: "mtnMoney" as const, label: "N° MTN Mobile Money", placeholder: "+242 06 …" },
+            { key: "airtelMoney" as const, label: "N° Airtel Money", placeholder: "+242 05 …" },
+          ].map((field) => (
+            <div key={field.key}>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{field.label}</label>
+              <input
+                type="text"
+                value={bank[field.key]}
+                onChange={(e) => setBank((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+              />
+            </div>
+          ))}
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Consigne de paiement (facultatif)</label>
+            <input
+              type="text"
+              value={bank.instructions}
+              onChange={(e) => setBank((prev) => ({ ...prev, instructions: e.target.value }))}
+              placeholder="Ex. : indiquer le numéro de facture dans le libellé du virement"
+              className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+            />
+          </div>
         </div>
       </div>
 

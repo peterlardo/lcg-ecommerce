@@ -1,40 +1,55 @@
 import { NextResponse } from "next/server"
-import { requireManagementAccess } from "@/lib/api-auth"
-import { readFile, writeFile } from "fs/promises"
-import { join } from "path"
+import { requireManagementAccess, requireModuleAccess } from "@/lib/api-auth"
+import { auth } from "@/lib/auth"
+import { logActivity } from "@/lib/activity"
+import { getSettings, saveSection, type SettingsSection } from "@/lib/settings"
 
-const SETTINGS_FILE = join(process.cwd(), "data", "settings.json")
+export const dynamic = "force-dynamic"
 
-async function readSettings() {
-  try {
-    const raw = await readFile(SETTINGS_FILE, "utf-8")
-    return JSON.parse(raw)
-  } catch {
-    return {}
-  }
+/** Noms de rubrique envoyés par l'écran Paramètres (français) ou par leur nom en base. */
+const SECTION_ALIASES: Record<string, SettingsSection> = {
+  generaux: "general", general: "general",
+  livraison: "delivery", delivery: "delivery",
+  paiement: "payment", payment: "payment",
+  notifications: "notifications",
+  reglement: "bank", bank: "bank",
 }
 
 export async function GET() {
   const forbidden = await requireManagementAccess()
   if (forbidden) return forbidden
 
-  const settings = await readSettings()
-  return NextResponse.json(settings)
+  try {
+    return NextResponse.json(await getSettings())
+  } catch (error) {
+    console.error("GET settings error:", error)
+    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
+  }
 }
 
+/**
+ * Enregistre une rubrique : `{ section, data: { <rubrique>: {...} } }` (forme envoyée par l'écran)
+ * ou `{ section, value: {...} }`.
+ */
 export async function POST(req: Request) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireModuleAccess("parametres", "edit")
   if (forbidden) return forbidden
 
-  const body = await req.json()
-  const current = await readSettings()
-  const updated = { ...current, ...body }
-
   try {
-    const { mkdirSync } = await import("fs")
-    mkdirSync(join(process.cwd(), "data"), { recursive: true })
-  } catch { /* already exists */ }
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
+    const section = SECTION_ALIASES[String(body?.section ?? "")]
+    if (!body || !section) return NextResponse.json({ error: "Rubrique inconnue" }, { status: 400 })
 
-  await writeFile(SETTINGS_FILE, JSON.stringify(updated, null, 2), "utf-8")
-  return NextResponse.json({ ok: true })
+    const data = body.data && typeof body.data === "object" ? (body.data as Record<string, unknown>) : null
+    const raw = body.value ?? data?.[section] ?? data
+    if (!raw || typeof raw !== "object") return NextResponse.json({ error: "Valeurs manquantes" }, { status: 400 })
+
+    const session = await auth()
+    const value = await saveSection(section, raw, session?.user?.id ?? null)
+    await logActivity({ module: "parametres", action: "Modification", entity: "appSetting", entityId: section, summary: `Paramètres « ${section} » enregistrés` })
+    return NextResponse.json({ ok: true, section, value })
+  } catch (error) {
+    console.error("POST settings error:", error)
+    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
+  }
 }

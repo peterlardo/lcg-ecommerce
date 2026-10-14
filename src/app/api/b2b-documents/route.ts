@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
-import { applicableContract, nextDocumentReference, PRIMARY_DOC_TYPES } from "@/lib/b2b"
+import { applicableContract, LISTED_DOC_TYPES, nextDocumentReference, PRIMARY_DOC_TYPES } from "@/lib/b2b"
 import { contractDiscount } from "@/lib/b2b-contract"
 import { auth } from "@/lib/auth"
 import { clientDisplayName, seesAllB2b, type SessionUser } from "@/lib/commercial"
@@ -49,7 +49,7 @@ export async function GET(req: Request) {
     const available = url.searchParams.get("available") === "1"
     const perPage = available ? 200 : 20
 
-    if (type && !PRIMARY_DOC_TYPES.includes(type as (typeof PRIMARY_DOC_TYPES)[number])) {
+    if (type && !LISTED_DOC_TYPES.includes(type as (typeof LISTED_DOC_TYPES)[number])) {
       return NextResponse.json({ error: "Type de document invalide" }, { status: 400 })
     }
     if (status && !DOCUMENT_STATUSES.includes(status)) {
@@ -104,7 +104,7 @@ export async function GET(req: Request) {
           client: { select: { id: true, companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true } },
           parent: { select: { id: true, reference: true, type: true } },
           // document suivant de la chaîne (devis -> commande -> livraison -> facture), s'il existe
-          children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true } },
+          children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true, total: true } },
           _count: { select: { items: true } },
           // factures : règlements validés, pour afficher « payée / reste à payer » dans la liste
           payments: { where: { validationStatus: "VALIDATED" }, select: { amount: true } },
@@ -120,12 +120,14 @@ export async function GET(req: Request) {
         ...d,
         clientName: clientDisplayName(d.client),
         paid: Math.round(payments.reduce((s, p) => s + p.amount, 0) * 100) / 100,
+        // factures : avoirs émis, déduits du reste à payer
+        credited: Math.round(d.children.filter((c) => c.type === "AVOIR").reduce((s, c) => s + c.total, 0) * 100) / 100,
       })),
       counts,
       total,
       page,
       perPage,
-      types: PRIMARY_DOC_TYPES,
+      types: LISTED_DOC_TYPES,
     })
   } catch (error) {
     console.error("GET b2b-documents error:", error)

@@ -3,11 +3,14 @@ import { createHash } from "node:crypto";
 
 export const PRIMARY_DOC_TYPES = ["DEVIS", "COMMANDE", "LIVRAISON", "FACTURE"] as const;
 
+/** Types affichés dans les listes : la chaîne de vente, plus les avoirs (établis depuis une facture, jamais créés seuls). */
+export const LISTED_DOC_TYPES = [...PRIMARY_DOC_TYPES, "AVOIR"] as const;
+
 export const B2B_SCOPE_USERS = ["ADMIN", "COMPTABLE"] as const;
 
 export async function nextDocumentReference(
   tx: Prisma.TransactionClient,
-  prefix: "DEV" | "BC" | "BL" | "FAC",
+  prefix: "DEV" | "BC" | "BL" | "FAC" | "AV",
   year = new Date().getFullYear()
 ): Promise<string> {
   const count = await tx.b2bDocument.count({

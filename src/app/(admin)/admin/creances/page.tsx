@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { AlertCircle, BellRing, Check, HandCoins, Search, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
+import { RECEIPT_METHODS, RECEIPT_METHOD_LABEL, REFERENCE_EXPECTED } from "@/lib/payment-methods"
 
 interface Creance {
   id: string
@@ -10,6 +11,7 @@ interface Creance {
   clientId: string | null
   clientName: string
   total: number
+  credited: number
   paid: number
   pendingAmount: number
   promisePending: number
@@ -23,11 +25,7 @@ interface Creance {
   lastReminderAt: string | null
 }
 
-const METHODS = [
-  { value: "CASH_ON_DELIVERY", label: "Espèces" },
-  { value: "MOBILE_MONEY", label: "Mobile Money" },
-  { value: "CARD", label: "Carte bancaire" },
-]
+const METHODS = RECEIPT_METHODS.map((value) => ({ value, label: RECEIPT_METHOD_LABEL[value] }))
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -47,6 +45,7 @@ export default function CreancesPage() {
   const [payAmount, setPayAmount] = useState("")
   const [payMethod, setPayMethod] = useState("CASH_ON_DELIVERY")
   const [payNotes, setPayNotes] = useState("")
+  const [payReference, setPayReference] = useState("")
   const [payError, setPayError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -95,6 +94,7 @@ export default function CreancesPage() {
     setPayAmount(String(Math.max(0, c.balance)))
     setPayMethod("CASH_ON_DELIVERY")
     setPayNotes("")
+    setPayReference("")
     setPayError("")
   }
 
@@ -107,7 +107,7 @@ export default function CreancesPage() {
       const res = await fetch(`/api/encaissements/${paying.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: Number(payAmount), method: payMethod, notes: payNotes }),
+        body: JSON.stringify({ amount: Number(payAmount), method: payMethod, reference: payReference, notes: payNotes }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
@@ -231,7 +231,10 @@ export default function CreancesPage() {
                       <p className="font-mono text-xs text-gray-700">{c.reference}</p>
                       <p className="text-xs text-gray-500">du {formatDate(c.createdAt)}</p>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-gray-700">{formatPrice(c.total)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-gray-700">
+                      {formatPrice(c.total)}
+                      {c.credited > 0 && <span className="block text-xs text-gray-500">avoir − {formatPrice(c.credited)}</span>}
+                    </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right text-gray-700">{formatPrice(c.paid)}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right">
                       {c.pendingAmount > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">{formatPrice(c.pendingAmount)}</span>}
@@ -324,14 +327,27 @@ export default function CreancesPage() {
                   {METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
               </label>
+              {REFERENCE_EXPECTED.includes(payMethod) && (
+                <label className="block text-sm font-medium text-gray-700">
+                  {payMethod === "BANK_TRANSFER" ? "Référence du virement" : payMethod === "MOBILE_MONEY" ? "N° de transaction Mobile Money" : "Référence de la transaction"}
+                  <input
+                    type="text"
+                    value={payReference}
+                    onChange={(e) => setPayReference(e.target.value)}
+                    maxLength={120}
+                    placeholder="Facultatif, mais utile pour retrouver le paiement"
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 font-mono focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                  />
+                </label>
+              )}
               <label className="block text-sm font-medium text-gray-700">
-                Référence ou remarque (facultatif)
+                Remarque (facultatif)
                 <input
                   type="text"
                   value={payNotes}
                   onChange={(e) => setPayNotes(e.target.value)}
                   maxLength={500}
-                  placeholder="N° de transaction, virement, chèque…"
+                  placeholder="Ex. : remis par le gérant, chèque n°…"
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                 />
               </label>

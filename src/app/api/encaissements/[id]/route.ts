@@ -4,7 +4,8 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { logActivity } from "@/lib/activity"
 import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
-import { DEFAULT_PAYMENT_TERMS_DAYS, seesAllB2b, type SessionUser } from "@/lib/commercial"
+import { DEFAULT_PAYMENT_TERMS_DAYS, INVOICE_CREDITS, invoiceSituation, seesAllB2b, type SessionUser } from "@/lib/commercial"
+import { RECEIPT_METHODS, type ReceiptMethod } from "@/lib/payment-methods"
 
 export const dynamic = "force-dynamic"
 
@@ -12,10 +13,7 @@ export const dynamic = "force-dynamic"
 // partie « documents »). `id` est l'identifiant de la facture.
 
 const ALLOWED = ["ADMIN", "COMMERCIAL", "COMPTABLE", ...CASHIER_ROLES]
-const METHODS = ["CASH_ON_DELIVERY", "MOBILE_MONEY", "CARD"] as const
 const CHANNELS = ["WHATSAPP", "SMS", "PHONE"]
-
-type Method = (typeof METHODS)[number]
 
 /** La facture, si elle est dans la portée de l'utilisateur ; sinon null (un commercial ne touche que ses clients). */
 async function invoiceInScope(id: string, user: SessionUser) {
@@ -25,6 +23,7 @@ async function invoiceInScope(id: string, user: SessionUser) {
       id: true, reference: true, type: true, status: true, total: true, createdAt: true,
       client: { select: { commercialId: true, b2bContracts: { where: { status: "ACTIVE" }, orderBy: { startsAt: "desc" }, take: 1, select: { paymentTermsDays: true } } } },
       payments: { select: { amount: true, validationStatus: true } },
+      children: INVOICE_CREDITS,
     },
   })
   if (!doc) return null
@@ -46,7 +45,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const amount = Number(body.amount)
     if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
     const method = String(body.method || "CASH_ON_DELIVERY").toUpperCase()
-    if (!(METHODS as readonly string[]).includes(method)) return NextResponse.json({ error: "Moyen de règlement invalide" }, { status: 400 })
+    if (!(RECEIPT_METHODS as readonly string[]).includes(method)) return NextResponse.json({ error: "Moyen de règlement invalide" }, { status: 400 })
 
     const doc = await invoiceInScope(id, user)
     if (!doc) return NextResponse.json({ error: "Document introuvable" }, { status: 404 })
@@ -54,22 +53,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Ce document ne peut pas être encaissé" }, { status: 400 })
     }
 
-    const sum = (status: string) => doc.payments.filter((p) => p.validationStatus === status).reduce((s, p) => s + p.amount, 0)
-    const validated = sum("VALIDATED")
-    const pending = sum("PENDING")
-    if (validated + pending + amount > doc.total + 0.01) return NextResponse.json({ error: "Montant supérieur au solde" }, { status: 400 })
+    // solde encaissable : total − avoirs − règlements validés − règlements en attente
+    const situation = invoiceSituation(doc.total, doc.payments, doc.children)
+    if (amount > situation.open + 0.01) return NextResponse.json({ error: "Montant supérieur au solde" }, { status: 400 })
 
     // L'administrateur et la caisse encaissent directement ; le règlement saisi par un commercial attend leur validation.
     const direct = user?.role === "ADMIN" || isCashierRole(user?.role)
-    const notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 500) : null
+    const clean = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null)
+    const notes = clean(body.notes, 500)
+    const reference = clean(body.reference, 120)
+    const now = new Date()
     const payment = await getPrisma().customerPayment.create({
       data: {
         b2bDocumentId: id,
         amount,
-        method: method as Method,
+        method: method as ReceiptMethod,
+        reference,
         notes,
+        receivedById: user?.id ?? null,
         validationStatus: direct ? "VALIDATED" : "PENDING",
         validatedById: direct ? user?.id ?? null : null,
+        validatedAt: direct ? now : null,
       },
     })
     await logActivity({
@@ -77,11 +81,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       action: "Règlement",
       entity: "b2bDocument",
       entityId: id,
-      summary: `Règlement de ${amount} sur la facture ${doc.reference}${direct ? "" : " (à valider)"}`,
+      summary: `Règlement de ${amount} sur la facture ${doc.reference}${reference ? ` (réf. ${reference})` : ""}${direct ? "" : " (à valider)"}`,
     })
 
     return NextResponse.json(
-      { id: payment.id, balance: Math.round((doc.total - validated - pending - amount) * 100) / 100, validationStatus: payment.validationStatus },
+      { id: payment.id, balance: Math.round((situation.open - amount) * 100) / 100, validationStatus: payment.validationStatus },
       { status: 201 },
     )
   } catch (error) {
@@ -129,7 +133,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     }
     const { count } = await getPrisma().customerPayment.updateMany({
       where: { b2bDocumentId: id, validationStatus: "PENDING" },
-      data: { validationStatus: "VALIDATED", validatedById: user?.id ?? null },
+      data: { validationStatus: "VALIDATED", validatedById: user?.id ?? null, validatedAt: new Date() },
     })
     if (count === 0) {
       const already = doc.payments.some((p) => p.validationStatus === "VALIDATED")

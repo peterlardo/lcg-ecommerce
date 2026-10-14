@@ -46,7 +46,36 @@ export function currentMonth(now: Date = new Date()) {
   }
 }
 
+/** « AAAA-MM-JJ » (jour à Brazzaville) → premier instant de ce jour ; null si la date est invalide. */
+export function localDayStart(ymd: string | null | undefined): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd ?? "")
+  if (!m) return null
+  const date = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) - TZ_OFFSET_MS)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/** Jour à Brazzaville d'un instant, au format « AAAA-MM-JJ ». */
+export function localDay(date: Date): string {
+  return new Date(date.getTime() + TZ_OFFSET_MS).toISOString().slice(0, 10)
+}
+
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+/** Avoirs d'une facture : documents AVOIR non annulés qui lui sont rattachés. */
+export const INVOICE_CREDITS = { where: { type: "AVOIR" as const, status: { not: "CANCELLED" as const } }, select: { total: true } }
+
+/**
+ * Situation d'une facture. Seuls les règlements validés comptent comme payés ; un règlement refusé ne compte pas.
+ * `open` : ce qui peut encore être réglé ou crédité (total − avoirs − validé − en attente).
+ */
+export function invoiceSituation(total: number, payments: { amount: number; validationStatus: string }[], credits: { total: number }[]) {
+  const sum = (status: string) => payments.filter((p) => p.validationStatus === status).reduce((s, p) => s + p.amount, 0)
+  const credited = round2(credits.reduce((s, c) => s + c.total, 0))
+  const paid = round2(sum("VALIDATED"))
+  const pending = round2(sum("PENDING"))
+  const due = round2(Math.max(0, total - credited))
+  return { credited, paid, pending, due, balance: round2(Math.max(0, due - paid)), open: round2(Math.max(0, due - paid - pending)) }
+}
 
 export interface CreanceLine {
   id: string
@@ -54,13 +83,15 @@ export interface CreanceLine {
   clientId: string | null
   clientName: string
   total: number
+  /** avoirs émis sur la facture */
+  credited: number
   /** règlements validés */
   paid: number
   /** règlements saisis, en attente de validation */
   pendingAmount: number
   /** promesses de paiement en cours */
   promisePending: number
-  /** reste à recouvrer : total − validé − en attente − promis */
+  /** reste à recouvrer : total − avoirs − validé − en attente − promis */
   balance: number
   creditLimit: number | null
   paymentTermsDays: number
@@ -94,18 +125,17 @@ export async function creanceLines(user: SessionUser, now: Date = new Date()): P
       payments: { select: { amount: true, validationStatus: true } },
       promises: { select: { amount: true, status: true } },
       reminders: { select: { createdAt: true } },
+      children: INVOICE_CREDITS,
     },
   })
 
   return docs
     .map((d) => {
-      const sum = (rows: { amount: number }[]) => rows.reduce((s, r) => s + r.amount, 0)
-      const paid = sum(d.payments.filter((p) => p.validationStatus === "VALIDATED"))
-      const pendingAmount = sum(d.payments.filter((p) => p.validationStatus === "PENDING"))
-      const promisePending = sum(d.promises.filter((p) => p.status === "PENDING"))
+      const situation = invoiceSituation(d.total, d.payments, d.children)
+      const promisePending = d.promises.filter((p) => p.status === "PENDING").reduce((s, p) => s + p.amount, 0)
       const days = Math.max(0, d.client?.b2bContracts[0]?.paymentTermsDays ?? DEFAULT_PAYMENT_TERMS_DAYS)
       const due = new Date(d.createdAt.getTime() + days * 24 * 60 * 60 * 1000)
-      const balance = round2(d.total - paid - pendingAmount - promisePending)
+      const balance = round2(situation.open - promisePending)
       const lastReminder = d.reminders.reduce<Date | null>((max, r) => (!max || r.createdAt > max ? r.createdAt : max), null)
       return {
         id: d.id,
@@ -113,8 +143,9 @@ export async function creanceLines(user: SessionUser, now: Date = new Date()): P
         clientId: d.clientId,
         clientName: clientDisplayName(d.client),
         total: d.total,
-        paid: round2(paid),
-        pendingAmount: round2(pendingAmount),
+        credited: situation.credited,
+        paid: situation.paid,
+        pendingAmount: situation.pending,
         promisePending: round2(promisePending),
         balance,
         creditLimit: d.client?.creditLimit ?? null,

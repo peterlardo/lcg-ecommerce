@@ -10,7 +10,7 @@ import { contractDiscount, productOptions } from "@/lib/b2b-contract"
 // Écran commun aux devis et aux bons B2B (commande, livraison, facture) : liste, création, suite de la chaîne
 // devis -> bon de commande -> bon de livraison -> facture. Portage de devis-b2b.php et bons-b2b.php (lcgapp3).
 
-export type DocType = "DEVIS" | "COMMANDE" | "LIVRAISON" | "FACTURE"
+export type DocType = "DEVIS" | "COMMANDE" | "LIVRAISON" | "FACTURE" | "AVOIR"
 
 interface LinkedDoc {
   id: string
@@ -33,6 +33,8 @@ interface B2bDocument {
   createdAt: string
   /** règlements validés (factures) */
   paid?: number
+  /** avoirs émis (factures) */
+  credited?: number
   parent: LinkedDoc | null
   children: LinkedDoc[]
   _count: { items: number }
@@ -109,6 +111,7 @@ export const TYPE_LABEL: Record<DocType, { one: string; many: string; next?: str
   COMMANDE: { one: "Bon de commande", many: "Commandes", next: "Créer le bon de livraison" },
   LIVRAISON: { one: "Bon de livraison", many: "Livraisons", next: "Créer la facture" },
   FACTURE: { one: "Facture", many: "Factures" },
+  AVOIR: { one: "Avoir", many: "Avoirs" },
 }
 
 export const STATUS_LABEL: Record<string, { label: string; className: string }> = {
@@ -503,14 +506,20 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-gray-900">{doc.reference}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_LABEL[doc.status]?.className ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LABEL[doc.status]?.label ?? doc.status}</span>
-                      {doc.parent && <span className="text-xs text-gray-500">issu de {doc.parent.reference}</span>}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_LABEL[doc.status]?.className ?? "bg-gray-100 text-gray-700"}`}>{doc.type === "AVOIR" && doc.status === "INVOICED" ? "Émis" : STATUS_LABEL[doc.status]?.label ?? doc.status}</span>
+                      {doc.parent && <span className="text-xs text-gray-500">{doc.type === "AVOIR" ? "sur la facture" : "issu de"} {doc.parent.reference}</span>}
                       {next && <span className="text-xs text-gray-500">→ {next.reference}</span>}
                       {doc.type === "FACTURE" && doc.status === "INVOICED" && (() => {
-                        // état du paiement : seuls les règlements validés comptent
+                        // état du paiement : seuls les règlements validés comptent ; les avoirs réduisent le dû
                         const paid = doc.paid ?? 0
-                        const rest = Math.max(0, doc.total - paid)
-                        const state = rest <= 0.005 ? { label: "Payée", className: "bg-green-100 text-green-700" } : paid > 0 ? { label: `Reste ${formatPrice(rest)}`, className: "bg-amber-100 text-amber-800" } : { label: "Non payée", className: "bg-rose-100 text-rose-700" }
+                        const credited = doc.credited ?? 0
+                        const due = Math.max(0, doc.total - credited)
+                        const rest = Math.max(0, due - paid)
+                        const state =
+                          credited > 0 && due <= 0.005 ? { label: "Annulée par avoir", className: "bg-gray-100 text-gray-600" }
+                          : rest <= 0.005 ? { label: "Payée", className: "bg-green-100 text-green-700" }
+                          : paid > 0 || credited > 0 ? { label: `Reste ${formatPrice(rest)}`, className: "bg-amber-100 text-amber-800" }
+                          : { label: "Non payée", className: "bg-rose-100 text-rose-700" }
                         return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${state.className}`}>{state.label}</span>
                       })()}
                     </div>

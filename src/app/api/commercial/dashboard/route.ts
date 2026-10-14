@@ -30,7 +30,7 @@ export async function GET() {
 
     const [
       ca, target, inProgress, newClients, contractsActive, contractsCreated, encaissements, devisOuverts,
-      paiementsPending, promesses, commandesRecues, bonsLivraison, factures, recentDevis, recentLivraisons, lines,
+      paiementsPending, promesses, commandesRecues, bonsLivraison, factures, avoirs, recentDevis, recentLivraisons, lines,
     ] = await Promise.all([
       // chiffre d'affaires du mois : bons de commande confirmés, livrés ou facturés
       prisma.b2bDocument.aggregate({
@@ -55,6 +55,8 @@ export async function GET() {
       prisma.b2bDocument.count({ where: { type: "COMMANDE", status: { not: "CANCELLED" }, ...inScope } }),
       prisma.b2bDocument.count({ where: { type: "LIVRAISON", status: { not: "CANCELLED" }, ...inScope } }),
       prisma.b2bDocument.aggregate({ where: { type: "FACTURE", status: "INVOICED", ...inScope }, _count: { _all: true }, _sum: { total: true } }),
+      // avoirs émis : ils viennent en déduction du montant facturé
+      prisma.b2bDocument.aggregate({ where: { type: "AVOIR", status: "INVOICED", ...inScope }, _sum: { total: true } }),
       prisma.b2bDocument.findMany({
         where: { type: "DEVIS", ...inScope },
         orderBy: { createdAt: "desc" },
@@ -96,7 +98,8 @@ export async function GET() {
         commandesRecues,
         bonsLivraison,
         facturesCount: factures._count._all,
-        facturesMontant: factures._sum.total ?? 0,
+        facturesMontant: Math.round(((factures._sum.total ?? 0) - (avoirs._sum.total ?? 0)) * 100) / 100,
+        avoirsMontant: avoirs._sum.total ?? 0,
         recentDevis: recent(recentDevis),
         recentLivraisons: recent(recentLivraisons),
       },
