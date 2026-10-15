@@ -32,7 +32,7 @@ function parseDayParam(value: string | null): Date | null {
 }
 
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess(VIEW_ROLES)
+  const forbidden = await requireManagementAccess(VIEW_ROLES, [["etat-stock"]])
   if (forbidden) return forbidden
 
   try {
