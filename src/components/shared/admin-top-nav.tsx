@@ -62,6 +62,7 @@ const navGroups = [
       { href: "/admin/ventes", label: "Ventes", icon: ReceiptText },
       { href: "/admin/tickets", label: "Tickets de vente", icon: TicketCheck },
       { href: "/admin/commandes", label: "Commandes", icon: ShoppingCart },
+      { href: "/admin/reservations", label: "Pré-commandes", icon: CalendarRange },
       { href: "/admin/archives", label: "Archives", icon: Archive },
       { href: "/admin/caisse", label: "Caisse", icon: CircleDollarSign },
       { href: "/admin/clients-b2b", label: "Clients B2B", icon: Building2 },
@@ -125,28 +126,9 @@ interface NavLink {
   children?: NavLink[]
 }
 
-// Liens affichés directement dans la barre principale. Un lien peut porter des
-// sous-liens (ils s'ouvrent au clic, comme le menu « Plus »).
-const priorityLinks: NavLink[] = [
-  { href: "/admin/ventes", label: "Ventes", icon: ReceiptText },
-  { href: "/admin/tickets", label: "Tickets de caisse", icon: TicketCheck },
-  {
-    href: "/admin/commandes",
-    label: "Commandes",
-    icon: ShoppingCart,
-    // Un menu avec sous-liens ne navigue pas : la liste des commandes doit y figurer.
-    children: [
-      { href: "/admin/commandes", label: "Commandes", icon: ShoppingCart },
-      { href: "/admin/reservations", label: "Pré-commandes", icon: CalendarRange },
-      { href: "/admin/archives", label: "Archives", icon: Archive },
-    ],
-  },
-  { href: "/admin/livraisons", label: "Livraisons", icon: Truck },
-  { href: "/admin/rapports", label: "Rapports", icon: BarChart3 },
-  { href: "/admin/etat-stock", label: "État de stock & caisse", icon: ClipboardCheck },
-]
+// Les menus (navGroups) sont affichés tels quels dans la barre, chacun avec sa liste déroulante :
+// il n'y a plus de menu « Plus » qui regroupait le reste.
 const newClientLink: NavLink = { href: "/admin/nouveau-client", label: "Nouveau client", icon: UserPlus }
-const priorityHrefs = new Set(priorityLinks.flatMap((link) => [link.href, ...(link.children ?? []).map((child) => child.href)]))
 
 // Le responsable commercial (profil RESPONSABLE_COMMERCIAL) a son propre menu, limité à ses modules :
 // il remplace le menu général. Les autres commerciaux gardent le menu général.
@@ -188,7 +170,7 @@ const commercialLinks: NavLink[] = [
 const commercialFlatLinks = commercialLinks.flatMap((link) => link.children ?? [link])
 const commercialGroups = [{ title: "Commercial", icon: BriefcaseBusiness, links: commercialFlatLinks }]
 const commercialHrefs = new Set(commercialFlatLinks.map((link) => link.href))
-const PLUS_INDEX = navGroups.length
+/** Les listes des liens de tête (responsable commercial) sont numérotées à part de celles des menus. */
 const SUBMENU_OFFSET = 100
 
 interface AdminTopNavProps {
@@ -223,7 +205,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
   // seul le responsable commercial a ce menu ; les autres commerciaux gardent le menu général
   const isCommercial = isCommercialManager(session?.user?.role)
   // Le responsable commercial garde, en plus de ses modules, les écrans que l'administrateur lui a cochés
-  // expressément (commandes, rapports…) : ils se rangent dans le menu « Plus ».
+  // expressément (commandes, rapports…) : leurs menus suivent les siens dans la barre.
   const granted = (module: string) => (session?.user?.permissions ?? []).some((p) => p.module === module && p.canView)
   const commercialExtras = navGroups
     .map((group) => ({
@@ -233,10 +215,10 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
     .filter((group) => group.links.length > 0)
   const groups = isCommercial ? [...commercialGroups, ...commercialExtras] : navGroups
   // Les commerciaux (menu général) ont « Nouveau client » en accès direct, en tête de la barre :
-  // c'est leur geste le plus fréquent sur le terrain, il ne doit pas être rangé dans « Plus ».
+  // c'est leur geste le plus fréquent sur le terrain.
   const fieldCommercial = !isCommercial && isCommercialRole(session?.user?.role)
-  const topLinks = isCommercial ? commercialLinks : fieldCommercial ? [newClientLink, ...priorityLinks] : priorityLinks
-  const topHrefs = isCommercial ? commercialHrefs : fieldCommercial ? new Set([newClientLink.href, ...priorityHrefs]) : priorityHrefs
+  const topLinks = isCommercial ? commercialLinks : fieldCommercial ? [newClientLink] : []
+  const topHrefs = isCommercial ? commercialHrefs : fieldCommercial ? new Set([newClientLink.href]) : new Set<string>()
 
   // Certains écrans se pilotent depuis la permission d'un module voisin
   // (les livreurs sont gérés avec le module « livraisons »).
@@ -291,21 +273,19 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
     }
   }, [mobileOpen])
 
-  // Les éléments prioritaires sont affichés directement dans la barre ;
-  // tous les autres sont masqués dans le menu « Plus ».
-  const plusSections = groups
+  // Menus de la barre : ceux du menu général (ou, pour le responsable commercial, ceux des écrans cochés en plus),
+  // limités aux écrans que l'utilisateur peut ouvrir.
+  const barGroups = (isCommercial ? commercialExtras : navGroups)
     .map((group) => ({
-      title: group.title,
+      ...group,
       links: group.links.filter((link) => {
         if (topHrefs.has(link.href)) return false
-        const activeModule = link.href === "/admin" ? "dashboard" : moduleOf(link.href)
-        return canSee(activeModule)
+        return canSee(link.href === "/admin" ? "dashboard" : moduleOf(link.href))
       }),
     }))
-    .filter((section) => section.links.length > 0)
+    .filter((group) => group.links.length > 0)
 
-  // Sur mobile la barre de liens cède la place à un menu complet : on y liste
-  // toutes les entrées (pas seulement celles du menu « Plus »).
+  // Sur mobile la barre de liens cède la place à un menu complet : on y liste toutes les entrées.
   const mobileSections = groups
     .map((group) => ({
       title: group.title,
@@ -363,9 +343,9 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-3 text-lg font-medium transition-colors sm:px-5 ${activeClass}`}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-3 text-base font-medium transition-colors ${activeClass}`}
                 >
-                  <Icon className="h-6 w-6 shrink-0" />
+                  <Icon className="hidden h-5 w-5 shrink-0 xl:block" />
                   <span className="whitespace-nowrap">{link.label}</span>
                 </Link>
               )
@@ -386,9 +366,9 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
                     setOpenSide(rect.left + 220 > window.innerWidth ? "right" : "left")
                     setOpenIndex(submenuIndex)
                   }}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-3 text-lg font-medium transition-colors sm:px-5 ${activeClass}`}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-3 text-base font-medium transition-colors ${activeClass}`}
                 >
-                  <Icon className="h-6 w-6 shrink-0" />
+                  <Icon className="hidden h-5 w-5 shrink-0 xl:block" />
                   <span className="whitespace-nowrap">{link.label}</span>
                   <ChevronDown
                     className={`h-4 w-4 shrink-0 transition-transform duration-200 ${openIndex === submenuIndex ? "rotate-180" : ""}`}
@@ -425,69 +405,77 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
             )
           })}
 
-          {plusSections.length > 0 && (
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={openIndex === PLUS_INDEX}
-                onClick={(event) => {
-                  if (openIndex === PLUS_INDEX) {
-                    setOpenIndex(null)
-                    return
-                  }
-                  const rect = event.currentTarget.getBoundingClientRect()
-                  setOpenSide(rect.left + 270 > window.innerWidth ? "right" : "left")
-                  setOpenIndex(PLUS_INDEX)
-                }}
-                className={`flex items-center gap-2 rounded-lg px-4 py-3 text-lg font-medium transition-colors sm:px-5 ${
-                  openIndex === PLUS_INDEX
-                    ? "bg-white text-[#16489f]"
-                    : "text-white/85 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <span className="whitespace-nowrap">Plus</span>
-                <ChevronDown
-                  className={`h-4 w-4 shrink-0 transition-transform duration-200 ${openIndex === PLUS_INDEX ? "rotate-180" : ""}`}
-                />
-              </button>
-              {openIndex === PLUS_INDEX && (
-                <div
-                  className={`absolute top-full z-50 mt-1.5 w-max max-w-[calc(100vw-1.5rem)] min-w-[260px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1.5 shadow-xl ${
-                    openSide === "right" ? "right-0" : "left-0"
+          {barGroups.map((group, groupIndex) => {
+            // un menu qui n'a qu'un écran visible est un lien direct
+            if (group.links.length === 1) {
+              const link = group.links[0]
+              const Icon = link.icon
+              return (
+                <Link
+                  key={group.title}
+                  href={link.href}
+                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-3 text-base font-medium transition-colors ${
+                    isLinkActive(link.href) ? "bg-white text-[#16489f]" : "text-white/85 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  {plusSections.map((section, sectionIndex) => (
-                    <div
-                      key={section.title}
-                      className={sectionIndex > 0 ? "mt-1.5 border-t border-gray-100 pt-1.5" : ""}
-                    >
-                      <p className="px-4 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                        {section.title}
-                      </p>
-                      {section.links.map((link) => {
-                        const Icon = link.icon
-                        const active = isLinkActive(link.href)
-                        return (
-                          <Link
-                            key={link.href}
-                            href={link.href}
-                            onClick={() => setOpenIndex(null)}
-                            className={`flex items-center gap-3 px-4 py-3 text-base font-medium transition-colors ${
-                              active ? "bg-primary-50 text-primary-700" : "text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            <Icon className="h-5 w-5 shrink-0" />
-                            <span>{link.label}</span>
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                  <Icon className="hidden h-5 w-5 shrink-0 xl:block" />
+                  <span className="whitespace-nowrap">{link.label}</span>
+                </Link>
+              )
+            }
+            const GroupIcon = group.icon
+            const open = openIndex === groupIndex
+            const active = group.links.some((link) => isLinkActive(link.href))
+            return (
+              <div key={group.title} className="relative shrink-0">
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={open}
+                  onClick={(event) => {
+                    if (open) {
+                      setOpenIndex(null)
+                      return
+                    }
+                    const rect = event.currentTarget.getBoundingClientRect()
+                    setOpenSide(rect.left + 270 > window.innerWidth ? "right" : "left")
+                    setOpenIndex(groupIndex)
+                  }}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-3 text-base font-medium transition-colors ${
+                    open || active ? "bg-white text-[#16489f]" : "text-white/85 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <GroupIcon className="hidden h-5 w-5 shrink-0 xl:block" />
+                  <span className="whitespace-nowrap">{group.title}</span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+                </button>
+                {open && (
+                  <div
+                    className={`absolute top-full z-50 mt-1.5 w-max max-w-[calc(100vw-1.5rem)] min-w-[240px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1.5 shadow-xl ${
+                      openSide === "right" ? "right-0" : "left-0"
+                    }`}
+                  >
+                    {group.links.map((link) => {
+                      const Icon = link.icon
+                      return (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          onClick={() => setOpenIndex(null)}
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium transition-colors ${
+                            isLinkActive(link.href) ? "bg-primary-50 text-primary-700" : "text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          <Icon className="h-5 w-5 shrink-0" />
+                          <span>{link.label}</span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </nav>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
@@ -569,7 +557,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-sm font-semibold text-white">
               {session?.user?.name?.charAt(0) || "U"}
             </div>
-            <span className="hidden max-w-[160px] truncate text-white sm:inline">{session?.user?.name}</span>
+            <span className="hidden max-w-[160px] truncate text-white 2xl:inline">{session?.user?.name}</span>
           </div>
 
           <button
