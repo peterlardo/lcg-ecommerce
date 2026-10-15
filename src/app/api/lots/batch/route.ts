@@ -7,7 +7,7 @@ import { ensureOperationalStockLocations } from "@/lib/stock-service"
 import { checkedLotDates, checkedLotQuantity, LotInputError } from "@/lib/lot-input"
 
 export async function POST(req: Request) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(undefined, [["production", "lots"], "create"])
   if (forbidden) return forbidden
 
   try {

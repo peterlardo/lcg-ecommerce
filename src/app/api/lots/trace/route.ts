@@ -4,7 +4,7 @@ import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from 
 import { auth } from "@/lib/auth"
 
 export async function GET(req: Request) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(undefined, [["production", "lots", "tracabilite"], "view"])
   if (forbidden) return forbidden
 
   const url = new URL(req.url)

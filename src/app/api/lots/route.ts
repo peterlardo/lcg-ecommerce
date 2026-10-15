@@ -9,7 +9,7 @@ import { ensureOperationalStockLocations } from "@/lib/stock-service"
 import { LOT_LIST_LIMIT, checkedLotDates, checkedLotQuantity, LotInputError } from "@/lib/lot-input"
 
 export async function GET(req: Request) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(undefined, [["production", "lots", "tracabilite"], "view"])
   if (forbidden) return forbidden
 
   const url = new URL(req.url)
@@ -149,7 +149,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(undefined, [["production", "lots"], "create"])
   if (forbidden) return forbidden
 
   try {

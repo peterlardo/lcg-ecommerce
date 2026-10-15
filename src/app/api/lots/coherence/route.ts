@@ -8,7 +8,7 @@ import { isLotNumberConflict } from "@/lib/lot-utils"
 
 /** État de cohérence du stock (emplacements, ancien stock global, lots) : lecture pour tout le personnel. */
 export async function GET() {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(undefined, [["production", "lots", "tracabilite"], "view"])
   if (forbidden) return forbidden
 
   try {

@@ -6,7 +6,7 @@ import { LOT_STATUSES } from "@/lib/lot-input"
 import { logActivity } from "@/lib/activity"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(undefined, [["production", "lots", "tracabilite"], "view"])
   if (forbidden) return forbidden
 
   const { id } = await params
@@ -79,7 +79,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(undefined, [["production", "lots"], "edit"])
   if (forbidden) return forbidden
 
   try {
@@ -112,7 +112,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess()
+  const forbidden = await requireManagementAccess(undefined, [["production", "lots"], "delete"])
   if (forbidden) return forbidden
 
   try {

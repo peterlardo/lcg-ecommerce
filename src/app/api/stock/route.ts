@@ -17,7 +17,7 @@ function stockDelta(type: string, quantity: number) {
 }
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"], [["stock", "production", "lots", "etat-stock"], "view"])
   if (forbidden) return forbidden
 
   try {

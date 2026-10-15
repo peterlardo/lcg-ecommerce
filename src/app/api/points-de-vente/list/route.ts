@@ -5,7 +5,7 @@ import { CASHIER_ROLES } from "@/lib/permissions"
 import { ensureOperationalStockLocations } from "@/lib/stock-service"
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE", ...CASHIER_ROLES])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE", ...CASHIER_ROLES], [["points-de-vente", "production", "stock", "distribution", "etat-stock"], "view"])
   if (forbidden) return forbidden
   await ensureOperationalStockLocations()
 
