@@ -10,7 +10,19 @@ export async function PATCH(request: Request, context: { params: Promise<unknown
   try {
     const { id } = (await context.params) as { id: string }
     const body = await request.json()
-    const data: Record<string, unknown> = { name: body.name?.trim() || null, email: body.email?.trim() || undefined, phone: body.phone?.trim() || null, role: body.role, isActive: body.isActive }
+    // Seuls les champs PRÉSENTS dans le corps sont modifiés : un PATCH partiel
+    // (ex. changement de photo envoyant {image}) ne doit jamais effacer le nom,
+    // le téléphone ou l'email.
+    const data: Record<string, unknown> = {}
+    if (body.name !== undefined) data.name = body.name?.trim() || null
+    if (body.email !== undefined) data.email = body.email?.trim() || null
+    if (body.phone !== undefined) data.phone = body.phone?.trim() || null
+    if (body.role !== undefined) {
+      const roleProfile = await getPrisma().roleProfile.findUnique({ where: { key: String(body.role).trim().toUpperCase() } })
+      if (!roleProfile) return NextResponse.json({ error: `Rôle inconnu : ${body.role}` }, { status: 400 })
+      data.role = roleProfile.key
+    }
+    if (body.isActive !== undefined) data.isActive = Boolean(body.isActive)
     if (body.password) data.password = await bcrypt.hash(String(body.password), 12)
     if (body.image !== undefined) data.image = body.image || null
     // Promotion vers un rôle hors STAFF_ROLES (ex. COMPTABLE) : sans
@@ -30,5 +42,11 @@ export async function PATCH(request: Request, context: { params: Promise<unknown
     }
     await logActivity({ module: "utilisateurs", action: "Modification", entity: "user", entityId: id, summary: `Compte ${user.email} modifié${body.role ? ` (rôle ${body.role})` : ""}${body.password ? " · mot de passe réinitialisé" : ""}` })
     return NextResponse.json({ id: user.id })
-  } catch { return NextResponse.json({ error: "Impossible de modifier l'utilisateur" }, { status: 400 }) }
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code
+    if (code === "P2002") return NextResponse.json({ error: "Cet email existe déjà" }, { status: 409 })
+    if (code === "P2025") return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 })
+    console.error("PATCH utilisateurs error:", error)
+    return NextResponse.json({ error: "Impossible de modifier l'utilisateur" }, { status: 400 })
+  }
 }

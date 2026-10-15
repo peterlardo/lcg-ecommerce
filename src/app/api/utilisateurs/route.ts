@@ -41,7 +41,10 @@ export async function POST(request: Request) {
     const password = String(body.password || "")
     const requestedRole = String(body.role || "").trim().toUpperCase()
     const validProfile = await getPrisma().roleProfile.findUnique({ where: { key: requestedRole } })
-    const role = validProfile ? requestedRole : "CUSTOMER"
+    // Refuser plutôt que de basculer silencieusement en CUSTOMER : un compte
+    // créé avec le mauvais rôle donne l'impression que l'enregistrement a échoué.
+    if (!validProfile) return NextResponse.json({ error: `Rôle inconnu : ${requestedRole || "(vide)"}` }, { status: 400 })
+    const role = requestedRole
     if (!email || password.length < 6) return NextResponse.json({ error: "Email et mot de passe de 6 caractères minimum requis" }, { status: 400 })
     const user = await getPrisma().user.create({
       data: {

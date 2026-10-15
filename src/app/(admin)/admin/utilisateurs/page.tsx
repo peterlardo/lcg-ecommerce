@@ -41,6 +41,7 @@ export default function UtilisateursPage() {
   const [error, setError] = useState("")
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [creating, setCreating] = useState(false)
   // objectif de chiffre d'affaires du mois en cours, par commercial
   const [targets, setTargets] = useState<Record<string, number>>({})
   const [targetMonth, setTargetMonth] = useState("")
@@ -120,15 +121,28 @@ export default function UtilisateursPage() {
   }
 
   const createUser = async (event: React.FormEvent) => {
-    event.preventDefault(); setError("")
-    const response = await fetch("/api/utilisateurs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, permissions: createPermissions, posIds: createPosIds }),
-    })
-    const body = await response.json()
-    if (!response.ok) setError(body.error || "Erreur")
-    else { setMessage("Utilisateur créé"); setForm(empty); setCreatePermissions(emptyPermissions()); setCreatePosIds([]); setShowCreate(false); await load() }
+    event.preventDefault(); setError(""); setMessage("")
+    // Garde anti double-clic : les requêtes serveur mettent plusieurs secondes,
+    // un second clic pendant l'envoi créait un doublon (409 « email existe déjà »).
+    if (creating) return
+    setCreating(true)
+    try {
+      const response = await fetch("/api/utilisateurs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, permissions: createPermissions, posIds: createPosIds }),
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        setError(body?.error || (response.status === 401 || response.status === 403 ? "Session expirée ou accès refusé : reconnectez-vous" : "Erreur lors de la création"))
+      } else {
+        setMessage("Utilisateur créé"); setForm(empty); setCreatePermissions(emptyPermissions()); setCreatePosIds([]); setShowCreate(false); await load()
+      }
+    } catch {
+      setError("Connexion au serveur impossible : utilisateur non créé")
+    } finally {
+      setCreating(false)
+    }
   }
 
   useEffect(() => {
@@ -344,8 +358,8 @@ export default function UtilisateursPage() {
           </div>
 
           <div className="mt-4 flex justify-end">
-            <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90">
-              <Plus className="mr-1 inline h-4 w-4" />Créer
+            <button type="submit" disabled={creating || uploading} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-wait disabled:opacity-60">
+              <Plus className={`mr-1 inline h-4 w-4 ${creating ? "animate-pulse" : ""}`} />{creating ? "Création…" : "Créer"}
             </button>
           </div>
         </form>
