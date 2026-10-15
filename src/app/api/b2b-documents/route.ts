@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
-import { applicableContract, LISTED_DOC_TYPES, nextDocumentReference, PRIMARY_DOC_TYPES } from "@/lib/b2b"
+import { applicableContract, LISTED_DOC_TYPES, nextDocumentReference } from "@/lib/b2b"
 import { contractDiscount } from "@/lib/b2b-contract"
 import { auth } from "@/lib/auth"
 import { clientDisplayName, seesAllB2b, type SessionUser } from "@/lib/commercial"
@@ -19,7 +19,10 @@ const REF_PREFIX: Record<string, string> = {
   FACTURE: "FAC",
 }
 
-const DOCUMENT_STATUSES = ["DRAFT", "SENT", "CONFIRMED", "REJECTED", "DELIVERED", "INVOICED", "CANCELLED"]
+/** Documents qui se saisissent ; les autres naissent du document précédent de la chaîne. */
+const CREATABLE_TYPES = ["DEVIS", "COMMANDE"]
+
+const DOCUMENT_STATUSES =["DRAFT", "SENT", "CONFIRMED", "REJECTED", "DELIVERED", "INVOICED", "CANCELLED"]
 
 /** Devis qu'on peut encore reprendre dans un bon de commande : ni refusé, ni annulé, ni déjà transformé. */
 const OPEN_QUOTE_STATUSES = ["DRAFT", "SENT", "CONFIRMED"] as const
@@ -152,16 +155,30 @@ export async function POST(req: Request) {
     }
 
     const docType = String(body.type ?? "").toUpperCase()
-    if (!PRIMARY_DOC_TYPES.includes(docType as (typeof PRIMARY_DOC_TYPES)[number])) {
-      return NextResponse.json({ error: "Type de document invalide" }, { status: 400 })
+    // Chaîne de vente : devis → bon de commande → facture → bon de livraison. Seuls le devis et le bon de
+    // commande se saisissent ; la facture naît du bon de commande, le bon de livraison de la facture payée.
+    if (!CREATABLE_TYPES.includes(docType)) {
+      return NextResponse.json({ error: docType === "FACTURE" || docType === "LIVRAISON" ? "Une facture se crée depuis son bon de commande, un bon de livraison depuis sa facture payée" : "Type de document invalide" }, { status: 400 })
     }
-    if (!body.clientId) return NextResponse.json({ error: "Choisissez un client B2B" }, { status: 400 })
+    // le bon de commande naît toujours d'un devis : c'est le devis qui donne le client
+    if (docType === "COMMANDE" && !body.parentId) {
+      return NextResponse.json({ error: "Un bon de commande se crée à partir d'un devis : choisissez le devis" }, { status: 400 })
+    }
+    if (body.parentId && docType !== "COMMANDE") return NextResponse.json({ error: "Seul un bon de commande se crée à partir d'un devis" }, { status: 400 })
     if (!Array.isArray(body.items) || body.items.length === 0) {
       return NextResponse.json({ error: "Ajoutez au moins un article" }, { status: 400 })
     }
 
     const prisma = getPrisma()
-    const client = await prisma.client.findFirst({ where: { id: String(body.clientId), type: "B2B" } })
+    // bon de commande : le client est celui du devis, quoi que l'écran envoie
+    let clientIdWanted = body.clientId ? String(body.clientId) : ""
+    if (body.parentId) {
+      const source = await prisma.b2bDocument.findUnique({ where: { id: String(body.parentId) }, select: { clientId: true, type: true } })
+      if (!source || source.type !== "DEVIS" || !source.clientId) return NextResponse.json({ error: "Devis introuvable" }, { status: 404 })
+      clientIdWanted = source.clientId
+    }
+    if (!clientIdWanted) return NextResponse.json({ error: "Choisissez un client B2B" }, { status: 400 })
+    const client = await prisma.client.findFirst({ where: { id: clientIdWanted, type: "B2B" } })
     if (!client) return NextResponse.json({ error: "Client B2B introuvable" }, { status: 404 })
     if (!seesAllB2b(session?.user as SessionUser) && session?.user?.role !== "ADMIN" && client.commercialId !== selfId) {
       return NextResponse.json({ error: "Ce client B2B ne vous est pas affecté" }, { status: 403 })
@@ -223,7 +240,6 @@ export async function POST(req: Request) {
     // Bon de commande repris d'un devis : même client, devis encore ouvert et pas déjà transformé.
     let parent: { id: string; reference: string } | null = null
     if (body.parentId) {
-      if (docType !== "COMMANDE") return NextResponse.json({ error: "Seul un bon de commande se crée à partir d'un devis" }, { status: 400 })
       const quote = await prisma.b2bDocument.findUnique({
         where: { id: String(body.parentId) },
         select: { id: true, reference: true, type: true, status: true, clientId: true, _count: { select: { children: { where: { status: { not: "CANCELLED" } } } } } },
@@ -255,7 +271,7 @@ export async function POST(req: Request) {
             data: {
               type: docType as Prisma.B2bDocumentCreateInput["type"],
               reference,
-              clientId: String(body.clientId),
+              clientId: client.id,
               ...(parent ? { parentId: parent.id } : {}),
               status: "DRAFT",
               subtotal,

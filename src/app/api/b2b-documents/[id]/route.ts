@@ -6,6 +6,7 @@ import { nextDocumentReference } from "@/lib/b2b"
 import { auth } from "@/lib/auth"
 import { COMPTOIR_CODE, consumePointOfSaleStockTx, ensureOperationalStockLocations } from "@/lib/stock-service"
 import { DEFAULT_PAYMENT_TERMS_DAYS, invoiceSituation } from "@/lib/commercial"
+import { formatPrice } from "@/lib/utils"
 import { documentCompany, getSettings } from "@/lib/settings"
 
 export const dynamic = "force-dynamic"
@@ -176,25 +177,41 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         newItems = mapped as { productVariantId: string; quantity: number; unitPrice: number }[]
       }
       const discount = body.discount !== undefined ? Math.max(0, Number(body.discount) || 0) : doc.discount
-      const notes = body.notes !== undefined ? String(body.notes) : doc.notes
+      const notes = body.notes !== undefined ? String(body.notes).slice(0, 2000) : doc.notes
+      // mêmes champs que le formulaire de création : validité du devis, livraison souhaitée
+      const extra: { validUntil?: Date | null; deliveryTerms?: string | null; requestedDeliveryDate?: Date | null } = {}
+      if (body.validUntil !== undefined && doc.type === "DEVIS") {
+        const d = body.validUntil ? new Date(String(body.validUntil)) : null
+        if (d && Number.isNaN(d.getTime())) return NextResponse.json({ error: "Date de validité invalide" }, { status: 400 })
+        extra.validUntil = d
+      }
+      if (body.deliveryTerms !== undefined) extra.deliveryTerms = String(body.deliveryTerms ?? "").trim().slice(0, 500) || null
+      if (body.requestedDeliveryDate !== undefined) {
+        const d = body.requestedDeliveryDate ? new Date(String(body.requestedDeliveryDate)) : null
+        if (d && Number.isNaN(d.getTime())) return NextResponse.json({ error: "Date de livraison invalide" }, { status: 400 })
+        const day = (x: Date) => new Date(x.getTime() + 60 * 60 * 1000).toISOString().slice(0, 10)
+        if (d && day(d) < day(new Date())) return NextResponse.json({ error: "La date de livraison souhaitée est déjà passée" }, { status: 400 })
+        extra.requestedDeliveryDate = d
+      }
+
+      const newSubtotal = newItems ? newItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) : doc.subtotal
+      if (discount > newSubtotal) return NextResponse.json({ error: "La remise ne peut pas dépasser le total" }, { status: 400 })
 
       const updated = await prisma.$transaction(async (tx) => {
         if (newItems) await tx.b2bDocumentItem.deleteMany({ where: { documentId: id } })
-        const subtotal = newItems ? newItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) : doc.subtotal
 
         await tx.b2bDocument.update({
           where: { id },
           data: {
+            // remise toujours enregistrée avec le total qu'elle produit (avant : perdue quand les lignes changeaient)
+            subtotal: newSubtotal,
+            discount,
+            total: Math.max(0, newSubtotal - discount),
             ...(newItems
-              ? {
-                  subtotal,
-                  total: Math.max(0, subtotal - discount),
-                  items: { create: newItems.map((i) => ({ productVariantId: i.productVariantId, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.unitPrice * i.quantity })) },
-                }
-              : discount !== doc.discount
-                ? { discount, total: Math.max(0, doc.subtotal - discount) }
-                : {}),
+              ? { items: { create: newItems.map((i) => ({ productVariantId: i.productVariantId, quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.unitPrice * i.quantity })) } }
+              : {}),
             ...(notes !== doc.notes ? { notes } : {}),
+            ...extra,
           },
         })
         return tx.b2bDocument.findUnique({
@@ -267,27 +284,35 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (action === "transform") {
     // La cible se dérive TOUJOURS du type du document : le client ne choisit
     // jamais la cible (un body.target éventuel est ignoré).
-    const nextType: Record<string, string> = {
-      DEVIS: "COMMANDE",
-      COMMANDE: "LIVRAISON",
-      LIVRAISON: "FACTURE",
+    // Chaîne de vente : devis → bon de commande → facture → bon de livraison (facture entièrement payée).
+    // Un bon de livraison de l'ancienne chaîne (établi depuis une commande) se facture encore.
+    const legacyDelivery = doc.type === "LIVRAISON" && doc.parent?.type === "COMMANDE"
+    const toType = ({ DEVIS: "COMMANDE", COMMANDE: "FACTURE", FACTURE: "LIVRAISON" } as Record<string, string>)[doc.type] ?? (legacyDelivery ? "FACTURE" : undefined)
+    if (!toType) return NextResponse.json({ error: "Ce document est le dernier de la chaîne" }, { status: 400 })
+    // Un document déjà transformé (document suivant non annulé) ne peut pas l'être une seconde fois :
+    // pas de double sortie de stock ni de double facture. Les avoirs d'une facture ne comptent pas.
+    const alreadyTransformed = await prisma.b2bDocument.count({
+      where: { parentId: doc.id, type: toType as "COMMANDE" | "FACTURE" | "LIVRAISON", status: { not: "CANCELLED" } },
+    })
+    if (alreadyTransformed > 0) {
+      const already = { COMMANDE: "son bon de commande", FACTURE: "sa facture", LIVRAISON: "son bon de livraison" }[toType] ?? "son document suivant"
+      return NextResponse.json({ error: `${doc.reference} a déjà ${already}` }, { status: 400 })
     }
-    const toType = nextType[doc.type]
-    if (!toType) return NextResponse.json({ error: "Impossible de transformer ce statut" }, { status: 400 })
-    // un document envoyé au client se transforme aussi (même règle que le formulaire de bon de commande)
-    if (doc.status !== "CONFIRMED" && doc.status !== "DRAFT" && doc.status !== "SENT") {
+    if (doc.type === "FACTURE") {
+      if (doc.status !== "INVOICED") return NextResponse.json({ error: "Cette facture n'est pas émise" }, { status: 400 })
+      // le bon de livraison suit le paiement complet de la facture (règlements validés, avoirs déduits)
+      const payments = await prisma.customerPayment.findMany({ where: { b2bDocumentId: doc.id }, select: { amount: true, validationStatus: true } })
+      const situation = invoiceSituation(doc.total, payments, doc.children.filter((c) => c.type === "AVOIR"))
+      if (situation.due <= 0.005) return NextResponse.json({ error: "Facture annulée par avoir : rien à livrer" }, { status: 400 })
+      if (situation.balance > 0.005) {
+        return NextResponse.json({ error: `Le bon de livraison s'établit une fois la facture payée : il reste ${formatPrice(situation.balance)} à encaisser${situation.pending > 0 ? " (ou à valider)" : ""}` }, { status: 400 })
+      }
+    } else if (doc.status !== "CONFIRMED" && doc.status !== "DRAFT" && doc.status !== "SENT") {
+      // un document envoyé au client se transforme aussi (même règle que le formulaire de bon de commande)
       return NextResponse.json({ error: "Le document doit être en brouillon, envoyé ou confirmé pour être transformé" }, { status: 400 })
     }
     if (doc.items.some((i) => !i.productVariantId)) {
       return NextResponse.json({ error: "Un article est sans produit" }, { status: 400 })
-    }
-    // Un document déjà transformé (enfant non annulé) ne peut pas l'être une
-    // seconde fois : éviterait un double débit de stock / un doublon comptable.
-    const alreadyTransformed = await prisma.b2bDocument.count({
-      where: { parentId: doc.id, status: { not: "CANCELLED" } },
-    })
-    if (alreadyTransformed > 0) {
-      return NextResponse.json({ error: "Document déjà transformé" }, { status: 400 })
     }
 
     try {
@@ -296,8 +321,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
       const created = await prisma.$transaction(async (tx) => {
         const reference = await nextDocumentReference(tx, REF_PREFIX[toType] as "BC" | "BL" | "FAC")
-        // La LIVRAISON débite le stock physique du Comptoir (même helper que la
-        // vente). Stock insuffisant → exception → rollback → 400.
+        // Le bon de LIVRAISON débite le stock physique du Comptoir (même helper que la
+        // vente) : la marchandise part. Stock insuffisant → exception → rollback → 400.
         if (toType === "LIVRAISON") {
           if (!pointOfSaleId) throw new Error("Moyen de stockage requis")
           for (const item of doc.items) {
@@ -336,9 +361,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           include: { client: true, items: { include: { productVariant: true } } },
         })
 
+        // Document d'origine : devis accepté (CONFIRMED), commande facturée (INVOICED), ancien bon de
+        // livraison facturé (DELIVERED). La facture reste émise (INVOICED) : on note seulement sa livraison.
         await tx.b2bDocument.update({
           where: { id },
-          data: { status: doc.type === "LIVRAISON" ? "DELIVERED" : "CONFIRMED" },
+          data:
+            doc.type === "FACTURE" ? { deliveredAt: new Date() }
+            : doc.type === "LIVRAISON" ? { status: "DELIVERED" }
+            : doc.type === "COMMANDE" ? { status: "INVOICED" }
+            : { status: "CONFIRMED" },
         })
 
         return created
@@ -360,8 +391,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json({ error: "Référence en collision, réessayez" }, { status: 409 })
       }
       const message = error instanceof Error ? error.message : ""
-      if (message.includes("Stock insuffisant") || message === "Moyen de stockage requis") {
-        return NextResponse.json({ error: "Stock insuffisant" }, { status: 400 })
+      if (message.includes("Stock insuffisant")) {
+        // le message du stock nomme le produit et les quantités : on le transmet tel quel
+        return NextResponse.json({ error: `${message.slice(0, 300)}. Le bon de livraison n'a pas été créé.` }, { status: 400 })
+      }
+      if (message === "Moyen de stockage requis") {
+        return NextResponse.json({ error: "Stock du comptoir introuvable : le bon de livraison n'a pas été créé" }, { status: 400 })
       }
       console.error("transform b2b-document error:", error)
       return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })

@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { useParams } from "next/navigation"
-import { AlertCircle, ArrowLeft, Check, Mail, Printer, ReceiptText, X } from "lucide-react"
+import { useParams, useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
+import { AlertCircle, ArrowLeft, ArrowRight, Check, HandCoins, Mail, Printer, ReceiptText, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
-import { STATUS_LABEL, TYPE_LABEL, type DocType } from "@/components/admin/b2b-documents-screen"
+import { canCreateNext, STATUS_LABEL, TYPE_LABEL, type DocType } from "@/components/admin/b2b-documents-screen"
 import { montantEnLettres } from "@/lib/montant-en-lettres"
 import { RECEIPT_METHOD_LABEL } from "@/lib/payment-methods"
 
@@ -130,8 +131,18 @@ function formatDate(iso: string): string {
 
 const fieldClass = "mt-1 w-full min-h-11 rounded-lg border border-gray-300 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
 
+/** Avertissement avant l'étape suivante (ce qui devient irréversible). */
+const NEXT_WARNING: Partial<Record<DocType, string>> = {
+  COMMANDE: "La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
+  FACTURE: "Les quantités sortiront du stock du comptoir.",
+  LIVRAISON: "La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
+}
+
 export default function B2bDocumentPage() {
   const { id } = useParams<{ id: string }>()
+  const router = useRouter()
+  const { data: session } = useSession()
+  const [moving, setMoving] = useState(false)
   const [doc, setDoc] = useState<DocumentDetail | null>(null)
   const [invoice, setInvoice] = useState<InvoiceInfo | null>(null)
   const [company, setCompany] = useState<Company>(DEFAULT_COMPANY)
@@ -179,7 +190,27 @@ export default function B2bDocumentPage() {
     return () => controller.abort()
   }, [id, reload])
 
-  const back = doc?.type === "DEVIS" ? "/admin/devis-b2b" : "/admin/bons-b2b"
+  const back = doc?.type === "DEVIS" ? "/admin/devis-b2b" : `/admin/bons-b2b${doc ? `?type=${doc.type}&doc=${doc.id}` : ""}`
+  // étape suivante de la chaîne : devis → commande → facture → livraison (facture payée)
+  const nextStep = doc && session?.user?.role !== "COMPTABLE" && canCreateNext({ ...doc, paid: invoice?.paid, credited: invoice?.credited })
+  const goNext = async () => {
+    if (!doc || moving) return
+    const warning = NEXT_WARNING[doc.type]
+    if (warning && !window.confirm(`${TYPE_LABEL[doc.type].next} de ${doc.reference} ?\n\n${warning}`)) return
+    setMoving(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/b2b-documents/${doc.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "transform" }) })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.document?.id) { setError(data?.error || "Création impossible"); return }
+      // on ouvre directement le document créé
+      router.push(`/admin/bons-b2b/${data.document.id}/document`)
+    } catch {
+      setError("Connexion au serveur impossible : rien n'a été créé")
+    } finally {
+      setMoving(false)
+    }
+  }
   const clientName = doc?.client ? doc.client.companyName || doc.client.tradeName || doc.client.contactName || `${doc.client.firstName ?? ""} ${doc.client.lastName ?? ""}`.trim() || "Client" : "Client"
   const canEmail = doc !== null && doc.status !== "CANCELLED" && doc.status !== "REJECTED"
   const showBank = doc?.type === "FACTURE" && bank && (bank.accountNumber || bank.mtnMoney || bank.airtelMoney)
@@ -226,6 +257,17 @@ export default function B2bDocumentPage() {
         </Link>
         {doc && (
           <div className="flex flex-wrap gap-2">
+            {nextStep && (
+              <button type="button" onClick={goNext} disabled={moving} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-primary bg-white px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-60">
+                <ArrowRight className="h-4 w-4" /> {moving ? "Création…" : TYPE_LABEL[doc.type].next}
+              </button>
+            )}
+            {/* facture émise, pas encore payée : le bon de livraison attend l'encaissement */}
+            {invoice && doc.status === "INVOICED" && invoice.balance > 0.005 && !doc.children.some((c) => c.type === "LIVRAISON") && (
+              <Link href={`/admin/creances?q=${encodeURIComponent(doc.reference)}`} title="Le bon de livraison s'établit une fois la facture entièrement payée" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50">
+                <HandCoins className="h-4 w-4" /> Encaisser ({formatPrice(invoice.balance)})
+              </Link>
+            )}
             {canCredit && invoice && invoice.creditable > 0 && (
               <button type="button" onClick={openCredit} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
                 <ReceiptText className="h-4 w-4" /> Établir un avoir
@@ -312,6 +354,7 @@ export default function B2bDocumentPage() {
               {doc.parent && doc.type === "AVOIR" && <p className="mt-1">Avoir sur la facture <span className="font-mono">{doc.parent.reference}</span></p>}
               {doc.parent && doc.type !== "AVOIR" && <p className="mt-1">Établi à partir de : {TYPE_LABEL[doc.parent.type].one.toLowerCase()} <span className="font-mono">{doc.parent.reference}</span></p>}
               {doc.type === "FACTURE" && doc.parent?.type === "LIVRAISON" && <p className="mt-1">Marchandises livrées le {formatDate(doc.parent.deliveredAt ?? doc.parent.createdAt)}</p>}
+              {doc.type === "FACTURE" && doc.deliveredAt && <p className="mt-1">Marchandises livrées le {formatDate(doc.deliveredAt)}</p>}
               {invoice && <p className="mt-1">Paiement à {invoice.termsDays} jour{invoice.termsDays > 1 ? "s" : ""}{invoice.fromContract ? " (contrat)" : ""}, au plus tard le {formatDate(invoice.dueDate)}</p>}
               {people.createdBy && <p className="mt-1">Établi par : {people.createdBy}</p>}
               {people.commercial && <p className="mt-1">Commercial : {people.commercial}</p>}

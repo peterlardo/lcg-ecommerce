@@ -49,6 +49,13 @@ export default function CreancesPage() {
   const [payError, setPayError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
+  // arrivée depuis une facture (« Encaisser ») : ?q=<référence> pré-remplit la recherche
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q")
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- état initial tiré de l'adresse
+    if (q) setSearch(q)
+  }, [])
+
   useEffect(() => {
     const controller = new AbortController()
     const init = async () => {
