@@ -34,14 +34,14 @@ function isP2002(error: unknown): error is { code: string } {
 }
 
 export async function GET(req: Request) {
-  const forbidden = await requireManagementAccess(ALLOWED)
+  // lecture ouverte au comptable (factures, avoirs) ; création et actions restent aux commerciaux et à l'administrateur
+  const forbidden = await requireManagementAccess([...ALLOWED, "COMPTABLE"])
   if (forbidden) return forbidden
 
   try {
     const session = await auth()
-    const role = session?.user?.role
     const selfId = session?.user?.id
-    const supervisesB2b = (session?.user as { supervisesB2b?: boolean } | undefined)?.supervisesB2b === true
+    const seesAll = seesAllB2b(session?.user as SessionUser)
 
     const url = new URL(req.url)
     const type = url.searchParams.get("type")?.toUpperCase() ?? ""
@@ -71,7 +71,8 @@ export async function GET(req: Request) {
         { client: { is: { OR: [{ companyName: { contains: q, mode: "insensitive" } }, { tradeName: { contains: q, mode: "insensitive" } }] } } },
       ]
     }
-    if (role !== "ADMIN" && !supervisesB2b) {
+    // administrateur, comptable, responsable commercial : tout ; un commercial : ses clients
+    if (!seesAll) {
       where.client = { is: { commercialId: selfId } }
     }
     if (available) {

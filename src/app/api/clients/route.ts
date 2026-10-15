@@ -4,6 +4,7 @@ import { logActivity } from "@/lib/activity"
 import { getPrisma } from "@/lib/prisma"
 import { geocodeAddress } from "@/lib/geocode"
 import { findDuplicates, type DuplicateCandidate } from "@/lib/client-duplicates"
+import { canAssignClients } from "@/lib/permissions"
 
 async function geocodeAndStore(clientId: string, address: string | null, city: string | null) {
   const query = [address, city].filter(Boolean).join(", ")
@@ -38,8 +39,11 @@ export async function GET(request: Request) {
     } else if (type === "B2B" || type === "B2C") {
       where.type = type
     }
-    // « none » : clients sans commercial attitré
-    if (commercialId === "none") where.commercialId = null
+    // Un simple commercial ne voit que son portefeuille ; l'administrateur, le responsable commercial et le
+    // comptable voient tout (et peuvent filtrer par commercial, « none » = clients sans commercial attitré).
+    const plainCommercial = role === "COMMERCIAL" && !canAssignClients(session?.user as { role?: string; supervisesB2b?: boolean } | undefined)
+    if (plainCommercial) where.commercialId = session?.user?.id ?? "__aucun__"
+    else if (commercialId === "none") where.commercialId = null
     else if (commercialId) where.commercialId = commercialId
     if (active === "true") where.isActive = true
     if (active === "false") where.isActive = false
@@ -147,9 +151,11 @@ export async function POST(request: Request) {
 
     // Un commercial inscrit par défaut ses clients à son nom ; l'administrateur et le responsable commercial
     // choisissent le commercial attitré (ou n'en mettent pas).
-    const commercialId =
-      (typeof body.commercialId === "string" && body.commercialId.trim()) ||
-      (session?.user?.role === "COMMERCIAL" ? session.user.id : null)
+    // Un simple commercial ne peut pas inscrire un client au nom d'un collègue : il est toujours à son nom.
+    const assigns = canAssignClients(session?.user as { role?: string; supervisesB2b?: boolean } | undefined)
+    const commercialId = assigns
+      ? (typeof body.commercialId === "string" && body.commercialId.trim()) || null
+      : session?.user?.role === "COMMERCIAL" ? session.user.id : null
     if (commercialId) data.commercialId = commercialId
 
     const client = await getPrisma().client.create({ data })

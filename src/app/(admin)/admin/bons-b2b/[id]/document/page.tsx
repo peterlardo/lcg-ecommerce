@@ -212,7 +212,7 @@ export default function B2bDocumentPage() {
     }
   }
   const clientName = doc?.client ? doc.client.companyName || doc.client.tradeName || doc.client.contactName || `${doc.client.firstName ?? ""} ${doc.client.lastName ?? ""}`.trim() || "Client" : "Client"
-  const canEmail = doc !== null && doc.status !== "CANCELLED" && doc.status !== "REJECTED"
+  const canEmail = doc !== null && doc.status !== "CANCELLED" && doc.status !== "REJECTED" && session?.user?.role !== "COMPTABLE"
   const showBank = doc?.type === "FACTURE" && bank && (bank.accountNumber || bank.mtnMoney || bank.airtelMoney)
 
   const openMail = () => {

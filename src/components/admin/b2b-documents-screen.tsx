@@ -194,6 +194,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [busy, setBusy] = useState<string | null>(null)
   // document qui vient d'être créé : mis en évidence dans la liste
   const [highlightId, setHighlightId] = useState("")
+  const [loadedAt, setLoadedAt] = useState(0)
   const canWrite = session?.user?.role !== "COMPTABLE"
 
   // formulaire de création (ou de modification d'un brouillon : `editing`)
@@ -240,6 +241,8 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
         setError("")
         setDocuments(data.documents ?? [])
         setTotal(data.total ?? 0)
+        // heure de lecture : sert à repérer les devis dont la validité est dépassée
+        setLoadedAt(Date.now())
       } catch (e) {
         if (!(e instanceof DOMException && e.name === "AbortError")) setError("Connexion au serveur impossible")
       } finally {
@@ -669,6 +672,10 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href={`/admin/bons-b2b/${doc.id}/document`} className="font-mono text-sm font-semibold text-gray-900 underline-offset-2 hover:underline">{doc.reference}</Link>
                       {doc.id === highlightId && <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-white">Nouveau</span>}
+                      {/* devis encore ouvert dont la date de validité est passée : à refaire ou à reconfirmer avec le client */}
+                      {doc.type === "DEVIS" && open && !next && doc.validUntil && new Date(doc.validUntil).getTime() < loadedAt && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Validité dépassée</span>
+                      )}
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_LABEL[doc.status]?.className ?? "bg-gray-100 text-gray-700"}`}>{(doc.type === "AVOIR" || doc.type === "FACTURE") && doc.status === "INVOICED" ? "Émis" + (doc.type === "FACTURE" ? "e" : "") : STATUS_LABEL[doc.status]?.label ?? doc.status}</span>
                       {isInvoice && (() => {
                         // état du paiement : seuls les règlements validés comptent ; les avoirs réduisent le dû

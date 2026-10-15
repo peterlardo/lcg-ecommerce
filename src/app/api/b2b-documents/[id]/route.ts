@@ -5,7 +5,7 @@ import { logActivity } from "@/lib/activity"
 import { nextDocumentReference } from "@/lib/b2b"
 import { auth } from "@/lib/auth"
 import { COMPTOIR_CODE, consumePointOfSaleStockTx, ensureOperationalStockLocations } from "@/lib/stock-service"
-import { DEFAULT_PAYMENT_TERMS_DAYS, invoiceSituation } from "@/lib/commercial"
+import { DEFAULT_PAYMENT_TERMS_DAYS, invoiceSituation, seesAllB2b, type SessionUser } from "@/lib/commercial"
 import { formatPrice } from "@/lib/utils"
 import { documentCompany, getSettings } from "@/lib/settings"
 
@@ -23,7 +23,7 @@ function isP2002(error: unknown): error is { code: string } {
   return !!error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002"
 }
 
-async function getDocOrNull(id: string, userId: string, role: string, supervisesB2b: boolean) {
+async function getDocOrNull(id: string, userId: string, role: string, seesAll: boolean) {
   const doc = await getPrisma().b2bDocument.findUnique({
     where: { id },
     include: {
@@ -34,26 +34,22 @@ async function getDocOrNull(id: string, userId: string, role: string, supervises
     },
   })
   if (!doc) return { doc: null, status: 404 as const }
-  if (role !== "ADMIN" && !supervisesB2b && doc.client?.commercialId !== userId) {
+  if (role !== "ADMIN" && !seesAll && doc.client?.commercialId !== userId) {
     return { doc: null, status: 403 as const }
   }
   return { doc, status: 200 as const }
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess(ALLOWED)
+  // lecture ouverte au comptable ; les actions (PATCH) restent aux commerciaux et à l'administrateur
+  const forbidden = await requireManagementAccess([...ALLOWED, "COMPTABLE"])
   if (forbidden) return forbidden
 
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
 
   const { id } = await params
-  const { doc, status } = await getDocOrNull(
-    id,
-    session.user.id,
-    session.user.role,
-    (session.user as { supervisesB2b?: boolean }).supervisesB2b === true
-  )
+  const { doc, status } = await getDocOrNull(id, session.user.id, session.user.role, seesAllB2b(session.user as SessionUser))
   if (!doc) return NextResponse.json({ error: status === 404 ? "Introuvable" : "Non autorisé" }, { status })
 
   // Facture : échéance (délai du contrat actif du client, 30 jours à défaut — même règle que les créances)
@@ -116,8 +112,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // en-tête, pied et coordonnées de règlement : ceux de l'écran Paramètres
     company: documentCompany(settings.general),
     bank: doc.type === "FACTURE" ? settings.bank : null,
-    // un avoir est une écriture comptable : administrateur seulement à l'écran (le comptable passe par l'API)
-    canCredit: role === "ADMIN" && doc.type === "FACTURE" && doc.status === "INVOICED",
+    // un avoir est une écriture comptable : administrateur et comptable
+    canCredit: (role === "ADMIN" || role === "COMPTABLE") && doc.type === "FACTURE" && doc.status === "INVOICED",
+    // l'envoi par e-mail reste au commercial et à l'administrateur
+    canEmail: role !== "COMPTABLE",
   })
 }
 
@@ -131,12 +129,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!selfId || !role) return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
 
   const { id } = await params
-  const { doc, status } = await getDocOrNull(
-    id,
-    selfId,
-    role,
-    (session?.user as { supervisesB2b?: boolean }).supervisesB2b === true
-  )
+  const { doc, status } = await getDocOrNull(id, selfId, role, seesAllB2b(session?.user as SessionUser))
   if (!doc) return NextResponse.json({ error: status === 404 ? "Introuvable" : "Non autorisé" }, { status })
 
   let body: Record<string, unknown>

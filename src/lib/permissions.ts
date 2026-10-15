@@ -46,7 +46,8 @@ export const MODULE_ROLES: Record<string, string[]> = {
   creances: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   // la caisse valide les règlements saisis par les commerciaux
   encaissements: ["ADMIN", "COMMERCIAL", "COMPTABLE", ...CASHIER_ROLES],
-  b2b: ["ADMIN", "COMMERCIAL"],
+  // le comptable lit les devis, commandes, factures et avoirs (sans en créer)
+  b2b: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   contrats: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
 }
 

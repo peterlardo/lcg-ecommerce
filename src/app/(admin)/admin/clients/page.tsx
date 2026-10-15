@@ -98,6 +98,10 @@ export default function ClientsPage() {
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const [assignTo, setAssignTo] = useState("")
   const [assigning, setAssigning] = useState(false)
+  // fusion de deux fiches en double : celle qu'on garde
+  const [merging, setMerging] = useState<Client[] | null>(null)
+  const [keepId, setKeepId] = useState("")
+  const [mergeError, setMergeError] = useState("")
 
   // doublons possibles : même téléphone (9 derniers chiffres) parmi les clients affichés
   const duplicatePhones = useMemo(() => {
@@ -251,11 +255,54 @@ export default function ClientsPage() {
     }
   }
 
+  function openMerge() {
+    const pair = clients.filter((c) => selection.has(c.id))
+    if (pair.length !== 2) return
+    setMerging(pair)
+    // proposée par défaut : la fiche la plus ancienne (souvent celle qui porte l'historique)
+    setKeepId([...pair].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0].id)
+    setMergeError("")
+  }
+
+  async function confirmMerge() {
+    if (!merging || assigning) return
+    const remove = merging.find((c) => c.id !== keepId)
+    if (!remove) return
+    setAssigning(true)
+    setMergeError("")
+    try {
+      const res = await fetch("/api/clients/fusion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keepId, removeId: remove.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMergeError(data.error || "Fusion impossible.")
+        return
+      }
+      setToast(`Fiches fusionnées : « ${data.removeLabel} » rejoint « ${data.keepLabel} » (${data.documents} document${data.documents > 1 ? "s" : ""} repris).`)
+      setMerging(null)
+      setSelection(new Set())
+      loadClients()
+      setTimeout(() => setToast(""), 4000)
+    } catch {
+      setMergeError("Erreur réseau : rien n'a été modifié.")
+    } finally {
+      setAssigning(false)
+    }
+  }
+
   async function remove(c: Client) {
     if (!confirm(`Supprimer le client « ${displayName(c)} » ?`)) return
     try {
       const res = await fetch(`/api/clients/${c.id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // la raison du refus (documents, contrats, droits) est donnée par le serveur
+        setError(data.error || "Échec de la suppression.")
+        return
+      }
       setToast("Client supprimé.")
       loadClients()
       setTimeout(() => setToast(""), 2500)
@@ -470,13 +517,15 @@ export default function ClientsPage() {
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
-                  <button
-                    onClick={() => remove(c)}
-                    className="p-2 text-gray-500 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                    title="Supprimer"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {canAssign && (
+                    <button
+                      onClick={() => remove(c)}
+                      className="p-2 text-gray-500 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -505,9 +554,49 @@ export default function ClientsPage() {
             >
               <Briefcase className="h-4 w-4" /> {assigning ? "Attribution…" : "Attribuer"}
             </button>
+            {selection.size === 2 && (
+              <button type="button" onClick={openMerge} className="min-h-11 rounded-lg border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 hover:bg-amber-50">
+                Fusionner les 2 fiches…
+              </button>
+            )}
             <button type="button" onClick={() => setSelection(new Set())} className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
               Désélectionner
             </button>
+          </div>
+        </div>
+      )}
+
+      {merging && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={(e) => { if (e.target === e.currentTarget && !assigning) setMerging(null) }}>
+          <div className="w-full rounded-t-2xl bg-white p-4 shadow-xl sm:max-w-lg sm:rounded-2xl sm:p-6">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Fusionner deux fiches</h2>
+                <p className="text-sm text-gray-500">Choisissez la fiche à garder. L&apos;autre est supprimée après avoir transmis ses devis, factures, contrats et les informations qui manquent à la première.</p>
+              </div>
+              <button type="button" onClick={() => setMerging(null)} aria-label="Fermer" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-2">
+              {merging.map((c) => (
+                <label key={c.id} className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border p-3 ${keepId === c.id ? "border-primary bg-primary-50" : "border-gray-200"}`}>
+                  <input type="radio" name="garder" checked={keepId === c.id} onChange={() => setKeepId(c.id)} className="mt-1 h-5 w-5 accent-primary" />
+                  <span className="text-sm text-gray-700">
+                    <span className="block font-semibold text-gray-900">{displayName(c)} {keepId === c.id ? "— gardée" : "— supprimée"}</span>
+                    {[c.phone, c.email, c.city, c.commercial ? `commercial : ${c.commercial.name || c.commercial.email}` : "sans commercial"].filter(Boolean).join(" · ")}
+                    <span className="block text-xs text-gray-500">créée le {new Date(c.createdAt).toLocaleDateString("fr-FR")}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {merging[0].type !== merging[1].type && <p className="mt-3 text-sm text-red-700">Un client B2B et un client B2C ne se fusionnent pas.</p>}
+            {mergeError && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{mergeError}</p>}
+            <p className="mt-3 text-sm font-medium text-amber-800">Cette opération ne peut pas être annulée.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setMerging(null)} disabled={assigning} className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">Annuler</button>
+              <button type="button" onClick={confirmMerge} disabled={assigning || merging[0].type !== merging[1].type} className="min-h-11 rounded-lg bg-amber-600 px-5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
+                {assigning ? "Fusion…" : "Fusionner"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -665,9 +754,11 @@ export default function ClientsPage() {
                 </div>
                 <div>
                   <label className={labelCls}>Commercial</label>
+                  {/* le commercial attitré est choisi par l'administrateur ou le responsable commercial */}
                   <select
                     className={inputCls}
                     value={form.commercialId}
+                    disabled={!canAssign}
                     onChange={(e) =>
                       setForm({ ...form, commercialId: e.target.value })
                     }
