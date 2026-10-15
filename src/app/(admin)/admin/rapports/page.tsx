@@ -66,6 +66,7 @@ export default function RapportsPage() {
   const [dayError, setDayError] = useState("")
 
   const periods = [
+    { id: "day", label: "Journée" },
     { id: "week", label: "Semaine" },
     { id: "month", label: "Mois" },
     { id: "quarter", label: "Trimestre" },

@@ -29,6 +29,8 @@ function daysArray(from: Date, count: number) {
 function getPeriodRange(period: string, now: Date) {
   const today = startOfDay(now)
   switch (period) {
+    case "day":
+      return { from: today, to: today, label: "Journée", dayCount: 1 }
     case "week": {
       const from = new Date(today)
       from.setDate(today.getDate() - 6)
