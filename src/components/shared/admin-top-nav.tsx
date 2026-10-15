@@ -297,7 +297,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
 
   return (
     <header ref={navRef} className="sticky top-0 z-40 border-b border-[#123b82] bg-[#16489f] shadow-sm">
-      <div className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-1.5 px-2 py-2 sm:gap-x-4 sm:px-4">
+      <div className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-1.5 px-2 pb-2 pt-6 sm:gap-x-4 sm:px-4">
         <Link href={isCommercial ? "/admin/commercial" : "/admin"} className="flex shrink-0 items-center gap-2">
           <Image
             src="/logo-lcg-white-hd.png"

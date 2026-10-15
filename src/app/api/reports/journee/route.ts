@@ -81,7 +81,7 @@ export async function GET(request: Request) {
       : role === "ADMIN"
         ? (posClause ?? {})
         : seesOnlyOwnOrders(role)
-          ? { userId: selfId }
+          ? { OR: [{ userId: selfId }, { cashierId: selfId }] }
           : { AND: [...(posClause ? [posClause] : []), ownScope] }
 
     const orders = await getPrisma().order.findMany({

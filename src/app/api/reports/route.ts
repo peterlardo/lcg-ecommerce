@@ -196,7 +196,7 @@ export async function GET(request: Request) {
       : role === "ADMIN"
         ? (posClause ?? {})
         : seesOnlyOwnOrders(role)
-          ? { userId: selfId }
+          ? { OR: [{ userId: selfId }, { cashierId: selfId }] }
           : { AND: [...(posClause ? [posClause] : []), ownScope] }
 
     // Mouvements de stock : masque aux non-ADMIN les ventes comptoir des autres
@@ -257,7 +257,7 @@ export async function GET(request: Request) {
       : role === "ADMIN"
         ? {}
         : seesOnlyOwnOrders(role)
-          ? { userId: selfId }
+          ? { OR: [{ userId: selfId }, { cashierId: selfId }] }
           : { AND: [...(allowedPosIds !== null ? [{ pointOfSaleId: { in: allowedPosIds } }] : []), ownScope] }
 
     const [recentOrders, allOrders, variantsRaw, movements, reservations, deliveries, cashSessions, lots, weekOrders, weekReservations, weekDeliveries, trendOrders, posStocks, revenueByPos] = await Promise.all([
