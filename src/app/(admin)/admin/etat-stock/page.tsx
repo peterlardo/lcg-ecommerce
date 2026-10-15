@@ -45,6 +45,7 @@ interface EtatStockRow {
   stockReel: number
   stockGlobal: number
   debite: number
+  ventesNonDebitees: number
   disponible: number
   alerte: boolean
 }
@@ -118,6 +119,7 @@ interface EtatStockPayload {
     commandes: number
     montant: number
     ventesSansDebit: number
+    ventesNonDebitees: number
     disponible: number
     alertes: number
     cashDay: number
@@ -500,7 +502,7 @@ export default function EtatStockPage() {
 
   const kpis = [
     { label: "Stock de départ", value: `${totals?.stockDepart ?? 0}`, detail: "à l'ouverture de la journée", icon: Boxes, tone: "text-blue-600 bg-blue-100" },
-    { label: "Ventes du vendeur", value: `${totals?.ventes ?? 0}`, detail: `${formatPrice(totals?.ventesMontant ?? 0)} sur ${totals?.commandes ?? 0} commande(s)`, icon: ShoppingCart, tone: "text-primary bg-primary/10" },
+    { label: "Ventes du vendeur", value: `${totals?.ventes ?? 0}`, detail: `${formatPrice(totals?.ventesMontant ?? 0)} sur ${totals?.commandes ?? 0} commande(s)${(totals?.ventesNonDebitees ?? 0) > 0 ? ` · ${totals?.ventesNonDebitees} u. non débitées` : ""}`, icon: ShoppingCart, tone: "text-primary bg-primary/10" },
     { label: "Autres mouvements", value: `${totals?.autresMouvements ?? 0}`, detail: `+${totals?.entrees ?? 0} entrée(s) · ${totals?.autresSorties ?? 0} sortie(s)`, icon: Scale, tone: "text-orange-600 bg-orange-100" },
     { label: "Stock de clôture", value: `${totals?.stockCloture ?? 0}`, detail: `stock système : ${totals?.stockReel ?? 0}`, icon: Package, tone: "text-emerald-600 bg-emerald-100" },
   ]
@@ -641,22 +643,22 @@ export default function EtatStockPage() {
         </p>
       )}
 
-      {data?.sellerMode && totals && totals.alertes > 0 && (
+      {totals && totals.alertes > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            {totals.alertes} produit(s) vendus au-delà du stock attribué à {data.seller?.name ?? "ce vendeur"}{" "}
-            aujourd&apos;hui. Les ventes restent autorisées tant que le stock du comptoir le permet.
+            {totals.alertes} produit(s) à stock négatif en fin de journée sur ce point de vente.
+            Vérifiez les débits et les ajustements.
           </span>
         </div>
       )}
 
-      {totals && totals.ventesSansDebit > 0 && (
+      {totals && totals.ventesNonDebitees > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            {totals.ventesSansDebit} article(s) vendus sans mouvement de stock correspondant sur ce point de vente.
-            Vérifiez les commandes en attente de confirmation.
+            {totals.ventesNonDebitees} unité(s) vendue(s) sans débit de stock (commandes non facturées).
+            Ces ventes ne sont pas encore décomptées de la clôture — facturez-les pour débiter le stock.
           </span>
         </div>
       )}
@@ -779,11 +781,6 @@ export default function EtatStockPage() {
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums text-foreground">
                           {row.stockDepart}
-                          {row.alerte && (
-                            <span className="mt-1 block text-xs font-semibold uppercase text-amber-600">
-                              hors stock
-                            </span>
-                          )}
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums text-foreground">
                           {row.ventes > 0 ? (
@@ -797,6 +794,11 @@ export default function EtatStockPage() {
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums font-semibold text-foreground">
                           {row.stockCloture}
+                          {row.alerte && (
+                            <span className="mt-1 block text-xs font-semibold uppercase text-amber-600">
+                              hors stock
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right">
                           <input
@@ -845,15 +847,15 @@ export default function EtatStockPage() {
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
               {data?.sellerMode ? (
                 <>
-                  <span>Le vendeur puise dans le stock du point de vente : il n&apos;détient aucun stock réservé</span>
-                  <span>Clôture = disponible après les ventes et les mouvements du vendeur</span>
+                  <span>Vue vendeur : départ et clôture sont ceux du point de vente ; seules les ventes et le débit sont ceux du vendeur</span>
+                  <span>Clôture = stock physique du point de vente en fin de journée</span>
                 </>
               ) : (
                 <>
                   <span>
-                    Stock de départ = stock de clôture + sorties de la journée − entrées de la journée
+                    Stock de départ = clôture + sorties de la journée − entrées de la journée (mouvements de stock)
                   </span>
-                  <span>Clôture = stock réel du point de vente · CA vendu {formatPrice(totals?.ventesMontant ?? 0)}</span>
+                  <span>Clôture = stock physique du point de vente en fin de journée · CA vendu {formatPrice(totals?.ventesMontant ?? 0)}</span>
                 </>
               )}
             </div>

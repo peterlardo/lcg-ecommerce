@@ -78,7 +78,7 @@ export async function GET(request: Request) {
       ...(userId ? { userId } : {}),
     }
 
-    const [variants, posStocks, movements, orders, openSession, lastSession] = await Promise.all([
+    const [variants, posStocks, movementAgg, laterAgg, movements, orders, openSession, lastSession] = await Promise.all([
       getPrisma().productVariant.findMany({
         select: {
           id: true,
@@ -92,6 +92,22 @@ export async function GET(request: Request) {
       }),
       posId
         ? getPrisma().pointOfSaleStock.findMany({ where: { pointOfSaleId: posId }, select: { variantId: true, quantity: true } })
+        : Promise.resolve([]),
+      // Agrégats de mouvements pour les calculs de stock : sans limite take,
+      // la liste détaillée ci-dessous (take 400) sert uniquement à l'affichage.
+      getPrisma().stockMovement.groupBy({
+        by: ["variantId", "type", "userId"],
+        where: { ...(posId ? { pointOfSaleId: posId } : { pointOfSaleId: null }), createdAt: { gte: from, lte: to } },
+        _sum: { quantity: true },
+      }),
+      // Mouvements APRÈS la journée sélectionnée : permet de rebattre le stock
+      // physique en fin de journée (les jours passés ne voient plus le stock courant).
+      posId
+        ? getPrisma().stockMovement.groupBy({
+            by: ["variantId", "type"],
+            where: { pointOfSaleId: posId, createdAt: { gt: to } },
+            _sum: { quantity: true },
+          })
         : Promise.resolve([]),
       getPrisma().stockMovement.findMany({
         where: { ...(posId ? { pointOfSaleId: posId } : { pointOfSaleId: null }), createdAt: { gte: from, lte: to } },
@@ -155,25 +171,38 @@ export async function GET(request: Request) {
 
     const posStockByVariant = new Map(posStocks.map((s) => [s.variantId, s.quantity]))
     // Le stock d'une journee appartient au point de vente : le vendeur n'y detient
-    // aucun stock reserve. Quand un vendeur est selectionne, on ne regarde que ses
-    // propres mouvements et ses propres ventes.
+    // aucun stock reserve. En mode vendeur, depart et cloture restent basees sur le
+    // point de vente ; seules les ventes et le debit affiches sont ceux du vendeur.
     const sellerMode = Boolean(userId)
 
-    const movementByVariant = new Map<string, { entrees: number; sorties: number; debite: number }>()
-    const ownMovementByVariant = new Map<string, { entrees: number; sorties: number; debite: number }>()
-    for (const movement of movements) {
-      const bucket = movementByVariant.get(movement.variantId) ?? { entrees: 0, sorties: 0, debite: 0 }
-      if (POSITIVE_TYPES.has(movement.type)) bucket.entrees += movement.quantity
-      else if (NEGATIVE_TYPES.has(movement.type)) bucket.sorties += movement.quantity
-      if (SALE_TYPES.has(movement.type)) bucket.debite += movement.quantity
-      movementByVariant.set(movement.variantId, bucket)
+    type MoveBucket = { entrees: number; sorties: number; debite: number; sale: number }
+    const emptyBucket = (): MoveBucket => ({ entrees: 0, sorties: 0, debite: 0, sale: 0 })
 
-      if (userId && movement.userId === userId) {
-        const own = ownMovementByVariant.get(movement.variantId) ?? { entrees: 0, sorties: 0, debite: 0 }
-        if (POSITIVE_TYPES.has(movement.type)) own.entrees += movement.quantity
-        else if (NEGATIVE_TYPES.has(movement.type)) own.sorties += movement.quantity
-        if (SALE_TYPES.has(movement.type)) own.debite += movement.quantity
-        ownMovementByVariant.set(movement.variantId, own)
+    const laterByVariant = new Map<string, number>()
+    for (const group of laterAgg) {
+      const q = group._sum.quantity ?? 0
+      if (POSITIVE_TYPES.has(group.type)) laterByVariant.set(group.variantId, (laterByVariant.get(group.variantId) ?? 0) + q)
+      else if (NEGATIVE_TYPES.has(group.type)) laterByVariant.set(group.variantId, (laterByVariant.get(group.variantId) ?? 0) - q)
+    }
+
+    const movementByVariant = new Map<string, MoveBucket>()
+    const ownMovementByVariant = new Map<string, MoveBucket>()
+    for (const group of movementAgg) {
+      const q = group._sum.quantity ?? 0
+      const bucket = movementByVariant.get(group.variantId) ?? emptyBucket()
+      if (POSITIVE_TYPES.has(group.type)) bucket.entrees += q
+      else if (NEGATIVE_TYPES.has(group.type)) bucket.sorties += q
+      if (SALE_TYPES.has(group.type)) bucket.debite += q
+      if (group.type === "SALE") bucket.sale += q
+      movementByVariant.set(group.variantId, bucket)
+
+      if (userId && group.userId === userId) {
+        const own = ownMovementByVariant.get(group.variantId) ?? emptyBucket()
+        if (POSITIVE_TYPES.has(group.type)) own.entrees += q
+        else if (NEGATIVE_TYPES.has(group.type)) own.sorties += q
+        if (SALE_TYPES.has(group.type)) own.debite += q
+        if (group.type === "SALE") own.sale += q
+        ownMovementByVariant.set(group.variantId, own)
       }
     }
 
@@ -196,15 +225,19 @@ export async function GET(request: Request) {
       )
       .map((variant) => {
         const posQuantity = posStockByVariant.get(variant.id) ?? 0
-        const pool = movementByVariant.get(variant.id) ?? { entrees: 0, sorties: 0, debite: 0 }
-        const movement = sellerMode
-          ? (ownMovementByVariant.get(variant.id) ?? { entrees: 0, sorties: 0, debite: 0 })
-          : pool
+        const pool = movementByVariant.get(variant.id) ?? emptyBucket()
+        const scope = sellerMode ? (ownMovementByVariant.get(variant.id) ?? emptyBucket()) : pool
         const sold = soldByVariant.get(variant.id) ?? { quantity: 0, total: 0 }
-        const autresSorties = Math.max(0, movement.sorties - sold.quantity)
-        const autresMouvements = movement.entrees - autresSorties
-        const stockDepart = posQuantity + pool.sorties - pool.entrees
-        const stockCloture = stockDepart + movement.entrees - sold.quantity - autresSorties
+        // Stock physique en fin de journée : stock courant du point de vente
+        // rebattu sur le jour sélectionné (mouvements posterieurs reintegres).
+        // Seule source de vérité des colonnes stock (départ et clôture).
+        const stockReel = posQuantity - (laterByVariant.get(variant.id) ?? 0)
+        const stockDepart = stockReel + pool.sorties - pool.entrees
+        // Sorties autres que les ventes débitées du vendeur affiché :
+        // en mode vendeur, les sorties des autres restent dans "autres sorties"
+        // pour que le stock du point de vente se reconstitue exactement.
+        const autresSorties = pool.sorties - scope.sale
+        const autresMouvements = pool.entrees - autresSorties
         return {
           variantId: variant.id,
           productName: variant.product.name,
@@ -215,19 +248,20 @@ export async function GET(request: Request) {
           stockDepart,
           ventes: sold.quantity,
           ventesMontant: sold.total,
-          entrees: movement.entrees,
+          entrees: pool.entrees,
           autresSorties,
           autresMouvements,
-          stockCloture,
-          stockReel: posQuantity,
+          stockCloture: stockReel,
+          stockReel,
           stockGlobal: variant.stock,
-          debite: movement.debite,
-          disponible: stockCloture,
-          alerte: stockCloture < 0,
+          debite: scope.debite,
+          ventesNonDebitees: sold.quantity - scope.sale,
+          disponible: stockReel,
+          alerte: stockReel < 0,
         }
       })
 
-    const sum = (key: "stockDepart" | "ventes" | "entrees" | "autresSorties" | "autresMouvements" | "stockCloture" | "stockReel" | "stockGlobal" | "debite" | "disponible") =>
+    const sum = (key: "stockDepart" | "ventes" | "entrees" | "autresSorties" | "autresMouvements" | "stockCloture" | "stockReel" | "stockGlobal" | "debite" | "ventesNonDebitees" | "disponible") =>
       rows.reduce((total, row) => total + row[key], 0)
 
     const cashOrders = orders.filter((o) => o.paymentMethod === "CASH_ON_DELIVERY" && o.paymentStatus === "PAID")
@@ -273,6 +307,7 @@ export async function GET(request: Request) {
         commandes: orders.length,
         montant: orders.reduce((total, order) => total + order.total, 0),
         ventesSansDebit: sum("ventes") - sum("debite"),
+        ventesNonDebitees: sum("ventesNonDebitees"),
         disponible: sum("disponible"),
         alertes: rows.filter((row) => row.alerte).length,
         cashDay: cashOrders.reduce((s, o) => s + o.total, 0),
