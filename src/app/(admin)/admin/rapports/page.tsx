@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import {
-  BarChart3, Banknote, CalendarRange, Clock, Download, Factory,
+  BarChart3, Banknote, CalendarDays, CalendarRange, Clock, Download, Factory,
   FileSpreadsheet, Package, RefreshCw, ScanBarcode, ShoppingCart, TrendingUp, Truck, WalletCards,
 } from "lucide-react"
 import {
@@ -19,12 +19,14 @@ import {
   exportProductionPDF, exportProductionExcel,
   exportCaissePDF, exportCaisseExcel,
   exportLotsPDF, exportLotsExcel,
+  exportJourneePDF, exportJourneeExcel,
 } from "@/lib/report-export"
-import type { ReportPayload } from "@/lib/report-types"
+import type { ReportPayload, JourneeReport } from "@/lib/report-types"
 
-type Tab = "ventes" | "stocks" | "appro" | "commandes" | "reservations" | "production" | "lots" | "caisse"
+type Tab = "journee" | "ventes" | "stocks" | "appro" | "commandes" | "reservations" | "production" | "lots" | "caisse"
 
 const tabList: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
+  { id: "journee", label: "Journée", icon: CalendarDays },
   { id: "ventes", label: "Ventes", icon: BarChart3 },
   { id: "stocks", label: "Stocks", icon: Package },
   { id: "appro", label: "Approvisionnements", icon: Truck },
@@ -37,8 +39,13 @@ const tabList: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
 
 const PAYMENT: Record<string, string> = { CASH_ON_DELIVERY: "Especes", MOBILE_MONEY: "Mobile Money", CARD: "Carte" }
 const COLORS = ["#1f4fa3", "#0f766e", "#7c3aed"]
-const STATUS_LBL: Record<string, string> = { PENDING: "En attente", CONFIRMED: "Confirmee", PROCESSING: "En cours", READY: "Prete", OUT_FOR_DELIVERY: "En livraison", DELIVERED: "Livre", CANCELLED: "Annulee" }
-const STATUS_BG: Record<string, string> = { PENDING: "bg-yellow-100 text-yellow-800", CONFIRMED: "bg-blue-100 text-blue-800", PROCESSING: "bg-indigo-100 text-indigo-800", READY: "bg-green-100 text-green-800", OUT_FOR_DELIVERY: "bg-purple-100 text-purple-800", DELIVERED: "bg-green-100 text-green-800", CANCELLED: "bg-red-100 text-red-800" }
+const STATUS_LBL: Record<string, string> = { PENDING: "En attente", SENT_TO_CASHIER: "Envoyee a la caisse", CONFIRMED: "Confirmee", PROCESSING: "En cours", READY: "Prete", OUT_FOR_DELIVERY: "En livraison", DELIVERED: "Livre", CANCELLED: "Annulee" }
+const STATUS_BG: Record<string, string> = { PENDING: "bg-yellow-100 text-yellow-800", SENT_TO_CASHIER: "bg-sky-100 text-sky-800", CONFIRMED: "bg-blue-100 text-blue-800", PROCESSING: "bg-indigo-100 text-indigo-800", READY: "bg-green-100 text-green-800", OUT_FOR_DELIVERY: "bg-purple-100 text-purple-800", DELIVERED: "bg-green-100 text-green-800", CANCELLED: "bg-red-100 text-red-800" }
+
+const todayIso = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
 const SUPPLY_LBL: Record<string, string> = { IN: "Entree", PRODUCTION: "Production", TRANSFER_IN: "Transfert", RETURN: "Retour" }
 const LOT_STATUS: Record<string, string> = { ACTIVE: "Actif", EXHAUSTED: "Epuise", EXPIRED: "Expire" }
 
@@ -53,6 +60,10 @@ export default function RapportsPage() {
   const [period, setPeriod] = useState<string>("month")
   // "all" = tous les points de vente, sinon id du point de vente.
   const [pos, setPos] = useState<string>("all")
+  // Onglet « Journée » : date sélectionnée + rapport consolidé du jour.
+  const [dayDate, setDayDate] = useState<string>(todayIso)
+  const [dayData, setDayData] = useState<JourneeReport | null>(null)
+  const [dayError, setDayError] = useState("")
 
   const periods = [
     { id: "week", label: "Semaine" },
@@ -104,6 +115,43 @@ export default function RapportsPage() {
     return () => controller.abort()
   }, [])
 
+  useEffect(() => {
+    if (tab !== "journee") return
+    const controller = new AbortController()
+    const init = async () => {
+      try {
+        const params = new URLSearchParams({ date: dayDate, pos })
+        const res = await fetch(`/api/reports/journee?${params}`, { signal: controller.signal })
+        if (!res.ok) throw new Error("Impossible de charger le rapport du jour")
+        setDayData(await res.json())
+        setDayError("")
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setDayError(err instanceof Error ? err.message : "Erreur")
+        }
+      }
+    }
+    void init()
+    return () => controller.abort()
+  }, [tab, dayDate, pos])
+
+  const refreshDay = async () => {
+    try {
+      const params = new URLSearchParams({ date: dayDate, pos })
+      const res = await fetch(`/api/reports/journee?${params}`)
+      if (!res.ok) throw new Error("Impossible de charger le rapport du jour")
+      setDayData(await res.json())
+      setDayError("")
+    } catch (err) {
+      setDayError(err instanceof Error ? err.message : "Erreur")
+    }
+  }
+
+  const handleDayDateChange = (value: string) => {
+    setDayDate(value)
+    setDayData(null)
+  }
+
   const s = data?.summary
   // Colonnes de stock par point de vente, quand le rapport couvre tous les points de vente.
   const posColumns = pos === "all" && (data?.pointsOfSale.length ?? 0) > 1 ? data!.pointsOfSale : []
@@ -111,6 +159,7 @@ export default function RapportsPage() {
   const exportPDF = () => {
     if (!data) return
     switch (tab) {
+      case "journee": if (dayData) exportJourneePDF(dayData); break
       case "ventes": exportVentesPDF(data); break
       case "stocks": exportStocksPDF(data); break
       case "appro": exportApproPDF(data); break
@@ -125,6 +174,7 @@ export default function RapportsPage() {
   const exportExcel = () => {
     if (!data) return
     switch (tab) {
+      case "journee": if (dayData) exportJourneeExcel(dayData); break
       case "ventes": exportVentesExcel(data); break
       case "stocks": exportStocksExcel(data); break
       case "appro": exportApproExcel(data); break
@@ -143,7 +193,7 @@ export default function RapportsPage() {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Rapports</h1>
           <p className="mt-1 text-sm text-gray-500">Tableaux de bord detailles par domaine.</p>
         </div>
-        <button onClick={() => load()} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <button onClick={() => (tab === "journee" ? refreshDay() : load())} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50">
           <RefreshCw className="h-4 w-4" /> Actualiser
         </button>
         {!loading && data && (
@@ -160,6 +210,7 @@ export default function RapportsPage() {
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-2 sm:px-4 sm:py-3 text-sm text-red-700">{error}</div>}
 
+      {tab !== "journee" && (
       <div className="flex flex-wrap items-center gap-3">
         <span className="shrink-0 text-sm font-medium text-gray-500">Période :</span>
         <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
@@ -171,6 +222,7 @@ export default function RapportsPage() {
         </div>
         {data?.periodLabel && <span className="min-w-0 text-xs text-gray-400">({data.periodLabel})</span>}
       </div>
+      )}
 
       {(data?.pointsOfSale.length ?? 0) > 1 && (
         <div className="flex flex-wrap items-center gap-3">
@@ -218,10 +270,171 @@ export default function RapportsPage() {
         })}
       </div>
 
+      {tab === "journee" && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+          <CalendarDays className="h-4 w-4 text-gray-400" />
+          <span className="shrink-0 text-sm font-medium text-gray-500">Journée :</span>
+          <input
+            type="date"
+            value={dayDate}
+            max={todayIso()}
+            onChange={(e) => handleDayDateChange(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none"
+          />
+          {dayData && <span className="text-xs text-gray-400">({dayData.label})</span>}
+        </div>
+      )}
+
       {loading ? (
         <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-8 text-center text-xs sm:text-sm text-gray-500">Chargement...</div>
       ) : (
         <>
+          {tab === "journee" && (
+            dayError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{dayError}</div>
+            ) : !dayData ? (
+              <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-8 text-center text-xs sm:text-sm text-gray-500">Chargement du rapport du jour...</div>
+            ) : (
+              <div className="space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">CA du jour</p><p className="mt-1 text-lg font-bold text-gray-900">{formatPrice(dayData.summary.revenue)}</p></div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">Commandes</p><p className="mt-1 text-lg font-bold text-gray-900">{dayData.summary.orders}</p></div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">Articles vendus</p><p className="mt-1 text-lg font-bold text-gray-900">{dayData.summary.items}</p></div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">Panier moyen</p><p className="mt-1 text-lg font-bold text-gray-900">{formatPrice(dayData.summary.avgOrder)}</p></div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+                  <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+                    <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><WalletCards className="h-4 w-4" /> Encaissements par mode</h2>
+                    <div className="space-y-2">
+                      {dayData.paymentBreakdown.length === 0 && <p className="text-sm text-gray-400">Aucun encaissement.</p>}
+                      {dayData.paymentBreakdown.map((p) => (
+                        <div key={p.method} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm">
+                          <div className="min-w-0"><p className="truncate font-medium">{PAYMENT[p.method] ?? p.method}</p><p className="text-xs text-gray-500">{p.count} tx(s)</p></div>
+                          <span className="font-semibold">{formatPrice(p.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+                    <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><ShoppingCart className="h-4 w-4" /> Commandes par statut</h2>
+                    <div className="space-y-2">
+                      {dayData.ordersByStatus.length === 0 && <p className="text-sm text-gray-400">Aucune commande.</p>}
+                      {dayData.ordersByStatus.map((item) => (
+                        <div key={item.status} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BG[item.status] ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LBL[item.status] ?? item.status}</span>
+                          <div className="text-right"><p className="font-semibold">{item.count} cmd(s)</p><p className="text-xs text-gray-500">{formatPrice(item.total)}</p></div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+                  <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+                    <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Par point de vente</h2>
+                    <div className="space-y-2">
+                      {dayData.byPointOfSale.length === 0 && <p className="text-sm text-gray-400">Aucune donnée.</p>}
+                      {dayData.byPointOfSale.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm">
+                          <span className="font-medium text-gray-800">{p.name}</span>
+                          <div className="text-right"><p className="font-semibold">{formatPrice(p.revenue)}</p><p className="text-xs text-gray-500">{p.orders} cmd(s)</p></div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+                    <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Par caissier</h2>
+                    <div className="space-y-2">
+                      {dayData.byCashier.length === 0 && <p className="text-sm text-gray-400">Aucune donnée.</p>}
+                      {dayData.byCashier.map((c) => (
+                        <div key={c.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm">
+                          <span className="font-medium text-gray-800">{c.name}</span>
+                          <div className="text-right"><p className="font-semibold">{formatPrice(c.revenue)}</p><p className="text-xs text-gray-500">{c.orders} cmd(s)</p></div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+
+                <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+                  <h2 className="mb-4 flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><Package className="h-4 w-4" /> Top produits du jour</h2>
+                  <div className="space-y-2">
+                    {dayData.topProducts.length === 0 && <p className="text-sm text-gray-400">Aucune vente.</p>}
+                    {dayData.topProducts.map((p) => (
+                      <div key={p.name} className="flex items-center justify-between rounded-lg bg-gray-50 p-2 sm:p-3 text-xs sm:text-sm">
+                        <span className="font-medium text-gray-800">{p.name}</span>
+                        <div className="text-right"><span className="font-semibold">{p.quantity}</span><p className="text-xs text-gray-500">{formatPrice(p.amount)}</p></div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+                  <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Sessions de caisse</h2>
+                  <div className="overflow-x-auto max-h-80">
+                    <table className="w-full text-xs sm:text-sm">
+                      <thead className="sticky top-0 bg-gray-50/80"><tr>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Caissier</th>
+                        <th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">PDV</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-center text-xs font-semibold uppercase text-gray-500">Statut</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Fond</th>
+                        <th className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Cloture</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Ecart</th>
+                      </tr></thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {dayData.cashSessions.length === 0 && <tr><td colSpan={6} className="px-4 py-3 text-center text-gray-400">Aucune session.</td></tr>}
+                        {dayData.cashSessions.map((c) => (
+                          <tr key={c.id}>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2">{c.cashier ?? "-"}</td>
+                            <td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{c.pointOfSale}</td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2 text-center"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.status === "OPEN" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{c.status === "OPEN" ? "Ouverte" : "Fermee"}</span></td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2 text-right">{formatPrice(c.openingBalance)}</td>
+                            <td className="hidden sm:table-cell px-2 py-2 sm:px-4 sm:py-2 text-right">{c.closingBalance !== null ? formatPrice(c.closingBalance) : "-"}</td>
+                            <td className={`px-2 py-2 sm:px-4 sm:py-2 text-right font-bold ${c.gap === null || c.gap === 0 ? "" : c.gap > 0 ? "text-blue-600" : "text-red-600"}`}>{c.gap !== null ? (c.gap > 0 ? "+" : "") + formatPrice(c.gap) : "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+                  <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Détail des commandes ({dayData.orders.length})</h2>
+                  <div className="overflow-x-auto max-h-96">
+                    <table className="w-full min-w-[720px] text-xs sm:text-sm">
+                      <thead className="sticky top-0 bg-gray-50/80"><tr>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Heure</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">N°</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Client</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Caissier</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Art.</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-left text-xs font-semibold uppercase text-gray-500">Paiement</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-center text-xs font-semibold uppercase text-gray-500">Statut</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-2 text-right text-xs font-semibold uppercase text-gray-500">Montant</th>
+                      </tr></thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {dayData.orders.length === 0 && <tr><td colSpan={8} className="px-4 py-3 text-center text-gray-400">Aucune commande ce jour.</td></tr>}
+                        {dayData.orders.map((o) => (
+                          <tr key={o.id}>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2 text-gray-500">{new Date(o.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2 font-mono text-xs font-semibold text-primary-700">{o.orderNumber}</td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2">{o.customerName ?? "-"}</td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{o.cashier ?? "-"}</td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2 text-right">{o.items}</td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2 text-gray-600">{PAYMENT[o.paymentMethod ?? ""] ?? o.paymentMethod ?? "-"}</td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2 text-center"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BG[o.status] ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LBL[o.status] ?? o.status}</span></td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-2 text-right font-bold">{formatPrice(o.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+            )
+          )}
+
           {tab === "ventes" && (
             <div className="space-y-4 sm:space-y-6">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -3,7 +3,7 @@ import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
 import { LOGO_BADGE_BASE64 } from "./logo-badge-base64"
 import { drawCoverPage } from "./pdf-cover"
-import type { ReportPayload } from "./report-types"
+import type { ReportPayload, JourneeReport } from "./report-types"
 
 type VentesData = Pick<ReportPayload, "summary" | "topProducts" | "paymentBreakdown30" | "daily7">
 type StocksData = Pick<ReportPayload, "summary" | "stockByCategory" | "allStockVariants" | "stockAlerts">
@@ -923,4 +923,228 @@ export function exportClotureCaisseExcel(data: ClotureReport) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(paiements), "Paiements")
 
   XLSX.writeFile(wb, `cloture-caisse-${(data.session.reportReference ?? todayShort()).replace(/[^\w-]/g, "")}.xlsx`)
+}
+
+// ─── RAPPORT D'UNE JOURNÉE ─────────────────────────────────────
+
+export function exportJourneePDF(data: JourneeReport) {
+  const title = "Rapport Journalier — Synthèse d'une journée"
+  const doc = createDoc()
+  addCoverPage(doc, title, REPORT_VERSION, data.label)
+  doc.addPage()
+  addPageHeader(doc, "Rapport Journalier")
+  let y = 30
+
+  const pageHeight = doc.internal.pageSize.height
+  const spaceFor = (needed: number) => {
+    if (y + needed > pageHeight - 18) {
+      doc.addPage()
+      addPageHeader(doc, "Rapport Journalier")
+      y = 30
+    }
+  }
+
+  // ── Synthèse ──
+  y = sectionTitle(doc, y, "Synthèse de la journée")
+  y = kv(doc, y, "Journée", data.label)
+  if (data.selectedPos) y = kv(doc, y, "Point de vente", data.selectedPos.name)
+  y = kv(doc, y, "Chiffre d'affaires", fmt(data.summary.revenue))
+  y = kv(doc, y, "Commandes", String(data.summary.orders))
+  y = kv(doc, y, "Articles vendus", String(data.summary.items))
+  y = kv(doc, y, "Panier moyen", fmt(data.summary.avgOrder))
+  y = kv(doc, y, "Commandes payées", String(data.summary.paidOrders))
+  y = kv(doc, y, "Annulées", String(data.summary.cancelled))
+  y += 6
+
+  // ── Encaissements ──
+  spaceFor(30)
+  y = sectionTitle(doc, y, "Encaissements par mode de paiement")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Mode de paiement", "Transactions", "Montant"]],
+    body: data.paymentBreakdown.length > 0
+      ? data.paymentBreakdown.map((row) => [PAYMENT[row.method] ?? row.method, String(row.count), fmt(row.amount)])
+      : [["-", "", ""]],
+    foot: [["TOTAL", String(data.summary.paidOrders), fmt(data.summary.revenue)]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
+    footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // ── Commandes par statut ──
+  spaceFor(30)
+  y = sectionTitle(doc, y, "Commandes par statut")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Statut", "Commandes", "Montant"]],
+    body: data.ordersByStatus.length > 0
+      ? data.ordersByStatus.map((row) => [STATUS_LBL[row.status] ?? row.status, String(row.count), fmt(row.total)])
+      : [["-", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // ── Répartition par point de vente ──
+  spaceFor(30)
+  y = sectionTitle(doc, y, "Répartition par point de vente")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Point de vente", "Commandes", "Chiffre d'affaires"]],
+    body: data.byPointOfSale.length > 0
+      ? data.byPointOfSale.map((row) => [row.name, String(row.orders), fmt(row.revenue)])
+      : [["-", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // ── Répartition par caissier ──
+  spaceFor(30)
+  y = sectionTitle(doc, y, "Répartition par caissier")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Caissier(ère)", "Commandes", "Chiffre d'affaires"]],
+    body: data.byCashier.length > 0
+      ? data.byCashier.map((row) => [row.name, String(row.orders), fmt(row.revenue)])
+      : [["-", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // ── Top produits ──
+  spaceFor(30)
+  y = sectionTitle(doc, y, "Top produits du jour")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Produit", "Quantité", "Montant"]],
+    body: data.topProducts.length > 0
+      ? data.topProducts.map((row) => [row.name, String(row.quantity), fmt(row.amount)])
+      : [["-", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // ── Sessions de caisse ──
+  spaceFor(30)
+  y = sectionTitle(doc, y, "Sessions de caisse")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Caissier(ère)", "PDV", "Statut", "Ouverture", "Fond", "Clôture", "Écart"]],
+    body: data.cashSessions.length > 0
+      ? data.cashSessions.map((c) => [
+          c.cashier ?? "-",
+          c.pointOfSale,
+          c.status,
+          new Date(c.openedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+          fmt(c.openingBalance),
+          c.closingBalance === null ? "—" : fmt(c.closingBalance),
+          c.gap === null ? "—" : fmt(c.gap),
+        ])
+      : [["-", "", "", "", "", "", ""]],
+    styles: { fontSize: 8, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // ── Détail des commandes ──
+  spaceFor(30)
+  y = sectionTitle(doc, y, "Détail des commandes")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "auto",
+    head: [["Heure", "N°", "Client", "Caissier", "PDV", "Articles", "Paiement", "Statut", "Montant"]],
+    body: data.orders.length > 0
+      ? data.orders.map((o) => [
+          new Date(o.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+          o.orderNumber,
+          o.customerName ?? "-",
+          o.cashier ?? "-",
+          o.pointOfSale ?? "-",
+          String(o.items),
+          PAYMENT[o.paymentMethod ?? ""] ?? o.paymentMethod ?? "-",
+          STATUS_LBL[o.status] ?? o.status,
+          fmt(o.total),
+        ])
+      : [["-", "", "", "", "", "", "", "", ""]],
+    styles: { fontSize: 7.5, textColor: [40, 40, 40] },
+    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
+  })
+
+  finalizePDF(doc, title, "rapport-journee-" + data.date.replace(/-/g, "") + ".pdf")
+}
+
+export function exportJourneeExcel(data: JourneeReport) {
+  const wb = XLSX.utils.book_new()
+
+  const resume: (string | number)[][] = [
+    ["Indicateur", "Valeur"],
+    ["Journée", data.label],
+    ["Point de vente", data.selectedPos?.name ?? "Tous"],
+    ["Chiffre d'affaires", data.summary.revenue],
+    ["Commandes", data.summary.orders],
+    ["Articles vendus", data.summary.items],
+    ["Panier moyen", data.summary.avgOrder],
+    ["Commandes payées", data.summary.paidOrders],
+    ["Annulées", data.summary.cancelled],
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resume), "Resume")
+
+  const paiements: (string | number)[][] = [
+    ["Mode", "Transactions", "Montant"],
+    ...data.paymentBreakdown.map((row) => [PAYMENT[row.method] ?? row.method, row.count, row.amount]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(paiements), "Encaissements")
+
+  const statuts: (string | number)[][] = [
+    ["Statut", "Commandes", "Montant"],
+    ...data.ordersByStatus.map((row) => [STATUS_LBL[row.status] ?? row.status, row.count, row.total]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(statuts), "Statuts")
+
+  const top: (string | number)[][] = [
+    ["Produit", "Quantite", "Montant"],
+    ...data.topProducts.map((row) => [row.name, row.quantity, row.amount]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(top), "Top Produits")
+
+  const parPdv: (string | number)[][] = [
+    ["Point de vente", "Commandes", "Chiffre d'affaires"],
+    ...data.byPointOfSale.map((row) => [row.name, row.orders, row.revenue]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(parPdv), "Par PDV")
+
+  const parCaissier: (string | number)[][] = [
+    ["Caissier", "Commandes", "Chiffre d'affaires"],
+    ...data.byCashier.map((row) => [row.name, row.orders, row.revenue]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(parCaissier), "Par caissier")
+
+  const sessions: (string | number | null)[][] = [
+    ["Caissier", "PDV", "Statut", "Ouverture", "Fond", "Cloture", "Ecart", "Reference"],
+    ...data.cashSessions.map((c) => [
+      c.cashier ?? "", c.pointOfSale, c.status, c.openedAt, c.openingBalance, c.closingBalance, c.gap, c.reportReference ?? "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sessions), "Sessions caisse")
+
+  const commandes: (string | number)[][] = [
+    ["Heure", "Numero", "Client", "Caissier", "PDV", "Articles", "Paiement", "Statut", "Montant"],
+    ...data.orders.map((o) => [
+      o.createdAt, o.orderNumber, o.customerName ?? "", o.cashier ?? "", o.pointOfSale ?? "",
+      o.items, PAYMENT[o.paymentMethod ?? ""] ?? o.paymentMethod ?? "", STATUS_LBL[o.status] ?? o.status, o.total,
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(commandes), "Commandes")
+
+  XLSX.writeFile(wb, "rapport-journee-" + data.date.replace(/-/g, "") + ".xlsx")
 }

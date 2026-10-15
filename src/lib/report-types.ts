@@ -238,6 +238,66 @@ export interface PointOfSaleComparison {
   stockUnits: number
 }
 
+// ─── RAPPORT D'UNE JOURNÉE (onglet « Journée ») ───────────────
+
+export interface JourneeOrder {
+  id: string
+  orderNumber: string
+  createdAt: string
+  customerName: string | null
+  status: string
+  paymentMethod: string | null
+  paymentStatus: string
+  total: number
+  items: number
+  pointOfSale: string | null
+  cashier: string | null
+}
+
+export interface JourneeCashSession {
+  id: string
+  pointOfSale: string
+  cashier: string | null
+  status: string
+  openedAt: string
+  closedAt: string | null
+  openingBalance: number
+  closingBalance: number | null
+  gap: number | null
+  reportReference: string | null
+}
+
+export interface JourneeReport {
+  date: string
+  label: string
+  generatedAt: string
+  pointsOfSale: { id: string; name: string }[]
+  selectedPos: { id: string; name: string } | null
+  summary: {
+    revenue: number
+    orders: number
+    items: number
+    avgOrder: number
+    cancelled: number
+    paidOrders: number
+  }
+  paymentBreakdown: { method: string; count: number; amount: number }[]
+  ordersByStatus: { status: string; count: number; total: number }[]
+  topProducts: { name: string; quantity: number; amount: number }[]
+  byPointOfSale: { id: string; name: string; revenue: number; orders: number }[]
+  byCashier: { id: string; name: string; revenue: number; orders: number }[]
+  cashSessions: JourneeCashSession[]
+  cashSummary: {
+    sessions: number
+    open: number
+    closed: number
+    totalOpening: number
+    totalClosing: number
+    totalGap: number
+  }
+  orders: JourneeOrder[]
+}
+
 export interface ReportPayload {
   period: string
   periodLabel: string
