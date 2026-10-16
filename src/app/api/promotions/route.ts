@@ -35,7 +35,7 @@ function serialize(p: PromotionRow) {
 }
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
   if (forbidden) return forbidden
 
   try {
@@ -51,7 +51,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
   if (forbidden) return forbidden
 
   try {

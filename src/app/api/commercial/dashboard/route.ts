@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
-import { b2bClientScope, clientDisplayName, creanceLines, currentMonth, seesAllB2b, type SessionUser } from "@/lib/commercial"
+import { b2bClientScope, clientDisplayName, creanceLines, currentMonth, INVOICE_CREDITS, invoiceSituation, seesAllB2b, type SessionUser } from "@/lib/commercial"
 
 export const dynamic = "force-dynamic"
 
@@ -72,10 +72,36 @@ export async function GET() {
       creanceLines(user),
     ])
 
+    // derniers bons de commande et dernières factures (avec leur état de paiement)
+    const [recentCommandes, recentFactures] = await Promise.all([
+      prisma.b2bDocument.findMany({
+        where: { type: "COMMANDE", ...inScope },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: { id: true, reference: true, status: true, total: true, createdAt: true, client: { select: clientNames } },
+      }),
+      prisma.b2bDocument.findMany({
+        where: { type: "FACTURE", ...inScope },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: {
+          id: true, reference: true, status: true, total: true, createdAt: true, client: { select: clientNames },
+          payments: { select: { amount: true, validationStatus: true } },
+          children: INVOICE_CREDITS,
+        },
+      }),
+    ])
+
     const caMonth = ca._sum.total ?? 0
     const targetAmount = target?.targetAmount ?? 0
     const recent = (rows: typeof recentDevis) =>
       rows.map((r) => ({ id: r.id, reference: r.reference, status: r.status, clientName: clientDisplayName(r.client), total: r.total, createdAt: r.createdAt.toISOString() }))
+    // état de paiement d'une facture : payée, partiellement payée (reste), non payée, annulée par avoir
+    const invoiceRows = recentFactures.map((f) => {
+      const s = invoiceSituation(f.total, f.payments, f.children)
+      const paymentState = s.credited > 0 && s.due <= 0.005 ? "CANCELLED" : s.balance <= 0.005 ? "PAID" : s.paid > 0 || s.credited > 0 ? "PARTIAL" : "UNPAID"
+      return { id: f.id, reference: f.reference, status: f.status, clientName: clientDisplayName(f.client), total: f.total, createdAt: f.createdAt.toISOString(), paymentState, balance: s.balance }
+    })
 
     return NextResponse.json({
       dashboard: {
@@ -102,6 +128,8 @@ export async function GET() {
         avoirsMontant: avoirs._sum.total ?? 0,
         recentDevis: recent(recentDevis),
         recentLivraisons: recent(recentLivraisons),
+        recentCommandes: recent(recentCommandes),
+        recentFactures: invoiceRows,
       },
     })
   } catch (error) {

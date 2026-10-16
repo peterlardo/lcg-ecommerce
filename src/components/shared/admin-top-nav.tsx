@@ -168,16 +168,26 @@ const commercialLinks: NavLink[] = [
 ]
 // à plat pour le menu du téléphone : un lien à sous-menu y est remplacé par ses sous-liens
 const commercialFlatLinks = commercialLinks.flatMap((link) => link.children ?? [link])
-const pilotageGroup = navGroups.find((group) => group.title === "Pilotage")!
 const ventesGroup = navGroups.find((group) => group.title === "Ventes")!
+// Pilotage des commerciaux : leur tableau de bord est le tableau de bord commercial (le leur), pas le général
+const commercialPilotageGroup = {
+  title: "Pilotage",
+  icon: LayoutDashboard,
+  links: [
+    { href: "/admin/commercial", label: "Tableau de bord", icon: LayoutDashboard },
+    { href: "/admin/rapports", label: "Rapports", icon: BarChart3 },
+  ],
+}
+// menu Commercial : le reste du module (le tableau de bord est dans Pilotage)
+const commercialModuleLinks = commercialFlatLinks.filter((link) => link.href !== "/admin/commercial")
 // Menus des commerciaux dans la barre : Pilotage, Ventes, Commercial (« Nouveau client » est à part, en accès direct)
 const commercialBarGroups = [
-  pilotageGroup,
+  commercialPilotageGroup,
   ventesGroup,
-  { title: "Commercial", icon: BriefcaseBusiness, links: commercialFlatLinks.filter((link) => link.href !== newClientLink.href) },
+  { title: "Commercial", icon: BriefcaseBusiness, links: commercialModuleLinks.filter((link) => link.href !== newClientLink.href) },
 ]
 // menu du téléphone : les mêmes, « Nouveau client » compris dans le menu Commercial
-const commercialGroups = [pilotageGroup, ventesGroup, { title: "Commercial", icon: BriefcaseBusiness, links: commercialFlatLinks }]
+const commercialGroups = [commercialPilotageGroup, ventesGroup, { title: "Commercial", icon: BriefcaseBusiness, links: commercialModuleLinks }]
 const commercialHrefs = new Set(commercialGroups.flatMap((group) => group.links.map((link) => link.href)))
 const SUBMENU_OFFSET = 100
 

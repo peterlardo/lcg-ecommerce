@@ -117,8 +117,17 @@ export function isStaffRole(role: string | null | undefined): boolean {
   return !!role && role !== "CUSTOMER" && role !== "DISABLED"
 }
 
+/**
+ * Modules d'exploitation (catalogue, stock, production) fermés aux profils de vente, même si la case est cochée
+ * (demande du 2026-10-16). L'état de stock & caisse reste ouvert : la caisse y établit son état de caisse ;
+ * la liste des produits reste lisible par les écrans de vente et de devis (son API ne dépend pas de ces modules).
+ */
+export const OPERATIONS_MODULES = ["produits", "promotions", "stock", "production", "lots", "tracabilite", "distribution"]
+export const SALES_PROFILE_ROLES = ["COMMERCIAL", "RESPONSABLE_COMMERCIAL", "OPERATEUR_ACCUEIL", ...CASHIER_ROLES]
+
 /** Le rôle peut-il recevoir ce module ? */
 export function moduleOpenTo(role: string | null | undefined, module: string): boolean {
+  if (role && SALES_PROFILE_ROLES.includes(role) && OPERATIONS_MODULES.includes(module)) return false
   const reserved = MODULE_ROLES[module]
   return !reserved || (!!role && reserved.includes(baseRole(role) as string))
 }

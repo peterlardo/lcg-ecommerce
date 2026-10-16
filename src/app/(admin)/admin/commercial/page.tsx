@@ -12,6 +12,16 @@ interface RecentDocument {
   clientName: string
   total: number
   createdAt: string
+  /** factures : état du paiement (avoirs déduits) */
+  paymentState?: "PAID" | "PARTIAL" | "UNPAID" | "CANCELLED"
+  balance?: number
+}
+
+const PAYMENT_STATE: Record<string, { label: string; className: string }> = {
+  PAID: { label: "Payée", className: "bg-green-100 text-green-700" },
+  PARTIAL: { label: "Partiellement payée", className: "bg-amber-100 text-amber-800" },
+  UNPAID: { label: "Non payée", className: "bg-rose-100 text-rose-700" },
+  CANCELLED: { label: "Annulée par avoir", className: "bg-gray-100 text-gray-500" },
 }
 
 interface CommercialDashboard {
@@ -36,6 +46,8 @@ interface CommercialDashboard {
   facturesMontant: number
   recentDevis: RecentDocument[]
   recentLivraisons: RecentDocument[]
+  recentCommandes?: RecentDocument[]
+  recentFactures?: RecentDocument[]
 }
 
 const STATUS: Record<string, { label: string; className: string }> = {
@@ -65,10 +77,13 @@ function Kpi({ label, value, hint, tone }: { label: string; value: string | numb
   )
 }
 
-function RecentTable({ title, empty, rows }: { title: string; empty: string; rows: RecentDocument[] }) {
+function RecentTable({ title, empty, rows, seeAll }: { title: string; empty: string; rows: RecentDocument[]; seeAll?: string }) {
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
-      <h2 className="mb-3 font-semibold text-gray-900">{title}</h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="font-semibold text-gray-900">{title}</h2>
+        {seeAll && <Link href={seeAll} className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline">Voir tout</Link>}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] text-left text-sm">
           <thead>
@@ -82,13 +97,21 @@ function RecentTable({ title, empty, rows }: { title: string; empty: string; row
           <tbody>
             {rows.map((doc) => (
               <tr key={doc.id} className="border-t border-gray-100">
-                <td className="py-2.5 pr-3 font-mono text-xs text-gray-700">{doc.reference}</td>
+                <td className="py-2.5 pr-3">
+                  <Link href={`/admin/bons-b2b/${doc.id}/document`} className="font-mono text-xs text-primary underline-offset-2 hover:underline">{doc.reference}</Link>
+                </td>
                 <td className="py-2.5 pr-3 text-gray-700">{doc.clientName}</td>
                 <td className="whitespace-nowrap py-2.5 pr-3 text-right font-medium text-gray-900">{formatPrice(doc.total)}</td>
                 <td className="py-2.5">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS[doc.status]?.className ?? "bg-gray-100 text-gray-600"}`}>
-                    {STATUS[doc.status]?.label ?? doc.status}
-                  </span>
+                  {doc.paymentState ? (
+                    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATE[doc.paymentState].className}`}>
+                      {doc.paymentState === "PARTIAL" && doc.balance ? `Reste ${formatPrice(doc.balance)}` : PAYMENT_STATE[doc.paymentState].label}
+                    </span>
+                  ) : (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS[doc.status]?.className ?? "bg-gray-100 text-gray-600"}`}>
+                      {STATUS[doc.status]?.label ?? doc.status}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -197,8 +220,11 @@ export default function CommercialDashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-            <RecentTable title="Devis récents" empty="Aucun devis" rows={dash.recentDevis} />
-            <RecentTable title="Bons de livraison récents" empty="Aucun bon de livraison" rows={dash.recentLivraisons} />
+            {/* dans l'ordre de la chaîne : devis → bon de commande → facture → bon de livraison */}
+            <RecentTable title="Devis récents" empty="Aucun devis" rows={dash.recentDevis} seeAll="/admin/devis-b2b" />
+            <RecentTable title="Bons de commande récents" empty="Aucun bon de commande" rows={dash.recentCommandes ?? []} seeAll="/admin/bons-b2b?type=COMMANDE" />
+            <RecentTable title="Factures récentes" empty="Aucune facture" rows={dash.recentFactures ?? []} seeAll="/admin/bons-b2b?type=FACTURE" />
+            <RecentTable title="Bons de livraison récents" empty="Aucun bon de livraison" rows={dash.recentLivraisons} seeAll="/admin/bons-b2b?type=LIVRAISON" />
           </div>
         </>
       )}

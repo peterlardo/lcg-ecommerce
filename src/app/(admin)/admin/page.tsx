@@ -2,7 +2,9 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { isCommercialRole } from "@/lib/permissions"
 import { RECEIPT_METHOD_LABEL } from "@/lib/payment-methods"
 import {
   AlertCircle,
@@ -222,8 +224,12 @@ export default function DashboardPage() {
 
   const role = session?.user?.role
   const isAdmin = role === "ADMIN"
-  // Commerciaux et responsable commercial : ce tableau de bord est dans leur menu Pilotage,
-  // leur tableau de bord commercial (clients B2B, devis, créances) dans le menu Commercial.
+  // Commerciaux et responsable commercial : leur tableau de bord est le tableau de bord commercial
+  // (leurs clients, devis, objectif, créances) — demande du 2026-10-16 ; on les y conduit.
+  const router = useRouter()
+  useEffect(() => {
+    if (isCommercialRole(role)) router.replace("/admin/commercial")
+  }, [role, router])
   const userPermissions = session?.user?.permissions ?? []
   const visibleModules = isAdmin ? [] : userPermissions.filter((p) => p.canView).map((p) => p.module)
 

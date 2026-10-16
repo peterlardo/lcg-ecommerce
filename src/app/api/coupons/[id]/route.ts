@@ -3,7 +3,7 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { getPrisma } from "@/lib/prisma"
 
 export async function PATCH(req: Request, ctx: RouteContext<"/api/coupons/[id]">) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
   if (forbidden) return forbidden
 
   try {
@@ -81,7 +81,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/coupons/[id]">
 }
 
 export async function DELETE(_req: Request, ctx: RouteContext<"/api/coupons/[id]">) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER"])
   if (forbidden) return forbidden
 
   try {
