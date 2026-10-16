@@ -11,6 +11,7 @@ import {
   BarChart3,
   Boxes,
   CheckCircle2,
+  Clock,
   CircleDollarSign,
   ClipboardList,
   Factory,
@@ -208,12 +209,22 @@ export default function DashboardPage() {
   const summary = report?.summary
   // Articles du jour : détail par produit des articles vendus aujourd'hui
   const todayArticles = summary?.todayProducts ?? []
+
+  // Commandes en attente : statut PENDING, les plus récentes d'abord
+  const pendingOrders = useMemo(
+    () => orders
+      .filter((order) => order.status === "PENDING")
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [orders]
+  )
+
+  // Situation complète du jour : ventes, commandes, articles, attente, livraisons
   const stats = [
-    { label: "En livraison", value: String(summary?.todayInDelivery ?? 0), detail: "Commandes en cours de livraison", icon: Truck, tone: "text-orange-600 bg-orange-100" },
-    { label: "Articles vendus", value: String(summary?.todayItems ?? 0), detail: `Hier : ${summary?.yesterdayItems ?? 0} article${(summary?.yesterdayItems ?? 0) > 1 ? "s" : ""}`, icon: Boxes, tone: "text-green-600 bg-green-100" },
-    { label: "Commandes totales", value: String(summary?.todayOrders ?? 0), detail: `${formatPrice(summary?.todayRevenue ?? 0)} de ventes`, icon: ShoppingCart, tone: "text-primary bg-primary/10" },
-    { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: `${summary?.todayOrdersDelivered ?? 0} livrée(s)`, icon: CircleDollarSign, tone: "text-emerald-600 bg-emerald-100" },
-    { label: "Commandes", value: String(summary?.orders30 ?? 0), detail: `${report?.periodLabel ?? "Mois"} — ${summary?.todayOrders ?? 0} aujourd'hui`, icon: ClipboardList, tone: "text-blue-600 bg-blue-100" },
+    { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: "Chiffre d'affaires du jour", icon: CircleDollarSign, tone: "text-emerald-600 bg-emerald-100" },
+    { label: "Commandes du jour", value: String(summary?.todayOrders ?? 0), detail: `${formatPrice(summary?.todayRevenue ?? 0)} de ventes`, icon: ShoppingCart, tone: "text-primary bg-primary/10" },
+    { label: "Articles vendus", value: String(summary?.todayItems ?? 0), detail: `${todayArticles.length} produit${todayArticles.length > 1 ? "s" : ""} vendu${todayArticles.length > 1 ? "s" : ""} aujourd'hui`, icon: Boxes, tone: "text-green-600 bg-green-100" },
+    { label: "Commandes en attente", value: String(pendingOrders.length), detail: pendingOrders.length > 0 ? "À traiter" : "Aucune commande en attente", icon: Clock, tone: "text-yellow-600 bg-yellow-100" },
+    { label: "Livraisons du jour", value: String(summary?.todayOrdersDelivered ?? 0), detail: `${summary?.todayInDelivery ?? 0} en cours de livraison`, icon: Truck, tone: "text-orange-600 bg-orange-100" },
   ]
 
   const filteredSales = useMemo(() => {
@@ -312,6 +323,41 @@ export default function DashboardPage() {
           )
         })}
       </div>
+
+      {pendingOrders.length > 0 && (
+        <section className="rounded-xl border border-yellow-200 bg-yellow-50/50 p-3 shadow-card-soft sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100"><Clock className="h-4 w-4 text-yellow-600" /></div>
+              <div>
+                <h2 className="font-semibold text-yellow-900">Commandes en attente</h2>
+                <p className="mt-0.5 text-xs text-yellow-700">{pendingOrders.length} commande{pendingOrders.length > 1 ? "s" : ""} en attente de traitement</p>
+              </div>
+            </div>
+            <Link href="/admin/commandes" className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-yellow-700 hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
+          </div>
+          <div className="mt-3 divide-y divide-yellow-200 sm:mt-4">
+            {pendingOrders.slice(0, 6).map((order) => (
+              <div key={order.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {order.customerName || "Client"}
+                    <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{order.orderNumber}</span>
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{formatSaleTime(order.createdAt)} · {order.items.length} article{order.items.length > 1 ? "s" : ""}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-800">En attente</span>
+                  <span className="whitespace-nowrap text-sm font-semibold text-foreground">{formatPrice(order.total)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {pendingOrders.length > 6 && (
+            <p className="mt-2 text-xs text-yellow-700">… et {pendingOrders.length - 6} autre{pendingOrders.length - 6 > 1 ? "s" : ""}.</p>
+          )}
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         <section className="flex flex-col rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5">
