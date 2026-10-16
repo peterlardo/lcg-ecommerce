@@ -176,6 +176,24 @@ export default function CommandesPage() {
     return () => clearInterval(id)
   }, [load])
 
+  // Commerciaux et responsable commercial : points de vente où enregistrer leurs commandes (« Compte LCG »,
+  // « LCG Mobile »…, réglés dans Paramètres) ; le premier est proposé par défaut
+  const [commercialPoints, setCommercialPoints] = useState<{ id: string; name: string }[]>([])
+  const [orderPointId, setOrderPointId] = useState("")
+  useEffect(() => {
+    if (!showModal || !isCommercialRole(role)) return
+    const controller = new AbortController()
+    fetch("/api/points-de-vente/commerciaux", { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : { points: [] }))
+      .then((data: { points?: { id: string; name: string }[] }) => {
+        const points = data.points ?? []
+        setCommercialPoints(points)
+        setOrderPointId((current) => (points.some((p) => p.id === current) ? current : points[0]?.id ?? ""))
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [showModal, role])
+
   // Arrivée depuis le tableau de bord (« Voir les commandes du jour ») : ?jour=AAAA-MM-JJ
   const [dayFilter, setDayFilter] = useState("")
   useEffect(() => {
@@ -336,6 +354,7 @@ export default function CommandesPage() {
           deliveryZoneId: pickup ? null : form.deliveryZoneId,
           source: "OPERATOR",
           items,
+          ...(orderPointId ? { pointOfSaleId: orderPointId } : {}),
         }),
       })
       const data = await res.json()
@@ -801,6 +820,26 @@ export default function CommandesPage() {
                     <option value="CARD">Carte bancaire</option>
                   </select>
                 </div>
+                {/* commerciaux et responsable commercial : point de vente de la commande (réglé dans Paramètres) */}
+                {isCommercialRole(role) && commercialPoints.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Point de vente</label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {commercialPoints.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setOrderPointId(p.id)}
+                          aria-pressed={orderPointId === p.id}
+                          className={`min-h-11 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors ${orderPointId === p.id ? "border-primary bg-primary text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">La caisse prendra le stock sur ce point de vente au moment du ticket.</p>
+                  </div>
+                )}
                 <div className="sm:col-span-2 grid grid-cols-2 gap-2">
                   {([["DELIVERY", "Livraison à domicile"], ["PICKUP", "Retrait sur place"]] as const).map(([mode, label]) => (
                     <button

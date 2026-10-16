@@ -46,16 +46,22 @@ export interface BankSettings {
   instructions: string
 }
 
+/** Points de vente sur lesquels les commerciaux et le responsable commercial enregistrent leurs commandes. */
+export interface CommercialSettings {
+  pointOfSaleIds: string[]
+}
+
 export interface AppSettings {
   general: GeneralSettings
   delivery: DeliverySettings
   payment: PaymentSettings
   notifications: NotificationSettings
   bank: BankSettings
+  commercial: CommercialSettings
 }
 
 export type SettingsSection = keyof AppSettings
-export const SETTINGS_SECTIONS: SettingsSection[] = ["general", "delivery", "payment", "notifications", "bank"]
+export const SETTINGS_SECTIONS: SettingsSection[] = ["general", "delivery", "payment", "notifications", "bank", "commercial"]
 
 /** Valeurs en vigueur tant que rien n'est enregistré : celles imprimées jusqu'ici sur les documents. */
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -72,6 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   payment: { card: true, mobileMoney: true, cod: true },
   notifications: { newOrder: true, deliveryUpdate: true, lowStock: false, newRegistration: true },
   bank: { bankName: "", accountHolder: "", accountNumber: "", mtnMoney: "", airtelMoney: "", instructions: "" },
+  commercial: { pointOfSaleIds: [] },
 }
 
 const text = (value: unknown, fallback: string, max = 300) => (typeof value === "string" ? value.trim().slice(0, max) : fallback)
@@ -128,6 +135,13 @@ export function sanitizeSection<K extends SettingsSection>(section: K, raw: unkn
         instructions: text(v.instructions, c.instructions, 300),
       } as AppSettings[K]
     }
+    case "commercial": {
+      const c = current as CommercialSettings
+      const ids = Array.isArray(v.pointOfSaleIds)
+        ? [...new Set(v.pointOfSaleIds.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length < 64))].slice(0, 20)
+        : c.pointOfSaleIds
+      return { pointOfSaleIds: ids } as AppSettings[K]
+    }
   }
   return current
 }
@@ -155,6 +169,17 @@ export async function saveSection<K extends SettingsSection>(section: K, raw: un
     update: { value: json, updatedById: userId },
   })
   return value
+}
+
+/** Points de vente actifs des commerciaux (réglage « Points de vente des commerciaux »), dans l'ordre du réglage. */
+export async function commercialPointsOfSale(): Promise<{ id: string; name: string; code: string }[]> {
+  const { commercial } = await getSettings()
+  if (commercial.pointOfSaleIds.length === 0) return []
+  const points = await getPrisma().pointOfSale.findMany({
+    where: { id: { in: commercial.pointOfSaleIds }, isActive: true },
+    select: { id: true, name: true, code: true },
+  })
+  return commercial.pointOfSaleIds.map((pid) => points.find((p) => p.id === pid)).filter((p): p is { id: string; name: string; code: string } => Boolean(p))
 }
 
 /** En-tête et pied des documents imprimés ou envoyés (devis, bons, factures). */

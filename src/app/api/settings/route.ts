@@ -13,6 +13,7 @@ const SECTION_ALIASES: Record<string, SettingsSection> = {
   paiement: "payment", payment: "payment",
   notifications: "notifications",
   reglement: "bank", bank: "bank",
+  commerciaux: "commercial", commercial: "commercial",
 }
 
 export async function GET() {

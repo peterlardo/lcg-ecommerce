@@ -92,6 +92,15 @@ export default function ParametresPage() {
   })
   const [loaded, setLoaded] = useState(false)
   const [saveError, setSaveError] = useState("")
+  // points de vente où les commerciaux et le responsable commercial enregistrent leurs commandes
+  const [commercialPos, setCommercialPos] = useState<string[]>([])
+  const [allPoints, setAllPoints] = useState<{ id: string; name: string; isActive: boolean }[]>([])
+  useEffect(() => {
+    fetch("/api/points-de-vente/list")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => setAllPoints(Array.isArray(list) ? list : []))
+      .catch(() => {})
+  }, [])
 
   const [payment, setPayment] = useState<PaymentSettings>({
     card: true,
@@ -120,6 +129,7 @@ export default function ParametresPage() {
         if (s.payment) setPayment(s.payment)
         if (s.notifications) setNotifications(s.notifications)
         if (s.bank) setBank(s.bank)
+        if (s.commercial) setCommercialPos(s.commercial.pointOfSaleIds ?? [])
         setLoaded(true)
       })
       .catch(() => setSaveError("Paramètres illisibles : rechargez la page avant d'enregistrer."))
@@ -156,6 +166,7 @@ export default function ParametresPage() {
     else if (section === "paiement") payload.payment = payment
     else if (section === "notifications") payload.notifications = notifications
     else if (section === "reglement") payload.bank = bank
+    else if (section === "commerciaux") payload.commercial = { pointOfSaleIds: commercialPos }
     persistSettings(section, payload)
   }
 
@@ -534,6 +545,33 @@ export default function ParametresPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Points de vente des commerciaux</h3>
+          <SaveBtn section="commerciaux" saving={saving} saved={saved} onSave={handleSave} />
+        </div>
+        <p className="mb-3 text-xs text-gray-500">
+          Les commerciaux et le responsable commercial enregistrent leurs commandes sur l&apos;un de ces points de vente (ils choisissent dans le formulaire de commande) ; la caisse y prend le stock au ticket.
+        </p>
+        {allPoints.length === 0 ? (
+          <p className="text-sm text-gray-500">Chargement des points de vente…</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {allPoints.filter((p) => p.isActive).map((p) => (
+              <label key={p.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-primary"
+                  checked={commercialPos.includes(p.id)}
+                  onChange={() => setCommercialPos((current) => (current.includes(p.id) ? current.filter((x) => x !== p.id) : [...current, p.id]))}
+                />
+                {p.name}
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
