@@ -9,6 +9,7 @@ import {
   BarChart3,
   Boxes,
   CheckCircle2,
+  ChevronDown,
   Clock,
   CircleDollarSign,
   ClipboardList,
@@ -23,7 +24,7 @@ import {
 import { formatPrice } from "@/lib/utils"
 
 interface ReportData {
-  summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; todayDeliveries: number; todayReservations: number; todayReservationsPending: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string; todayInDelivery: number; todayConfirmed: number; todayItems: number; yesterdayItems: number; todayProducts: { name: string; quantity: number; revenue: number }[] }
+  summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; todayDeliveries: number; todayReservations: number; todayReservationsPending: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string; todayInDelivery: number; todayConfirmed: number; todayItems: number; yesterdayItems: number; todayProducts: { name: string; quantity: number; revenue: number }[]; todayWaiting?: number }
   daily: { name: string; revenu: number; commandes: number }[]
   salesByDay: { name: string; revenu: number; commandes: number }[]
   paymentBreakdown: { method: string; total: number; count: number }[]
@@ -52,7 +53,17 @@ interface Order {
   createdAt: string; source: string; paymentMethod: string; paymentStatus: string;
   pointOfSaleId: string | null; pointOfSale?: { name: string } | null;
   userId?: string | null; userName?: string | null;
+  /** caissière à qui la commande a été transmise (c'est elle qui l'encaisse) */
+  cashierId?: string | null; cashierName?: string | null;
   items: { name: string; format: string; quantity: number; price: number; total: number }[]
+}
+
+/**
+ * Qui a encaissé : la caissière à qui la commande a été transmise ; pour une vente faite directement en caisse,
+ * l'auteur de la vente. Qui a créé : l'auteur de la commande (opérateur, commercial, caissière).
+ */
+function cashierOf(order: Order): string | null {
+  return order.cashierName ?? (order.source === "CAISSE" ? order.userName ?? null : null)
 }
 
 interface Reservation { id: string; client: string; type: string; date: string; heure: string; status: string; source: string }
@@ -60,6 +71,21 @@ interface Reservation { id: string; client: string; type: string; date: string; 
 const sourceLabels: Record<string, { label: string; className: string }> = {
   WEB: { label: "En ligne", className: "bg-teal-100 text-teal-700" },
   OPERATOR: { label: "Opérateur", className: "bg-violet-100 text-violet-700" },
+}
+
+/** Jour du navigateur (Brazzaville sur les postes de LCG), au format AAAA-MM-JJ : sert au lien « commandes du jour ». */
+function todayKey(): string {
+  return new Date().toLocaleDateString("fr-CA")
+}
+
+/** La commande a-t-elle été passée aujourd'hui ? */
+function isToday(iso: string): boolean {
+  return new Date(iso).toDateString() === new Date().toDateString()
+}
+
+/** Commande en attente : ni annulée, ni payée, ni partie en livraison (même règle que le chiffre d'affaires). */
+function isWaiting(order: { status: string; paymentStatus: string }): boolean {
+  return order.status !== "CANCELLED" && order.paymentStatus !== "PAID" && order.status !== "OUT_FOR_DELIVERY" && order.status !== "DELIVERED"
 }
 
 function formatSaleTime(iso: string): string {
@@ -204,26 +230,58 @@ export default function DashboardPage() {
   // Articles du jour : détail par produit des articles vendus aujourd'hui
   const todayArticles = summary?.todayProducts ?? []
 
-  // Commandes en attente : statut PENDING, les plus récentes d'abord
+  // Commandes en attente DU JOUR (demande du 2026-10-16) : passées aujourd'hui, ni payées ni livrées,
+  // les plus récentes d'abord
   const pendingOrders = useMemo(
     () => orders
-      .filter((order) => order.status === "PENDING")
+      .filter((order) => isToday(order.createdAt) && isWaiting(order))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [orders]
   )
+  const todayOrdersHref = `/admin/commandes?jour=${todayKey()}`
+
+  // Suppression d'une commande en attente : administrateur seulement ; le serveur refuse toute commande
+  // qui a déjà engagé quelque chose (paiement, ticket, stock) et propose de l'annuler.
+  const [deleting, setDeleting] = useState<string | null>(null)
+  // section « Commandes en attente du jour » : pliée par défaut (demande du 2026-10-16)
+  const [pendingOpen, setPendingOpen] = useState(false)
+  const [pendingNotice, setPendingNotice] = useState<{ ok: boolean; text: string } | null>(null)
+  const deleteOrder = async (order: Order) => {
+    if (deleting || !window.confirm(`Supprimer définitivement la commande ${order.orderNumber} (${order.customerName || "client"}, ${formatPrice(order.total)}) ?`)) return
+    setDeleting(order.id)
+    setPendingNotice(null)
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, { method: "DELETE" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setPendingNotice({ ok: false, text: data?.error || "Suppression impossible" })
+        return
+      }
+      setOrders((current) => current.filter((o) => o.id !== order.id))
+      setPendingNotice({ ok: true, text: `Commande ${order.orderNumber} supprimée.` })
+    } catch {
+      setPendingNotice({ ok: false, text: "Connexion au serveur impossible : rien n'a été supprimé" })
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   // Situation complète du jour : ventes, commandes, articles, attente, livraisons
-  const stats = [
-    { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: "Chiffre d'affaires du jour", icon: CircleDollarSign, tone: "text-emerald-600 bg-emerald-100" },
-    { label: "Commandes du jour", value: String(summary?.todayOrders ?? 0), detail: `${formatPrice(summary?.todayRevenue ?? 0)} de ventes`, icon: ShoppingCart, tone: "text-primary bg-primary/10" },
-    { label: "Articles vendus", value: String(summary?.todayItems ?? 0), detail: `${todayArticles.length} produit${todayArticles.length > 1 ? "s" : ""} vendu${todayArticles.length > 1 ? "s" : ""} aujourd'hui`, icon: Boxes, tone: "text-green-600 bg-green-100" },
-    { label: "Commandes en attente", value: String(pendingOrders.length), detail: pendingOrders.length > 0 ? "À traiter" : "Aucune commande en attente", icon: Clock, tone: "text-yellow-600 bg-yellow-100" },
-    { label: "Livraisons du jour", value: String(summary?.todayOrdersDelivered ?? 0), detail: `${summary?.todayInDelivery ?? 0} en cours de livraison`, icon: Truck, tone: "text-orange-600 bg-orange-100" },
+  const soldToday = summary?.todayOrdersDelivered ?? 0
+  const stats: { label: string; value: string; detail: string; icon: typeof Clock; tone: string; href?: string; hrefLabel?: string }[] = [
+    { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: `Chiffre d'affaires de ${soldToday} commande${soldToday > 1 ? "s" : ""} payée${soldToday > 1 ? "s" : ""} ou livrée${soldToday > 1 ? "s" : ""}`, icon: CircleDollarSign, tone: "text-emerald-600 bg-emerald-100" },
+    { label: "Commandes du jour", value: String(summary?.todayOrders ?? 0), detail: `${soldToday} vendue${soldToday > 1 ? "s" : ""} · ${summary?.todayWaiting ?? pendingOrders.length} en attente`, icon: ShoppingCart, tone: "text-primary bg-primary/10", href: todayOrdersHref, hrefLabel: "Voir les commandes du jour" },
+    { label: "Articles vendus", value: String(summary?.todayItems ?? 0), detail: `Payés ou livrés · hier : ${summary?.yesterdayItems ?? 0}`, icon: Boxes, tone: "text-green-600 bg-green-100" },
+    { label: "Commandes en attente", value: String(pendingOrders.length), detail: pendingOrders.length > 0 ? "Du jour, à traiter" : "Aucune commande en attente aujourd'hui", icon: Clock, tone: "text-yellow-600 bg-yellow-100" },
+    { label: "Livraisons du jour", value: String(summary?.deliveredToday ?? 0), detail: `${summary?.todayInDelivery ?? 0} en cours de livraison`, icon: Truck, tone: "text-orange-600 bg-orange-100" },
   ]
 
+  // « Dernières ventes » : seulement ce qui est vendu (payé ou livré), comme le chiffre d'affaires.
+  // Une commande pas encore payée est dans « Commandes en attente », jamais dans les deux listes.
   const filteredSales = useMemo(() => {
     const query = saleClient.trim().toLowerCase()
     return orders.filter((order) => {
+      if (order.status === "CANCELLED" || isWaiting(order)) return false
       if (query && !order.customerName.toLowerCase().includes(query)) return false
       if (saleDate && new Date(order.createdAt).toDateString() !== new Date(`${saleDate}T00:00:00`).toDateString()) return false
       if (saleUserId && order.userId !== saleUserId) return false
@@ -303,6 +361,11 @@ export default function DashboardPage() {
                 <div className={`flex h-9 w-9 items-center justify-center rounded-full sm:h-11 sm:w-11 ${stat.tone}`}><Icon className="h-4 w-4 sm:h-5 sm:w-5" /></div>
               </div>
               <p className="mt-3 text-xs text-muted-foreground sm:mt-4">{stat.detail}</p>
+              {stat.href && (
+                <Link href={stat.href} className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 text-sm font-semibold text-primary hover:bg-primary/10">
+                  {stat.hrefLabel} <ArrowRight className="h-4 w-4" />
+                </Link>
+              )}
               {stat.label === "Articles vendus" && todayArticles.length > 0 && (
                 <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto border-t border-border pt-2">
                   {todayArticles.map((article) => (
@@ -321,15 +384,28 @@ export default function DashboardPage() {
       {pendingOrders.length > 0 && (
         <section className="rounded-xl border border-yellow-200 bg-yellow-50/50 p-3 shadow-card-soft sm:p-5">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100"><Clock className="h-4 w-4 text-yellow-600" /></div>
-              <div>
-                <h2 className="font-semibold text-yellow-900">Commandes en attente</h2>
-                <p className="mt-0.5 text-xs text-yellow-700">{pendingOrders.length} commande{pendingOrders.length > 1 ? "s" : ""} en attente de traitement</p>
+            {/* en-tête cliquable : la section est pliée par défaut */}
+            <button
+              type="button"
+              onClick={() => setPendingOpen((open) => !open)}
+              aria-expanded={pendingOpen}
+              className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-yellow-100"><Clock className="h-4 w-4 text-yellow-600" /></div>
+              <div className="min-w-0">
+                <h2 className="font-semibold text-yellow-900">Commandes en attente du jour ({pendingOrders.length})</h2>
+                <p className="mt-0.5 text-xs text-yellow-700">
+                  {formatPrice(pendingOrders.reduce((sum, o) => sum + o.total, 0))} pas encore payés ni livrés · {pendingOpen ? "toucher pour replier" : "toucher pour afficher"}
+                </p>
               </div>
-            </div>
-            <Link href="/admin/commandes" className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-yellow-700 hover:underline">Voir tout <ArrowRight className="h-3.5 w-3.5" /></Link>
+              <ChevronDown className={`ml-auto h-5 w-5 shrink-0 text-yellow-700 transition-transform ${pendingOpen ? "rotate-180" : ""}`} />
+            </button>
+            <Link href={todayOrdersHref} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-yellow-700 hover:underline">Commandes du jour <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
+          {pendingNotice && (
+            <p role="status" className={`mt-3 rounded-lg border px-3 py-2 text-sm ${pendingNotice.ok ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>{pendingNotice.text}</p>
+          )}
+          {pendingOpen && (<>
           <div className="mt-3 divide-y divide-yellow-200 sm:mt-4">
             {pendingOrders.slice(0, 6).map((order) => (
               <div key={order.id} className="flex items-center justify-between gap-3 py-2.5">
@@ -339,17 +415,37 @@ export default function DashboardPage() {
                     <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{order.orderNumber}</span>
                   </p>
                   <p className="truncate text-xs text-muted-foreground">{formatSaleTime(order.createdAt)} · {order.items.length} article{order.items.length > 1 ? "s" : ""}</p>
+                  {/* qui a créé la commande, et à quelle caissière elle a été transmise */}
+                  {(order.userName || order.cashierName) && (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {order.userName ? <>Créée par <span className="font-semibold text-foreground">{order.userName}</span></> : null}
+                      {order.cashierName ? <>{order.userName ? " · " : ""}transmise à <span className="font-semibold text-foreground">{order.cashierName}</span></> : null}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-800">En attente</span>
                   <span className="whitespace-nowrap text-sm font-semibold text-foreground">{formatPrice(order.total)}</span>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => deleteOrder(order)}
+                      disabled={deleting !== null}
+                      className="inline-flex min-h-11 items-center rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {deleting === order.id ? "Suppression…" : "Supprimer"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
           {pendingOrders.length > 6 && (
-            <p className="mt-2 text-xs text-yellow-700">… et {pendingOrders.length - 6} autre{pendingOrders.length - 6 > 1 ? "s" : ""}.</p>
+            <p className="mt-2 text-xs text-yellow-700">
+              … et {pendingOrders.length - 6} autre{pendingOrders.length - 6 > 1 ? "s" : ""} : <Link href={todayOrdersHref} className="font-semibold underline">voir les commandes du jour</Link>
+            </p>
           )}
+          </>)}
         </section>
       )}
 
@@ -426,6 +522,13 @@ export default function DashboardPage() {
                       <span className="ml-2 text-xs font-normal text-muted-foreground">{formatSaleTime(order.createdAt)}</span>
                     </p>
                     <p className="truncate text-xs text-muted-foreground">{articles || order.orderNumber}</p>
+                    {/* qui a encaissé la vente, et qui a créé la commande quand ce n'est pas la même personne */}
+                    {(cashierOf(order) || order.userName) && (
+                      <p className="truncate text-xs text-muted-foreground">
+                        {cashierOf(order) ? <>Encaissée par <span className="font-semibold text-foreground">{cashierOf(order)}</span></> : null}
+                        {order.userName && order.userName !== cashierOf(order) ? <>{cashierOf(order) ? " · " : ""}Créée par <span className="font-semibold text-foreground">{order.userName}</span></> : null}
+                      </p>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                     <span className="rounded-full bg-muted px-2 py-0.5  font-semibold text-foreground sm:px-2.5 sm:py-1 ">

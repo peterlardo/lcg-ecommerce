@@ -358,15 +358,18 @@ export async function GET(request: Request) {
 
     const yesterdayStart = new Date(todayStart)
     yesterdayStart.setDate(todayStart.getDate() - 1)
-    const yesterdayOrders = activeRecent.filter((o) => o.createdAt >= yesterdayStart && o.createdAt < todayStart)
+    // Articles vendus : même périmètre que le chiffre d'affaires du jour (commandes payées ou livrées).
+    // Avant, les commandes encore en attente y étaient comptées : la carte ne collait pas aux ventes du jour.
+    const yesterdayOrdersSold = activeRecentDelivered.filter((o) => o.createdAt >= yesterdayStart && o.createdAt < todayStart)
     const countItems = (list: typeof activeRecent) => list.reduce((sum, o) => sum + o.items.reduce((sub, i) => sub + i.quantity, 0), 0)
-    const todayItems = countItems(todayOrders)
-    const yesterdayItems = countItems(yesterdayOrders)
+    const todayItems = countItems(todayOrdersDelivered)
+    const yesterdayItems = countItems(yesterdayOrdersSold)
+    // commandes du jour encore en attente (ni payées, ni livrées) : le reste des commandes du jour
+    const todayWaiting = todayOrders.length - todayOrdersDelivered.length
 
-    // Détail des articles vendus aujourd'hui : même périmètre que todayItems
-    // (commandes du jour non annulées), regroupé par produit.
+    // Détail des articles vendus aujourd'hui : même périmètre que todayItems, regroupé par produit.
     const todayProductTotals = new Map<string, { name: string; quantity: number; revenue: number }>()
-    for (const order of todayOrders) {
+    for (const order of todayOrdersDelivered) {
       for (const item of order.items) {
         const name = item.variant?.product?.name ?? "Produit"
         const cur = todayProductTotals.get(item.productId) ?? { name, quantity: 0, revenue: 0 }
@@ -615,6 +618,7 @@ export async function GET(request: Request) {
         todayItems,
         yesterdayItems,
         todayProducts,
+        todayWaiting,
         lowStock: stockAlerts.filter((i) => i.stock > 0).length, outOfStock: stockAlerts.filter((i) => i.stock <= 0).length,
         pendingReservations: reservations.filter((r) => r.status === "PENDING").length,
         totalReservations: reservations.length,

@@ -173,8 +173,42 @@ export default function CommandesPage() {
     return () => clearInterval(id)
   }, [load])
 
+  // Arrivée depuis le tableau de bord (« Voir les commandes du jour ») : ?jour=AAAA-MM-JJ
+  const [dayFilter, setDayFilter] = useState("")
+  useEffect(() => {
+    const jour = new URLSearchParams(window.location.search).get("jour")
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- état initial tiré de l'adresse
+    if (jour && /^\d{4}-\d{2}-\d{2}$/.test(jour)) setDayFilter(jour)
+  }, [])
+  const localDay = (iso: string) => new Date(iso).toLocaleDateString("fr-CA")
+
+  // Suppression d'une commande en attente (administrateur) : le serveur refuse si elle est payée,
+  // a son ticket, est confirmée ou a déjà sorti du stock.
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteNotice, setDeleteNotice] = useState<{ ok: boolean; text: string } | null>(null)
+  const deleteOrder = async (order: Order) => {
+    if (deletingId || !window.confirm(`Supprimer définitivement la commande ${order.orderNumber} (${order.customerName}, ${formatPrice(order.total)}) ?`)) return
+    setDeletingId(order.id)
+    setDeleteNotice(null)
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, { method: "DELETE" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setDeleteNotice({ ok: false, text: data?.error || "Suppression impossible" })
+        return
+      }
+      setOrders((current) => current.filter((o) => o.id !== order.id))
+      setDeleteNotice({ ok: true, text: `Commande ${order.orderNumber} supprimée.` })
+    } catch {
+      setDeleteNotice({ ok: false, text: "Connexion au serveur impossible : rien n'a été supprimé" })
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  // les commandes d'un jour précis sont toutes montrées, même archivées
   const activeOrders = orders.filter(
-    (order) => !isArchivedOrder(order)
+    (order) => (dayFilter ? localDay(order.createdAt) === dayFilter : !isArchivedOrder(order))
   )
 
   const filtered = activeOrders.filter((order) => {
@@ -361,6 +395,21 @@ export default function CommandesPage() {
         </div>
       </div>
 
+      {dayFilter && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 sm:px-4">
+          <p className="text-sm font-semibold text-primary">
+            Commandes du {new Date(`${dayFilter}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} : {activeOrders.length}
+            <span className="font-normal text-gray-600"> · {activeOrders.filter((o) => o.paymentStatus === "PAID").length} payée{activeOrders.filter((o) => o.paymentStatus === "PAID").length > 1 ? "s" : ""}</span>
+          </p>
+          <button type="button" onClick={() => { setDayFilter(""); setPage(1); window.history.replaceState(null, "", "/admin/commandes") }} className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+            Toutes les dates
+          </button>
+        </div>
+      )}
+      {deleteNotice && (
+        <p role="status" className={`rounded-lg border px-3 py-2 text-sm ${deleteNotice.ok ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>{deleteNotice.text}</p>
+      )}
+
       <div className="flex gap-2 overflow-x-auto pb-2">
         {statusFilters.map((tab) => (
           <button
@@ -431,6 +480,17 @@ export default function CommandesPage() {
                     )}
                   </div>
                   <p className="break-words text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
+                  {/* qui a créé la commande, et qui l'a encaissée (caissière à qui elle a été transmise, ou vente faite en caisse) */}
+                  {(() => {
+                    const cashier = order.cashierName ?? (order.source === "CAISSE" ? order.userName ?? null : null)
+                    if (!order.userName && !cashier) return null
+                    return (
+                      <p className="break-words text-xs text-gray-500">
+                        {order.userName && order.userName !== cashier ? <>Créée par <span className="font-semibold text-gray-700">{order.userName}</span></> : null}
+                        {cashier ? <>{order.userName && order.userName !== cashier ? " · " : ""}{order.paymentStatus === "PAID" ? "encaissée par" : "transmise à"} <span className="font-semibold text-gray-700">{cashier}</span></> : null}
+                      </p>
+                    )
+                  })()}
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   {!isOperateur && (
@@ -592,6 +652,18 @@ export default function CommandesPage() {
                           <Receipt className="h-4 w-4" />
                           {order.paymentStatus === "PAID" ? "Ticket de caisse établi" : "Établir la facture"}
                         </Link>
+                      )}
+
+                      {/* administrateur : suppression d'une commande en attente (le serveur refuse si elle a engagé quelque chose) */}
+                      {role === "ADMIN" && order.paymentStatus !== "PAID" && (order.status === "PENDING" || order.status === "SENT_TO_CASHIER") && (
+                        <button
+                          type="button"
+                          onClick={() => deleteOrder(order)}
+                          disabled={deletingId !== null}
+                          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {deletingId === order.id ? "Suppression…" : "Supprimer cette commande en attente"}
+                        </button>
                       )}
 
                       {isOperateur && (

@@ -320,3 +320,58 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: message }, { status })
   }
 }
+
+/** Statuts d'une commande qui n'a encore rien engagé : pas de stock sorti, pas d'encaissement. */
+const DELETABLE_STATUS = ["PENDING", "SENT_TO_CASHIER"]
+
+/**
+ * Suppression définitive d'une commande en attente, par l'administrateur (décision du 2026-10-16).
+ * Seulement si elle n'a rien engagé : ni payée, ni ticket, ni confirmée, ni sortie de stock, ni issue d'une
+ * pré-commande. Sinon on l'annule (le stock est rendu et la vente reste tracée dans les rapports).
+ */
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const forbidden = await requireManagementAccess(["ADMIN"])
+  if (forbidden) return forbidden
+
+  try {
+    const { id } = await params
+    const prisma = getPrisma()
+    const order = await prisma.order.findUnique({
+      where: { id },
+      select: { id: true, orderNumber: true, status: true, paymentStatus: true, ticketGenerated: true, source: true, customerName: true, total: true },
+    })
+    if (!order) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
+
+    const [movements, allocations] = await Promise.all([
+      prisma.stockMovement.count({ where: { reference: order.orderNumber } }),
+      prisma.lotAllocation.count({ where: { reference: order.orderNumber } }),
+    ])
+    const reason =
+      order.paymentStatus === "PAID" || order.paymentStatus === "REFUNDED" ? "elle est payée"
+      : order.ticketGenerated ? "son ticket est émis"
+      : order.source === "RESERVATION" ? "elle vient d'une pré-commande"
+      : movements > 0 || allocations > 0 ? "du stock a déjà été sorti pour elle"
+      : !DELETABLE_STATUS.includes(order.status) ? "elle est déjà confirmée ou en cours"
+      : null
+    if (reason) {
+      return NextResponse.json(
+        { error: `${order.orderNumber} ne peut pas être supprimée : ${reason}. Annulez-la plutôt (le stock est rendu et la trace reste dans les rapports).` },
+        { status: 409 }
+      )
+    }
+
+    // les lignes et la livraison prévue partent avec la commande (suppression en cascade)
+    await prisma.order.delete({ where: { id } })
+    await logActivity({
+      module: "commandes",
+      action: "Suppression",
+      entity: "order",
+      entityId: id,
+      summary: `Commande en attente ${order.orderNumber} supprimée (${order.customerName ?? "client"}, ${order.total} FCFA)`,
+    })
+    return NextResponse.json({ deleted: true, orderNumber: order.orderNumber })
+  } catch (error) {
+    console.error("DELETE order error:", error)
+    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
+  }
+}
