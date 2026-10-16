@@ -363,6 +363,20 @@ export async function GET(request: Request) {
     const todayItems = countItems(todayOrders)
     const yesterdayItems = countItems(yesterdayOrders)
 
+    // Détail des articles vendus aujourd'hui : même périmètre que todayItems
+    // (commandes du jour non annulées), regroupé par produit.
+    const todayProductTotals = new Map<string, { name: string; quantity: number; revenue: number }>()
+    for (const order of todayOrders) {
+      for (const item of order.items) {
+        const name = item.variant?.product?.name ?? "Produit"
+        const cur = todayProductTotals.get(item.productId) ?? { name, quantity: 0, revenue: 0 }
+        cur.quantity += item.quantity
+        cur.revenue += item.total
+        todayProductTotals.set(item.productId, cur)
+      }
+    }
+    const todayProducts = Array.from(todayProductTotals.values()).sort((a, b) => b.quantity - a.quantity)
+
     const todayDeliveries = deliveries.filter((d) => d.createdAt >= todayStart)
     const todayReservations = reservations.filter((r) => r.createdAt >= todayStart)
     const todayReservationsPending = todayReservations.filter((r) => r.status === "PENDING")
@@ -600,6 +614,7 @@ export async function GET(request: Request) {
         todayConfirmed: todayConfirmed.length,
         todayItems,
         yesterdayItems,
+        todayProducts,
         lowStock: stockAlerts.filter((i) => i.stock > 0).length, outOfStock: stockAlerts.filter((i) => i.stock <= 0).length,
         pendingReservations: reservations.filter((r) => r.status === "PENDING").length,
         totalReservations: reservations.length,

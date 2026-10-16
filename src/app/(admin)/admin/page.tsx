@@ -24,7 +24,7 @@ import {
 import { formatPrice } from "@/lib/utils"
 
 interface ReportData {
-  summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; todayDeliveries: number; todayReservations: number; todayReservationsPending: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string; todayInDelivery: number; todayConfirmed: number; todayItems: number; yesterdayItems: number }
+  summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; todayDeliveries: number; todayReservations: number; todayReservationsPending: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string; todayInDelivery: number; todayConfirmed: number; todayItems: number; yesterdayItems: number; todayProducts: { name: string; quantity: number; revenue: number }[] }
   daily: { name: string; revenu: number; commandes: number }[]
   salesByDay: { name: string; revenu: number; commandes: number }[]
   paymentBreakdown: { method: string; total: number; count: number }[]
@@ -206,6 +206,8 @@ export default function DashboardPage() {
   const visibleModules = isAdmin ? [] : userPermissions.filter((p) => p.canView).map((p) => p.module)
 
   const summary = report?.summary
+  // Articles du jour : détail par produit des articles vendus aujourd'hui
+  const todayArticles = summary?.todayProducts ?? []
   const stats = [
     { label: "En livraison", value: String(summary?.todayInDelivery ?? 0), detail: "Commandes en cours de livraison", icon: Truck, tone: "text-orange-600 bg-orange-100" },
     { label: "Articles vendus", value: String(summary?.todayItems ?? 0), detail: `Hier : ${summary?.yesterdayItems ?? 0} article${(summary?.yesterdayItems ?? 0) > 1 ? "s" : ""}`, icon: Boxes, tone: "text-green-600 bg-green-100" },
@@ -287,7 +289,28 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
-        {stats.map((stat) => { const Icon = stat.icon; return <div key={stat.label} className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-muted-foreground sm:text-sm">{stat.label}</p><p className="mt-2 text-xl font-bold text-foreground sm:text-2xl">{stat.value}</p></div><div className={`flex h-9 w-9 items-center justify-center rounded-full sm:h-11 sm:w-11 ${stat.tone}`}><Icon className="h-4 w-4 sm:h-5 sm:w-5" /></div></div><p className="mt-3 text-xs text-muted-foreground sm:mt-4">{stat.detail}</p></div> })}
+        {stats.map((stat) => {
+          const Icon = stat.icon
+          return (
+            <div key={stat.label} className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5">
+              <div className="flex items-start justify-between">
+                <div><p className="text-xs text-muted-foreground sm:text-sm">{stat.label}</p><p className="mt-2 text-xl font-bold text-foreground sm:text-2xl">{stat.value}</p></div>
+                <div className={`flex h-9 w-9 items-center justify-center rounded-full sm:h-11 sm:w-11 ${stat.tone}`}><Icon className="h-4 w-4 sm:h-5 sm:w-5" /></div>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground sm:mt-4">{stat.detail}</p>
+              {stat.label === "Articles vendus" && todayArticles.length > 0 && (
+                <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto border-t border-border pt-2">
+                  {todayArticles.map((article) => (
+                    <li key={article.name} className="flex items-baseline justify-between gap-2 text-xs">
+                      <span className="min-w-0 truncate text-muted-foreground" title={article.name}>{article.name}</span>
+                      <span className="shrink-0 font-semibold text-foreground">{article.quantity}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
