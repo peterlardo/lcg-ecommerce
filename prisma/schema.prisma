@@ -23,6 +23,7 @@ enum PaymentMethod {
   MOBILE_MONEY
   CASH_ON_DELIVERY
   BANK_TRANSFER
+  CHEQUE
 }
 
 enum PaymentStatus {
@@ -918,6 +919,8 @@ model CustomerPayment {
   method PaymentMethod
   /// n° de transaction Mobile Money, de virement ou de chèque
   reference String?
+  /// banque émettrice (chèque)
+  bank String?
   notes String?
   customerName String?
   /// qui a saisi le règlement
@@ -928,8 +931,23 @@ model CustomerPayment {
   rejectReason String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  proofs PaymentProof[]
   @@index([b2bDocumentId])
   @@index([createdAt])
+}
+
+/// Justificatif d'un règlement : preuve du virement, scan du chèque. Gardé en base (Cloudflare n'a pas de disque).
+model PaymentProof {
+  id String @id @default(cuid())
+  paymentId String
+  payment CustomerPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  fileName String
+  mimeType String
+  size Int
+  data Bytes
+  uploadedById String?
+  createdAt DateTime @default(now())
+  @@index([paymentId])
 }
 
 /// Réglages de l'administration (Paramètres), une ligne par rubrique : general, delivery, payment, notifications, bank.

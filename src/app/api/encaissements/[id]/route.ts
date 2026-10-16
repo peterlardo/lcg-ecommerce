@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth"
 import { logActivity } from "@/lib/activity"
 import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
 import { DEFAULT_PAYMENT_TERMS_DAYS, INVOICE_CREDITS, invoiceSituation, seesAllB2b, type SessionUser } from "@/lib/commercial"
-import { RECEIPT_METHODS, type ReceiptMethod } from "@/lib/payment-methods"
+import { PROOF_MAX_BYTES, PROOF_REQUIRED, PROOF_TYPES, RECEIPT_METHODS, REFERENCE_REQUIRED, type ReceiptMethod } from "@/lib/payment-methods"
 
 export const dynamic = "force-dynamic"
 
@@ -40,12 +40,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params
     const session = await auth()
     const user = session?.user as SessionUser
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
+    // formulaire avec justificatif (multipart) ou simple JSON
+    let body: Record<string, unknown> = {}
+    const proofFiles: File[] = []
+    if ((req.headers.get("content-type") ?? "").includes("multipart/form-data")) {
+      const form = await req.formData()
+      for (const [key, value] of form.entries()) {
+        if (key === "proof" && typeof value !== "string") proofFiles.push(value)
+        else if (typeof value === "string") body[key] = value
+      }
+    } else {
+      body = (await req.json().catch(() => ({}))) as Record<string, unknown>
+    }
 
     const amount = Number(body.amount)
     if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
     const method = String(body.method || "CASH_ON_DELIVERY").toUpperCase()
     if (!(RECEIPT_METHODS as readonly string[]).includes(method)) return NextResponse.json({ error: "Moyen de règlement invalide" }, { status: 400 })
+
+    // Virement et chèque : référence et justificatif obligatoires (banque émettrice pour un chèque).
+    const files = proofFiles.filter((f) => f.size > 0).slice(0, 3)
+    if (PROOF_REQUIRED.includes(method)) {
+      const what = method === "CHEQUE" ? "le scan du chèque" : "la preuve du virement"
+      if (files.length === 0) return NextResponse.json({ error: `Joignez ${what} (photo ou PDF)` }, { status: 400 })
+    }
+    for (const f of files) {
+      if (!PROOF_TYPES.includes(f.type)) return NextResponse.json({ error: "Justificatif : photo (JPEG, PNG, WebP) ou PDF uniquement" }, { status: 400 })
+      if (f.size > PROOF_MAX_BYTES) return NextResponse.json({ error: "Justificatif trop lourd (4 Mo au plus)" }, { status: 400 })
+    }
+    if (REFERENCE_REQUIRED.includes(method) && !(typeof body.reference === "string" && body.reference.trim())) {
+      return NextResponse.json({ error: method === "CHEQUE" ? "Indiquez le n° du chèque" : "Indiquez le n° ou la référence du virement" }, { status: 400 })
+    }
+    if (method === "CHEQUE" && !(typeof body.bank === "string" && body.bank.trim())) {
+      return NextResponse.json({ error: "Indiquez la banque émettrice du chèque" }, { status: 400 })
+    }
 
     const doc = await invoiceInScope(id, user)
     if (!doc) return NextResponse.json({ error: "Document introuvable" }, { status: 404 })
@@ -58,10 +86,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (amount > situation.open + 0.01) return NextResponse.json({ error: "Montant supérieur au solde" }, { status: 400 })
 
     // L'administrateur et la caisse encaissent directement ; le règlement saisi par un commercial attend leur validation.
-    const direct = user?.role === "ADMIN" || isCashierRole(user?.role)
+    // Virement et chèque attendent toujours : l'argent n'est acquis qu'une fois le virement reçu ou le chèque encaissé.
+    const direct = (user?.role === "ADMIN" || isCashierRole(user?.role)) && !PROOF_REQUIRED.includes(method)
     const clean = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null)
     const notes = clean(body.notes, 500)
     const reference = clean(body.reference, 120)
+    const bank = method === "CHEQUE" ? clean(body.bank, 120) : null
+    const proofs = await Promise.all(files.map(async (f) => ({
+      fileName: f.name.replace(/[^\p{L}\p{N}._ -]/gu, "_").slice(0, 120) || "justificatif",
+      mimeType: f.type,
+      size: f.size,
+      data: new Uint8Array(await f.arrayBuffer()),
+      uploadedById: user?.id ?? null,
+    })))
     const now = new Date()
     const payment = await getPrisma().customerPayment.create({
       data: {
@@ -69,11 +106,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         amount,
         method: method as ReceiptMethod,
         reference,
+        bank,
         notes,
         receivedById: user?.id ?? null,
         validationStatus: direct ? "VALIDATED" : "PENDING",
         validatedById: direct ? user?.id ?? null : null,
         validatedAt: direct ? now : null,
+        ...(proofs.length > 0 ? { proofs: { create: proofs } } : {}),
       },
     })
     await logActivity({
@@ -81,7 +120,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       action: "Règlement",
       entity: "b2bDocument",
       entityId: id,
-      summary: `Règlement de ${amount} sur la facture ${doc.reference}${reference ? ` (réf. ${reference})` : ""}${direct ? "" : " (à valider)"}`,
+      summary: `Règlement de ${amount} sur la facture ${doc.reference}${reference ? ` (réf. ${reference})` : ""}${proofs.length ? `, ${proofs.length} justificatif(s)` : ""}${direct ? "" : " (à valider)"}`,
     })
 
     return NextResponse.json(

@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, BellRing, Check, HandCoins, Search, X } from "lucide-react"
+import { AlertCircle, BellRing, Camera, Check, HandCoins, Paperclip, Search, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
-import { RECEIPT_METHODS, RECEIPT_METHOD_LABEL, REFERENCE_EXPECTED } from "@/lib/payment-methods"
+import { PROOF_LABEL, PROOF_MAX_BYTES, PROOF_REQUIRED, RECEIPT_METHODS, RECEIPT_METHOD_LABEL, REFERENCE_EXPECTED, REFERENCE_LABEL, REFERENCE_REQUIRED } from "@/lib/payment-methods"
+import { prepareProof } from "@/lib/proof-file"
 
 interface Creance {
   id: string
@@ -46,6 +47,10 @@ export default function CreancesPage() {
   const [payMethod, setPayMethod] = useState("CASH_ON_DELIVERY")
   const [payNotes, setPayNotes] = useState("")
   const [payReference, setPayReference] = useState("")
+  const [payBank, setPayBank] = useState("")
+  // justificatifs (preuve du virement, scan du chèque), déjà réduits pour l'envoi
+  const [payProofs, setPayProofs] = useState<File[]>([])
+  const [preparing, setPreparing] = useState(false)
   const [payError, setPayError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -102,28 +107,58 @@ export default function CreancesPage() {
     setPayMethod("CASH_ON_DELIVERY")
     setPayNotes("")
     setPayReference("")
+    setPayBank("")
+    setPayProofs([])
     setPayError("")
   }
 
+  const addProofs = async (list: FileList | null) => {
+    if (!list || list.length === 0) return
+    setPreparing(true)
+    setPayError("")
+    try {
+      const ready = await Promise.all([...list].map(prepareProof))
+      const tooBig = ready.find((f) => f.size > PROOF_MAX_BYTES)
+      if (tooBig) { setPayError(`« ${tooBig.name} » est trop lourd (4 Mo au plus).`); return }
+      setPayProofs((current) => [...current, ...ready].slice(0, 3))
+    } finally {
+      setPreparing(false)
+    }
+  }
+
+  const proofRequired = PROOF_REQUIRED.includes(payMethod)
+
   const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!paying || submitting) return
+    if (!paying || submitting || preparing) return
+    if (proofRequired && payProofs.length === 0) {
+      setPayError(payMethod === "CHEQUE" ? "Joignez le scan (ou la photo) du chèque." : "Joignez la preuve du virement (avis de virement, capture de l'ordre).")
+      return
+    }
     setSubmitting(true)
     setPayError("")
     try {
-      const res = await fetch(`/api/encaissements/${paying.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: Number(payAmount), method: payMethod, reference: payReference, notes: payNotes }),
-      })
+      const form = new FormData()
+      form.set("amount", String(Number(payAmount)))
+      form.set("method", payMethod)
+      form.set("reference", payReference)
+      form.set("notes", payNotes)
+      if (payMethod === "CHEQUE") form.set("bank", payBank)
+      if (proofRequired) for (const f of payProofs) form.append("proof", f, f.name)
+      const res = await fetch(`/api/encaissements/${paying.id}`, { method: "POST", body: form })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
         setPayError(data?.error || "Enregistrement impossible")
         return
       }
+      const waitingFor = payMethod === "CHEQUE"
+        ? " : à valider une fois le chèque encaissé (onglet Encaissements)."
+        : payMethod === "BANK_TRANSFER"
+          ? " : à valider une fois le virement reçu sur le compte (onglet Encaissements)."
+          : " : en attente de validation par la caisse ou l'administrateur (onglet Encaissements)."
       setMessage(
         data?.validationStatus === "PENDING"
-          ? `Règlement de ${formatPrice(Number(payAmount))} enregistré sur ${paying.reference} : en attente de validation par la caisse.`
+          ? `Règlement de ${formatPrice(Number(payAmount))} enregistré sur ${paying.reference}${waitingFor}`
           : `Règlement de ${formatPrice(Number(payAmount))} encaissé sur ${paying.reference}.`,
       )
       setPaying(null)
@@ -304,7 +339,7 @@ export default function CreancesPage() {
 
       {paying && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={(e) => { if (e.target === e.currentTarget && !submitting) setPaying(null) }}>
-          <form onSubmit={submitPayment} className="w-full rounded-t-2xl bg-white p-4 shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6">
+          <form onSubmit={submitPayment} className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">Encaisser {paying.reference}</h2>
@@ -336,16 +371,64 @@ export default function CreancesPage() {
               </label>
               {REFERENCE_EXPECTED.includes(payMethod) && (
                 <label className="block text-sm font-medium text-gray-700">
-                  {payMethod === "BANK_TRANSFER" ? "Référence du virement" : payMethod === "MOBILE_MONEY" ? "N° de transaction Mobile Money" : "Référence de la transaction"}
+                  {REFERENCE_LABEL[payMethod] ?? "Référence de la transaction"}{REFERENCE_REQUIRED.includes(payMethod) ? " *" : ""}
                   <input
                     type="text"
                     value={payReference}
                     onChange={(e) => setPayReference(e.target.value)}
                     maxLength={120}
-                    placeholder="Facultatif, mais utile pour retrouver le paiement"
+                    required={REFERENCE_REQUIRED.includes(payMethod)}
+                    placeholder={REFERENCE_REQUIRED.includes(payMethod) ? "" : "Facultatif, mais utile pour retrouver le paiement"}
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 font-mono focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                   />
                 </label>
+              )}
+              {payMethod === "CHEQUE" && (
+                <label className="block text-sm font-medium text-gray-700">
+                  Banque émettrice *
+                  <input
+                    type="text"
+                    value={payBank}
+                    onChange={(e) => setPayBank(e.target.value)}
+                    maxLength={120}
+                    required
+                    placeholder="Ex. : LCB Bank, BGFIBank, Ecobank…"
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                  />
+                </label>
+              )}
+              {proofRequired && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-semibold text-amber-900">{PROOF_LABEL[payMethod]} * </p>
+                  <p className="mt-0.5 text-xs text-amber-800">
+                    {payMethod === "CHEQUE"
+                      ? "Photographiez ou scannez le chèque établi (recto, lisible). Le règlement sera validé une fois le chèque encaissé."
+                      : "Joignez l'avis de virement ou la capture de l'ordre de virement. Le règlement sera validé une fois l'argent reçu sur le compte."}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {/* sur téléphone : l'appareil photo s'ouvre directement */}
+                    <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 text-sm font-semibold text-amber-900 hover:bg-amber-100">
+                      <Camera className="h-4 w-4" /> Prendre une photo
+                      <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => { void addProofs(e.target.files); e.target.value = "" }} />
+                    </label>
+                    <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 text-sm font-semibold text-amber-900 hover:bg-amber-100">
+                      <Paperclip className="h-4 w-4" /> {preparing ? "Préparation…" : "Choisir un fichier (photo ou PDF)"}
+                      <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple className="sr-only" onChange={(e) => { void addProofs(e.target.files); e.target.value = "" }} />
+                    </label>
+                  </div>
+                  {payProofs.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {payProofs.map((f, i) => (
+                        <li key={i} className="flex items-center justify-between gap-2 rounded-md bg-white px-2 py-1.5 text-sm text-gray-800">
+                          <span className="truncate">{f.name} <span className="text-xs text-gray-500">({Math.max(1, Math.round(f.size / 1024))} Ko)</span></span>
+                          <button type="button" onClick={() => setPayProofs((current) => current.filter((_, j) => j !== i))} aria-label={`Retirer ${f.name}`} className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
               <label className="block text-sm font-medium text-gray-700">
                 Remarque (facultatif)
@@ -354,18 +437,18 @@ export default function CreancesPage() {
                   value={payNotes}
                   onChange={(e) => setPayNotes(e.target.value)}
                   maxLength={500}
-                  placeholder="Ex. : remis par le gérant, chèque n°…"
+                  placeholder="Ex. : remis par le gérant"
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                 />
               </label>
-              {!canValidate && <p className="text-sm text-gray-500">Ce règlement sera compté après validation par la caisse ou l&apos;administrateur.</p>}
+              {(!canValidate || proofRequired) && <p className="text-sm text-gray-500">Ce règlement sera compté après validation par la caisse ou l&apos;administrateur (écran Encaissements).</p>}
               {payError && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{payError}</p>}
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setPaying(null)} disabled={submitting} className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                 Annuler
               </button>
-              <button type="submit" disabled={submitting} aria-busy={submitting} className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-wait disabled:opacity-60">
+              <button type="submit" disabled={submitting || preparing} aria-busy={submitting} className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-wait disabled:opacity-60">
                 {submitting ? "Enregistrement…" : "Enregistrer le règlement"}
               </button>
             </div>

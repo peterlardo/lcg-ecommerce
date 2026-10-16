@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, Banknote, Check, Download, Search, X } from "lucide-react"
+import { AlertCircle, Banknote, Check, Download, Paperclip, Search, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
-import { RECEIPT_METHODS, RECEIPT_METHOD_LABEL, VALIDATION_LABEL } from "@/lib/payment-methods"
+import { PROOF_REQUIRED, RECEIPT_METHODS, RECEIPT_METHOD_LABEL, VALIDATION_LABEL } from "@/lib/payment-methods"
 
 // Journal des règlements reçus sur les factures B2B (étape 4 du module commercial).
 
@@ -14,6 +14,8 @@ interface Payment {
   amount: number
   method: string
   reference: string | null
+  bank?: string | null
+  proofs?: { id: string; fileName: string; mimeType: string }[]
   notes: string | null
   validationStatus: "PENDING" | "VALIDATED" | "REJECTED"
   validatedAt: string | null
@@ -110,6 +112,9 @@ export default function EncaissementsPage() {
 
   const decide = async (p: Payment, action: "validate" | "reject", reason = "") => {
     if (busy) return
+    // virement, chèque : on valide une fois l'argent réellement reçu, justificatif vérifié
+    if (action === "validate" && p.method === "BANK_TRANSFER" && !window.confirm(`Valider le virement de ${formatPrice(p.amount)} (${p.clientName}) ?\n\nVérifiez la preuve jointe et que l'argent est bien arrivé sur le compte.`)) return
+    if (action === "validate" && p.method === "CHEQUE" && !window.confirm(`Valider le chèque de ${formatPrice(p.amount)} (${p.clientName}) ?\n\nVérifiez le scan joint et que le chèque a bien été encaissé.`)) return
     setBusy(`${action}-${p.id}`)
     setError("")
     setMessage("")
@@ -301,7 +306,17 @@ export default function EncaissementsPage() {
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-gray-700">
                         {RECEIPT_METHOD_LABEL[p.method] ?? p.method}
-                        {p.reference && <span className="block font-mono text-xs text-gray-500">réf. {p.reference}</span>}
+                        {p.reference && <span className="block font-mono text-xs text-gray-500">{p.method === "CHEQUE" ? "n°" : "réf."} {p.reference}</span>}
+                        {p.bank && <span className="block text-xs text-gray-500">{p.bank}</span>}
+                        {/* justificatifs : preuve du virement, scan du chèque */}
+                        {(p.proofs ?? []).map((proof, i) => (
+                          <a key={proof.id} href={`/api/encaissements/preuves/${proof.id}`} target="_blank" rel="noopener" className="mt-1 flex items-center gap-1 text-xs font-semibold text-primary underline-offset-2 hover:underline">
+                            <Paperclip className="h-3.5 w-3.5" /> {p.method === "CHEQUE" ? "Scan du chèque" : p.method === "BANK_TRANSFER" ? "Preuve du virement" : "Justificatif"}{(p.proofs?.length ?? 0) > 1 ? ` ${i + 1}` : ""}
+                          </a>
+                        ))}
+                        {PROOF_REQUIRED.includes(p.method) && (p.proofs ?? []).length === 0 && (
+                          <span className="mt-1 block text-xs font-semibold text-red-600">Aucun justificatif</span>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-right text-base font-bold text-gray-900">{formatPrice(p.amount)}</td>
                       <td className="px-3 py-2.5">

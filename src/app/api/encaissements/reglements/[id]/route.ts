@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { logActivity } from "@/lib/activity"
 import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
 import { formatPrice } from "@/lib/utils"
+import { PROOF_REQUIRED } from "@/lib/payment-methods"
 
 export const dynamic = "force-dynamic"
 
@@ -29,6 +30,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (action !== "validate" && action !== "reject") return NextResponse.json({ error: "Action invalide" }, { status: 400 })
     const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 300) : ""
     if (action === "reject" && !reason) return NextResponse.json({ error: "Le motif du refus est obligatoire" }, { status: 400 })
+    if (action === "validate") {
+      // virement ou chèque : pas de validation sans justificatif à vérifier
+      const current = await getPrisma().customerPayment.findUnique({ where: { id }, select: { method: true, _count: { select: { proofs: true } } } })
+      if (current && PROOF_REQUIRED.includes(current.method) && current._count.proofs === 0) {
+        return NextResponse.json({ error: current.method === "CHEQUE" ? "Aucun scan du chèque : ce règlement ne peut pas être validé" : "Aucune preuve du virement : ce règlement ne peut pas être validé" }, { status: 400 })
+      }
+    }
 
     // décision posée seulement si le règlement est encore en attente : deux clics simultanés n'en font qu'une
     const { count } = await getPrisma().customerPayment.updateMany({
