@@ -59,7 +59,8 @@ export async function GET(request: Request) {
               ? { userId: selfId }
               : { AND: [...(posClause ? [posClause] : []), ownScope] }
 
-    if (session?.user?.role === "ADMIN" && userIdParam) where.userId = userIdParam
+    // membre d'équipe choisi : commandes qu'il a créées OU encaissées (caissière à qui elles ont été transmises)
+    if (session?.user?.role === "ADMIN" && userIdParam) where.OR = [{ userId: userIdParam }, { cashierId: userIdParam }]
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
       const start = new Date(`${dateParam}T00:00:00`)
       const end = new Date(`${dateParam}T23:59:59.999`)

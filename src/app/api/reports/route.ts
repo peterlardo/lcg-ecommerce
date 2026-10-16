@@ -70,6 +70,11 @@ const orderSelect = {
   source: true,
   pointOfSaleId: true,
   createdAt: true,
+  // qui a créé la commande, et la caissière qui l'a encaissée (ventes du jour par caissière)
+  userId: true,
+  cashierId: true,
+  user: { select: { name: true } },
+  cashier: { select: { name: true } },
   items: {
     select: {
       id: true,
@@ -247,7 +252,8 @@ export async function GET(request: Request) {
     }
     const trendFilter: Record<string, unknown> = { createdAt: trendCreatedAt }
     if (clientParam) trendFilter.customerName = { contains: clientParam, mode: "insensitive" }
-    if (session?.user?.role === "ADMIN" && userIdParam) trendFilter.userId = userIdParam
+    // membre d'équipe choisi : commandes qu'il a créées OU encaissées (caissière à qui elles ont été transmises)
+    if (session?.user?.role === "ADMIN" && userIdParam) trendFilter.OR = [{ userId: userIdParam }, { cashierId: userIdParam }]
 
     const deliveryPosFilter: Prisma.DeliveryWhereInput = selectedPos ? { order: { pointOfSaleId: selectedPos.id } } : {}
 
@@ -379,6 +385,28 @@ export async function GET(request: Request) {
       }
     }
     const todayProducts = Array.from(todayProductTotals.values()).sort((a, b) => b.quantity - a.quantity)
+
+    // Ventes du jour par caissière (même périmètre que le chiffre d'affaires) : la caissière à qui la commande
+    // a été transmise ; pour une vente faite directement en caisse, son auteur. Les ventes en ligne payées ou
+    // livrées sans passer par une caissière sont regroupées à part.
+    const cashierTotals = new Map<string, { id: string | null; name: string; sales: number; items: number; revenue: number; byMethod: Record<string, number> }>()
+    for (const order of todayOrdersDelivered) {
+      const cashierId = order.cashierId ?? (order.source === "CAISSE" ? order.userId : null)
+      const cashierName = order.cashierId ? order.cashier?.name : order.source === "CAISSE" ? order.user?.name : null
+      const key = cashierId ?? "__sans__"
+      const row = cashierTotals.get(key) ?? {
+        id: cashierId,
+        name: cashierName ?? (cashierId ? "Caissière sans nom" : "Sans caissière (en ligne, livraison)"),
+        sales: 0, items: 0, revenue: 0, byMethod: {},
+      }
+      row.sales += 1
+      row.items += order.items.reduce((sum, i) => sum + i.quantity, 0)
+      row.revenue += order.total
+      const method = order.paymentMethod ?? "AUTRE"
+      row.byMethod[method] = (row.byMethod[method] ?? 0) + order.total
+      cashierTotals.set(key, row)
+    }
+    const todaySalesByCashier = Array.from(cashierTotals.values()).sort((a, b) => (a.id === null ? 1 : b.id === null ? -1 : b.revenue - a.revenue))
 
     const todayDeliveries = deliveries.filter((d) => d.createdAt >= todayStart)
     const todayReservations = reservations.filter((r) => r.createdAt >= todayStart)
@@ -619,6 +647,7 @@ export async function GET(request: Request) {
         yesterdayItems,
         todayProducts,
         todayWaiting,
+        todaySalesByCashier,
         lowStock: stockAlerts.filter((i) => i.stock > 0).length, outOfStock: stockAlerts.filter((i) => i.stock <= 0).length,
         pendingReservations: reservations.filter((r) => r.status === "PENDING").length,
         totalReservations: reservations.length,

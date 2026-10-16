@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
+import { RECEIPT_METHOD_LABEL } from "@/lib/payment-methods"
 import {
   AlertCircle,
   ArrowRight,
@@ -24,7 +25,7 @@ import {
 import { formatPrice } from "@/lib/utils"
 
 interface ReportData {
-  summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; todayDeliveries: number; todayReservations: number; todayReservationsPending: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string; todayInDelivery: number; todayConfirmed: number; todayItems: number; yesterdayItems: number; todayProducts: { name: string; quantity: number; revenue: number }[]; todayWaiting?: number }
+  summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; todayDeliveries: number; todayReservations: number; todayReservationsPending: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string; todayInDelivery: number; todayConfirmed: number; todayItems: number; yesterdayItems: number; todayProducts: { name: string; quantity: number; revenue: number }[]; todayWaiting?: number; todaySalesByCashier?: { id: string | null; name: string; sales: number; items: number; revenue: number; byMethod: Record<string, number> }[] }
   daily: { name: string; revenu: number; commandes: number }[]
   salesByDay: { name: string; revenu: number; commandes: number }[]
   paymentBreakdown: { method: string; total: number; count: number }[]
@@ -284,7 +285,9 @@ export default function DashboardPage() {
       if (order.status === "CANCELLED" || isWaiting(order)) return false
       if (query && !order.customerName.toLowerCase().includes(query)) return false
       if (saleDate && new Date(order.createdAt).toDateString() !== new Date(`${saleDate}T00:00:00`).toDateString()) return false
-      if (saleUserId && order.userId !== saleUserId) return false
+      // membre d'équipe : ventes qu'il a encaissées (caissière à qui la commande a été transmise) ou créées.
+      // Avant, seul l'auteur comptait : une caissière qui encaisse les commandes de l'accueil ne voyait rien.
+      if (saleUserId && order.userId !== saleUserId && order.cashierId !== saleUserId) return false
       return true
     })
   }, [orders, saleClient, saleDate, saleUserId])
@@ -381,6 +384,74 @@ export default function DashboardPage() {
         })}
       </div>
 
+      {/* Ventes du jour par caissière : payé ou livré, attribué à la caissière qui a encaissé */}
+      {(() => {
+        const rows = summary?.todaySalesByCashier ?? []
+        if (rows.length === 0) return null
+        const total = rows.reduce((acc, r) => ({ sales: acc.sales + r.sales, items: acc.items + r.items, revenue: acc.revenue + r.revenue }), { sales: 0, items: 0, revenue: 0 })
+        return (
+          <section className="rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5">
+            <h2 className="text-lg font-bold text-foreground sm:text-xl">Ventes du jour par caissière</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Ventes payées ou livrées aujourd&apos;hui, attribuées à la caissière qui les a encaissées</p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <th className="py-2 pr-3">Caissière</th>
+                    <th className="py-2 pr-3 text-right">Ventes</th>
+                    <th className="py-2 pr-3 text-right">Articles</th>
+                    <th className="py-2 pr-3">Moyens de paiement</th>
+                    <th className="py-2 pr-3 text-right">Montant</th>
+                    <th className="py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map((r) => (
+                    <tr key={r.id ?? "sans"}>
+                      <td className={`py-2.5 pr-3 font-semibold ${r.id ? "text-foreground" : "text-muted-foreground"}`}>{r.name}</td>
+                      <td className="py-2.5 pr-3 text-right">{r.sales}</td>
+                      <td className="py-2.5 pr-3 text-right">{r.items}</td>
+                      <td className="py-2.5 pr-3 text-xs text-muted-foreground">
+                        {Object.entries(r.byMethod).map(([method, amount]) => `${method === "AUTRE" ? "Moyen non précisé" : RECEIPT_METHOD_LABEL[method] ?? method} ${formatPrice(amount)}`).join(" · ")}
+                      </td>
+                      <td className="whitespace-nowrap py-2.5 pr-3 text-right text-base font-bold text-foreground">{formatPrice(r.revenue)}</td>
+                      <td className="py-2.5 text-right">
+                        {r.id && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // « Dernières ventes » filtrée sur cette caissière et sur aujourd'hui
+                              setSaleUserId(r.id ?? "")
+                              setSaleDate(todayKey())
+                              setSaleClient("")
+                              setSalesPage(1)
+                              document.getElementById("dernieres-ventes")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                            }}
+                            className="inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-lg border border-primary/30 bg-primary/5 px-3 text-sm font-semibold text-primary hover:bg-primary/10"
+                          >
+                            Voir ses ventes <ArrowRight className="h-4 w-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border font-bold text-foreground">
+                    <td className="py-2.5 pr-3">Total</td>
+                    <td className="py-2.5 pr-3 text-right">{total.sales}</td>
+                    <td className="py-2.5 pr-3 text-right">{total.items}</td>
+                    <td className="py-2.5 pr-3" />
+                    <td className="whitespace-nowrap py-2.5 pr-3 text-right text-base">{formatPrice(total.revenue)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+        )
+      })()}
+
       {pendingOrders.length > 0 && (
         <section className="rounded-xl border border-yellow-200 bg-yellow-50/50 p-3 shadow-card-soft sm:p-5">
           <div className="flex items-center justify-between gap-3">
@@ -450,7 +521,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        <section className="flex flex-col rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5">
+        <section id="dernieres-ventes" className="flex scroll-mt-24 flex-col rounded-xl border border-border bg-card p-3 shadow-card-soft sm:p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-lg font-bold text-foreground sm:text-xl">Dernières ventes</h2>
