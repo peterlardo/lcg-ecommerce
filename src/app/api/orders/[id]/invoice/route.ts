@@ -11,7 +11,8 @@ interface InvoiceItemInput {
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", ...CASHIER_ROLES])
+  // commerciaux : commandes en lecture seule (2026-10-16), ils n'établissent pas de ticket
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", ...CASHIER_ROLES])
   if (forbidden) return forbidden
 
   try {

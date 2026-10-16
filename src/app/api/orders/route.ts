@@ -4,7 +4,6 @@ import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds, b2bOrderScope, seesOnlyOwnOrders } from "@/lib/api-auth"
 import { CASHIER_ROLES, isCashierRole, isCommercialRole } from "@/lib/permissions"
 import { auth } from "@/lib/auth"
-import { commercialPointsOfSale } from "@/lib/settings"
 import { createOrder, type OrderInput } from "@/data/store"
 import { sendOrderEmail, sendOrderDevisEmail, buildOrderDevisText, type OrderMailData } from "@/lib/mailer"
 import { sendWhatsAppMessage } from "@/lib/whatsapp"
@@ -212,19 +211,10 @@ export async function POST(request: Request) {
     const operator = body.source === "OPERATOR" ? (await auth())?.user : null
     const operatorId = (operator?.id as string | undefined) ?? null
 
-    // Commerciaux et responsable commercial : la commande est enregistrée sur l'un des points de vente réglés
-    // dans Paramètres (« Points de vente des commerciaux ») ; la caisse y prendra le stock au ticket.
-    let commercialPointOfSaleId: string | null = null
+    // Commerciaux et responsable commercial : les commandes en lecture seule (demande du 2026-10-16) ;
+    // leurs ventes passent par devis → facture → bon de livraison.
     if (operator && isCommercialRole(operator.role)) {
-      const allowed = await commercialPointsOfSale()
-      if (allowed.length > 0) {
-        const wanted = typeof body.pointOfSaleId === "string" ? body.pointOfSaleId : ""
-        const chosen = allowed.find((p) => p.id === wanted) ?? (allowed.length === 1 ? allowed[0] : null)
-        if (!chosen) {
-          return NextResponse.json({ error: `Choisissez le point de vente : ${allowed.map((p) => p.name).join(" ou ")}` }, { status: 400 })
-        }
-        commercialPointOfSaleId = chosen.id
-      }
+      return NextResponse.json({ error: "Commandes en lecture seule pour les commerciaux : établissez un devis" }, { status: 403 })
     }
 
     const input: OrderInput = {
@@ -257,11 +247,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Articles invalides" }, { status: 400 })
     }
 
-    const created = await createOrder(input)
-    // point de vente du commercial, posé juste après la création (la création ne le connaît pas)
-    const order = commercialPointOfSaleId
-      ? { ...created, pointOfSaleId: (await getPrisma().order.update({ where: { id: created.id }, data: { pointOfSaleId: commercialPointOfSaleId }, select: { pointOfSaleId: true } })).pointOfSaleId }
-      : created
+    const order = await createOrder(input)
 
     const mailData: OrderMailData = {
       orderNumber: order.orderNumber,

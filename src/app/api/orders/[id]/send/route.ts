@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { isOperateurAccueil } from "@/lib/api-auth"
-import { isCashierRole, isCommercialRole } from "@/lib/permissions"
+import { isCashierRole } from "@/lib/permissions"
 import { logActivity } from "@/lib/activity"
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -24,8 +24,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!order) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
 
     const isAdmin = role === "ADMIN"
-    // l'accueil, les commerciaux et le responsable commercial transmettent à la caisse les commandes qu'ils ont créées
-    const isAuthorOperator = (isOperateurAccueil(role) || isCommercialRole(role)) && order.userId === selfId
+    // l'accueil transmet à la caisse les commandes qu'il a créées (les commerciaux : commandes en lecture seule)
+    const isAuthorOperator = isOperateurAccueil(role) && order.userId === selfId
     if (!isAdmin && !isAuthorOperator) {
       return NextResponse.json({ error: "Acces non autorise" }, { status: 403 })
     }

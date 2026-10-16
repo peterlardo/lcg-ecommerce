@@ -117,7 +117,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "COMMERCIAL", ...CASHIER_ROLES])
+  // commerciaux : commandes et ventes en lecture seule (2026-10-16)
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", ...CASHIER_ROLES])
   if (forbidden) return forbidden
 
   try {
