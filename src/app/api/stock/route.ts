@@ -4,7 +4,7 @@ import { requireManagementAccess, saleMovementsFilter } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
 import { allocateStockFIFOTx, createCoverageLotTx } from "@/lib/lot-utils"
-import { fetchCachedLocations, ensureOperationalStockLocations, OPERATIONAL_STOCK_CODES } from "@/lib/stock-service"
+import { COMPTOIR_CODE, fetchCachedLocations, ensureOperationalStockLocations, OPERATIONAL_STOCK_CODES } from "@/lib/stock-service"
 
 const NEGATIVE_TYPES = new Set(["OUT", "SALE", "LOSS", "TRANSFER_OUT", "ADJUSTMENT_OUT"])
 const POSITIVE_TYPES = new Set(["IN", "PRODUCTION", "TRANSFER_IN", "RETURN", "ADJUSTMENT_IN", "CANCEL_RESTOCK"])
@@ -176,7 +176,12 @@ export async function POST(request: Request) {
     const quantity = Math.max(1, Number(body.quantity) || 0)
     const reason = body.reason ? String(body.reason) : null
     const reference = body.reference ? String(body.reference) : null
-    const pointOfSaleId = body.pointOfSaleId ? String(body.pointOfSaleId) : null
+    // Une entrée sans point de vente va au Comptoir LCG : sinon elle resterait invisible en caisse.
+    const pointOfSaleId = body.pointOfSaleId
+      ? String(body.pointOfSaleId)
+      : POSITIVE_TYPES.has(type)
+        ? (await ensureOperationalStockLocations()).find((l) => l.code === COMPTOIR_CODE)?.id ?? null
+        : null
 
     if (!variantId || quantity <= 0) {
       return NextResponse.json({ error: "Variante et quantité requises" }, { status: 400 })

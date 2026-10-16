@@ -25,6 +25,8 @@ export interface CoherenceRow {
   excess: number
   /** Écart de l'ancien stock global par rapport au stock des emplacements. */
   globalGap: number
+  /** Stock global sans point de vente (ex. saisi à la création du produit) : invisible en caisse. */
+  unlocated: number
 }
 
 export const REGULARISATION_NOTE = "Régularisation : stock présent sans lot"
@@ -69,16 +71,85 @@ export async function stockCoherenceTx(tx: TxClient): Promise<CoherenceRow[]> {
       excess: Math.max(0, covered - locationStock),
       // sans aucun emplacement connu, le stock global reste la seule information : on n'y touche pas
       globalGap: hasLocationStock ? v.stock - locationStock : 0,
+      unlocated: Math.max(0, v.stock - locationStock),
     }
   })
 }
 
+export const COMPTOIR_PLACEMENT_NOTE = "Stock hors point de vente placé au Comptoir LCG"
+
+/**
+ * Place au Comptoir LCG le stock global qui n'est dans aucun point de vente (stock saisi à la
+ * création du produit, ancienne entrée sans emplacement) : il devient vendable en caisse.
+ * Le stock global ne change pas, on ne fait que lui donner un emplacement, couvert par un lot.
+ */
+export async function placeUnlocatedStockTx(
+  tx: TxClient,
+  { variantId, comptoirId, actorId, reason }: { variantId: string; comptoirId: string; actorId: string | null; reason?: string },
+) {
+  const variant = await tx.productVariant.findUnique({ where: { id: variantId }, select: { stock: true } })
+  if (!variant) return { placed: 0, lotNumber: null }
+  const [located, lots] = await Promise.all([
+    tx.pointOfSaleStock.aggregate({ where: { variantId }, _sum: { quantity: true } }),
+    tx.productionLot.aggregate({
+      where: { variantId, status: { in: ["ACTIVE", "EXPIRED"] }, remainingQuantity: { gt: 0 } },
+      _sum: { remainingQuantity: true },
+    }),
+  ])
+  const locationStock = located._sum.quantity ?? 0
+  const placed = variant.stock - locationStock
+  if (placed <= 0) return { placed: 0, lotNumber: null }
+
+  const note = reason || COMPTOIR_PLACEMENT_NOTE
+  // le lot couvre ce qui, une fois placé, ne serait couvert par aucun lot
+  const toCover = Math.min(placed, Math.max(0, locationStock + placed - (lots._sum.remainingQuantity ?? 0)))
+  const lot = toCover > 0 ? await createCoverageLotTx(tx, { variantId, quantity: toCover, notes: note, createdById: actorId }) : null
+
+  await tx.pointOfSaleStock.upsert({
+    where: { pointOfSaleId_variantId: { pointOfSaleId: comptoirId, variantId } },
+    update: { quantity: { increment: placed } },
+    create: { pointOfSaleId: comptoirId, variantId, quantity: placed },
+  })
+  await tx.stockMovement.create({
+    data: {
+      variantId,
+      type: "ADJUSTMENT_IN",
+      quantity: placed,
+      reason: note,
+      reference: lot?.lotNumber ?? `PLACEMENT-${Date.now()}`,
+      pointOfSaleId: comptoirId,
+      lotId: lot?.id ?? null,
+      userId: actorId,
+    },
+  })
+  return { placed, lotNumber: lot?.lotNumber ?? null }
+}
+
+/** Retire le stock hors point de vente qui n'existe pas réellement : le stock global redescend au total des points de vente. */
+export async function dropUnlocatedStockTx(tx: TxClient, { variantId, actorId }: { variantId: string; actorId: string | null }) {
+  const variant = await tx.productVariant.findUnique({ where: { id: variantId }, select: { stock: true } })
+  if (!variant) return { dropped: 0 }
+  const located = await tx.pointOfSaleStock.aggregate({ where: { variantId }, _sum: { quantity: true } })
+  const locationStock = located._sum.quantity ?? 0
+  const dropped = variant.stock - locationStock
+  if (dropped <= 0) return { dropped: 0 }
+  await tx.productVariant.update({ where: { id: variantId }, data: { stock: locationStock } })
+  await tx.stockMovement.create({
+    data: { variantId, type: "ADJUSTMENT_OUT", quantity: dropped, reason: "Stock hors point de vente retiré (inexistant)", reference: `RETRAIT-${Date.now()}`, userId: actorId },
+  })
+  return { dropped }
+}
+
 export function coherenceSummary(rows: CoherenceRow[]) {
   const uncovered = rows.filter((r) => r.uncovered > 0)
-  const gaps = rows.filter((r) => r.globalGap !== 0)
+  // un stock global au-dessus des points de vente est du stock hors point de vente : traité à part
+  const gaps = rows.filter((r) => r.globalGap < 0)
   const excess = rows.filter((r) => r.excess > 0)
   const expired = rows.filter((r) => r.expiredLots > 0)
+  const unlocated = rows.filter((r) => r.unlocated > 0)
   return {
+    unlocatedFormats: unlocated.length,
+    unlocatedUnits: unlocated.reduce((s, r) => s + r.unlocated, 0),
     uncoveredFormats: uncovered.length,
     uncoveredUnits: uncovered.reduce((s, r) => s + r.uncovered, 0),
     globalGapFormats: gaps.length,
@@ -87,13 +158,15 @@ export function coherenceSummary(rows: CoherenceRow[]) {
     expiredFormats: expired.length,
     expiredUnits: expired.reduce((s, r) => s + r.expiredLots, 0),
     /** Nombre de formats que la régularisation peut corriger. */
-    fixable: rows.filter((r) => r.uncovered > 0 || r.globalGap !== 0).length,
+    fixable: rows.filter((r) => r.uncovered > 0 || r.globalGap < 0).length,
   }
 }
 
 /**
- * Régularisation : un lot couvre le stock présent sans lot, et l'ancien stock global est réaligné
- * sur le stock des emplacements. Aucune quantité en stock ne change dans les points de vente.
+ * Régularisation : un lot couvre le stock présent sans lot, et l'ancien stock global, s'il est en
+ * dessous, est réaligné sur le stock des emplacements. Aucune quantité ne change dans les points de
+ * vente. Un stock global au-dessus (stock hors point de vente) n'est jamais baissé ici : il se place
+ * au Comptoir ou se retire format par format (placeUnlocatedStockTx / dropUnlocatedStockTx).
  */
 export async function regulariseStockTx(tx: TxClient, actorId: string | null) {
   const rows = await stockCoherenceTx(tx)
@@ -110,7 +183,7 @@ export async function regulariseStockTx(tx: TxClient, actorId: string | null) {
       })
       createdLots.push({ lotNumber: lot.lotNumber, variantId: row.variantId, quantity: row.uncovered })
     }
-    if (row.globalGap !== 0) {
+    if (row.globalGap < 0) {
       await tx.productVariant.update({ where: { id: row.variantId }, data: { stock: row.locationStock } })
       syncedFormats++
     }

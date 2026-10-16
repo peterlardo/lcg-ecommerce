@@ -76,11 +76,12 @@ interface CoherenceRow {
   uncovered: number
   excess: number
   globalGap: number
+  unlocated: number
 }
 
 interface CoherencePayload {
   rows: CoherenceRow[]
-  summary: { uncoveredFormats: number; uncoveredUnits: number; globalGapFormats: number; excessFormats: number; excessUnits: number; expiredFormats: number; expiredUnits: number; fixable: number }
+  summary: { unlocatedFormats: number; unlocatedUnits: number; uncoveredFormats: number; uncoveredUnits: number; globalGapFormats: number; excessFormats: number; excessUnits: number; expiredFormats: number; expiredUnits: number; fixable: number }
 }
 
 interface PointOfSaleOption {
@@ -399,6 +400,33 @@ export default function ProductionPage() {
       }
       await load()
       succeed(`Régularisation faite : ${body.createdLots.length} lot(s) créé(s), stock global réaligné sur ${body.syncedFormats} format(s)`)
+    } finally {
+      setRegularising(false)
+    }
+  }
+
+  // Stock hors point de vente d'un format : le placer au Comptoir LCG, ou le retirer s'il n'existe pas.
+  const handleUnlocated = async (row: CoherenceRow, action: "placer" | "retirer") => {
+    const question = action === "placer"
+      ? `Placer ${row.unlocated} unité(s) de « ${row.productName} · ${row.format} » au Comptoir LCG ?\nElles deviennent vendables en caisse.`
+      : `Retirer ${row.unlocated} unité(s) de « ${row.productName} · ${row.format} » du stock ?\nÀ faire seulement si ce stock n'existe pas réellement.`
+    if (!confirm(question)) return
+    setError("")
+    setSuccess("")
+    setRegularising(true)
+    try {
+      const res = await fetch("/api/stock/hors-point-de-vente", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: row.variantId, action }),
+      })
+      const body = await res.json().catch(() => null)
+      if (!res.ok) {
+        fail(res.status === 403 ? "Action réservée à l'administrateur" : body?.error ?? "Action impossible")
+        return
+      }
+      await load()
+      succeed(action === "placer" ? `${body.placed} unité(s) placée(s) au ${body.pointOfSale}` : `${body.dropped} unité(s) retirée(s) du stock`)
     } finally {
       setRegularising(false)
     }
@@ -775,13 +803,16 @@ export default function ProductionPage() {
           {coherence && coherence.summary.fixable === 0 && coherence.summary.excessFormats === 0 && coherence.summary.expiredFormats === 0 && (
             <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700 sm:text-sm">Tout est cohérent : chaque unité en stock est couverte par un lot.</p>
           )}
+          {coherence && coherence.summary.unlocatedFormats > 0 && (
+            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:text-sm">{coherence.summary.unlocatedFormats} format(s) ont du stock hors point de vente ({coherence.summary.unlocatedUnits} unités) : invisible en caisse. Placez-le au Comptoir LCG, ou retirez-le s&apos;il n&apos;existe pas (colonne « Hors point de vente »).</p>
+          )}
           {coherence && coherence.summary.excessFormats > 0 && (
             <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:text-sm">{coherence.summary.excessFormats} format(s) ont plus de reste dans leurs lots que de stock présent ({coherence.summary.excessUnits} unités) : à vérifier par un inventaire, la régularisation n&apos;y touche pas.</p>
           )}
 
           {coherence && (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-xs sm:text-sm">
+              <table className="w-full min-w-[900px] text-xs sm:text-sm">
                 <thead className="bg-gray-50/80">
                   <tr>
                     <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Produit</th>
@@ -791,6 +822,7 @@ export default function ProductionPage() {
                     <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Lots expirés</th>
                     <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Sans lot</th>
                     <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Ancien stock global</th>
+                    <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Hors point de vente</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -803,10 +835,19 @@ export default function ProductionPage() {
                       <td className={`px-2 py-2 text-right sm:px-4 sm:py-2.5 ${r.expiredLots > 0 ? "font-semibold text-red-700" : "text-gray-400"}`}>{r.expiredLots}</td>
                       <td className={`px-2 py-2 text-right sm:px-4 sm:py-2.5 ${r.uncovered > 0 ? "font-bold text-red-700" : "text-gray-400"}`}>{r.uncovered}</td>
                       <td className={`px-2 py-2 text-right sm:px-4 sm:py-2.5 ${r.globalGap !== 0 ? "font-semibold text-amber-700" : "text-gray-600"}`}>{r.globalStock}{r.globalGap !== 0 ? ` (${r.globalGap > 0 ? "+" : ""}${r.globalGap})` : ""}</td>
+                      <td className="px-2 py-2 text-right sm:px-4 sm:py-2.5">
+                        {r.unlocated > 0 ? (
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <span className="font-bold text-amber-700">{r.unlocated}</span>
+                            <button onClick={() => handleUnlocated(r, "placer")} disabled={regularising} className="rounded-md bg-green-600 px-2 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">Placer au Comptoir</button>
+                            <button onClick={() => handleUnlocated(r, "retirer")} disabled={regularising} className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">Retirer</button>
+                          </div>
+                        ) : <span className="text-gray-400">0</span>}
+                      </td>
                     </tr>
                   ))}
                   {coherence.rows.length === 0 && (
-                    <tr><td colSpan={7} className="px-2 py-6 text-center text-xs text-gray-500 sm:px-4 sm:py-8 sm:text-sm">Aucun produit.</td></tr>
+                    <tr><td colSpan={8} className="px-2 py-6 text-center text-xs text-gray-500 sm:px-4 sm:py-8 sm:text-sm">Aucun produit.</td></tr>
                   )}
                 </tbody>
               </table>

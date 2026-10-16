@@ -10,6 +10,8 @@ import type { Product } from "@/data/products"
 // id : variante existante (édition) — permet de renommer un format sans perdre stock et historique.
 const emptyVariant: { id?: string; format: string; price: number; unit: string; stock: number } = { format: "", price: 0, unit: "", stock: 0 }
 
+interface UnlocatedRow { variantId: string; productName: string; format: string; unlocated: number }
+
 async function errorOf(res: Response): Promise<string> {
   const data = await res.json().catch(() => null)
   return data?.error || "Erreur lors de l'enregistrement"
@@ -44,8 +46,40 @@ export default function ProduitsPage() {
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [notice, setNotice] = useState("")
+  // Stock global sans point de vente : il existe mais la caisse ne le voit pas.
+  const [unlocated, setUnlocated] = useState<UnlocatedRow[]>([])
+  const [placing, setPlacing] = useState("")
+
+  const fetchUnlocated = async () => {
+    try {
+      const res = await fetch("/api/lots/coherence")
+      if (!res.ok) return
+      const data = await res.json()
+      setUnlocated((data.rows ?? []).filter((r: UnlocatedRow) => r.unlocated > 0))
+    } catch {}
+  }
+
+  const placeAtComptoir = async (row: UnlocatedRow) => {
+    setPlacing(row.variantId)
+    try {
+      const res = await fetch("/api/stock/hors-point-de-vente", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: row.variantId, action: "placer" }),
+      })
+      if (!res.ok) return setNotice(await errorOf(res))
+      const data = await res.json()
+      setNotice(`${data.placed} unité(s) de « ${row.productName} · ${row.format} » placée(s) au ${data.pointOfSale} : vendables en caisse.`)
+      await fetchUnlocated()
+    } catch {
+      setNotice("Connexion impossible, réessayez")
+    } finally {
+      setPlacing("")
+    }
+  }
 
   const fetchProducts = async () => {
+    void fetchUnlocated()
     try {
       const res = await fetch("/api/produits?all=1")
       if (res.ok) {
@@ -89,7 +123,16 @@ export default function ProduitsPage() {
         if (!controller.signal.aborted) setLoading(false)
       }
     }
+    const initUnlocated = async () => {
+      try {
+        const res = await fetch("/api/lots/coherence", { signal: controller.signal })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!controller.signal.aborted) setUnlocated((data.rows ?? []).filter((r: UnlocatedRow) => r.unlocated > 0))
+      } catch {}
+    }
     void init()
+    void initUnlocated()
     return () => controller.abort()
   }, [])
 
@@ -294,6 +337,25 @@ export default function ProduitsPage() {
           <button onClick={() => setNotice("")} aria-label="Fermer" className="shrink-0 text-amber-700 hover:text-amber-900">
             <X className="h-4 w-4" />
           </button>
+        </div>
+      )}
+      {unlocated.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 sm:p-4">
+          <p className="text-sm font-semibold text-amber-900">Stock invisible en caisse</p>
+          <p className="mt-0.5 text-sm text-amber-800">Ce stock n&apos;est dans aucun point de vente : la caisse ne l&apos;affiche pas. Placez-le au Comptoir LCG pour le vendre.</p>
+          <ul className="mt-3 divide-y divide-amber-200">
+            {unlocated.map((row) => (
+              <li key={row.variantId} className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-sm text-amber-900">
+                  <span className="font-semibold">{row.productName}</span> · {row.format} : <span className="font-semibold">{row.unlocated}</span> unité(s)
+                </span>
+                <button onClick={() => placeAtComptoir(row)} disabled={placing !== ""}
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+                  <Check className="h-4 w-4" /> {placing === row.variantId ? "Placement…" : "Placer au Comptoir LCG"}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">

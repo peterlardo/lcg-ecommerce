@@ -3,7 +3,9 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { logActivity } from "@/lib/activity"
 import { getProducts, createProduct } from "@/data/store"
-import { ensureOperationalStockLocations, ensurePointOfSaleStockRows } from "@/lib/stock-service"
+import { getPrisma } from "@/lib/prisma"
+import { COMPTOIR_CODE, ensureOperationalStockLocations, ensurePointOfSaleStockRows } from "@/lib/stock-service"
+import { placeUnlocatedStockTx } from "@/lib/lot-coherence"
 import { parseVariants } from "@/lib/product-validation"
 
 export async function GET(request: Request) {
@@ -44,6 +46,20 @@ export async function POST(request: Request) {
     })
     const locations = await ensureOperationalStockLocations()
     await ensurePointOfSaleStockRows(locations.map((l) => l.id))
+
+    // Le stock saisi à la création va au Comptoir LCG (avec son lot) : sans point de vente,
+    // il resterait invisible en caisse.
+    const comptoir = locations.find((l) => l.code === COMPTOIR_CODE)
+    const session = await auth()
+    if (comptoir && product.variants.some((v) => v.stock > 0)) {
+      await getPrisma().$transaction(async (tx) => {
+        for (const v of product.variants) {
+          if (v.stock > 0) {
+            await placeUnlocatedStockTx(tx, { variantId: v.id, comptoirId: comptoir.id, actorId: session?.user?.id ?? null, reason: "Stock initial du produit" })
+          }
+        }
+      })
+    }
 
     await logActivity({ module: "produits", action: "Création", entity: "product", entityId: product.id, summary: `Produit « ${product.name} » créé` })
     return NextResponse.json(product, { status: 201 })
