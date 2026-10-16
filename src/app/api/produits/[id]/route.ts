@@ -49,7 +49,14 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/produits/[id]"
     if (!success) {
       return NextResponse.json({ error: "Produit introuvable" }, { status: 404 })
     }
-    await logActivity({ module: "produits", action: "Modification", entity: "product", entityId: id, summary: `Produit « ${data.name ?? id} » modifié` })
+    const statusOnly = Object.keys(data).length === 1 && data.isActive !== undefined
+    await logActivity({
+      module: "produits",
+      action: statusOnly ? (data.isActive ? "Activation" : "Désactivation") : "Modification",
+      entity: "product",
+      entityId: id,
+      summary: statusOnly ? `Produit ${id} ${data.isActive ? "activé" : "désactivé"}` : `Produit « ${data.name ?? id} » modifié`,
+    })
     return NextResponse.json({ success: true })
   } catch (error) {
     if (error instanceof VariantInUseError) {

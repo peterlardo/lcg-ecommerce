@@ -42,6 +42,7 @@ export default function ProduitsPage() {
   const [priceSaved, setPriceSaved] = useState(false)
   const [formError, setFormError] = useState("")
   const [saving, setSaving] = useState(false)
+  const [toggling, setToggling] = useState(false)
   const [notice, setNotice] = useState("")
 
   const fetchProducts = async () => {
@@ -242,6 +243,35 @@ export default function ProduitsPage() {
     } catch (err) {
       console.error("Erreur:", err)
       setNotice("Connexion impossible, réessayez")
+    }
+  }
+
+  // Activer / désactiver tout de suite, sans toucher au reste de la fiche.
+  const setActive = async (id: string, name: string, isActive: boolean) => {
+    setToggling(true)
+    setFormError("")
+    try {
+      const res = await fetch(`/api/produits/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
+      })
+      if (!res.ok) {
+        const message = await errorOf(res)
+        return showModal ? setFormError(message) : setNotice(message)
+      }
+      if (editingId === id) setForm((prev) => ({ ...prev, isActive }))
+      setNotice(
+        isActive
+          ? `« ${name} » est actif : visible sur le site, en caisse (Ventes) et dans les devis et bons de commande.`
+          : `« ${name} » est désactivé : masqué du site, de la caisse et des devis.`
+      )
+      await fetchProducts()
+    } catch (err) {
+      console.error("Erreur:", err)
+      setFormError("Connexion impossible, réessayez")
+    } finally {
+      setToggling(false)
     }
   }
 
@@ -489,6 +519,12 @@ export default function ProduitsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {!product.isActive && (
+                          <button onClick={() => setActive(product.id, product.name, true)} disabled={toggling}
+                            className="mr-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+                            Activer
+                          </button>
+                        )}
                         <button onClick={() => openEdit(product)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
                           <Edit className="h-4 w-4" />
                         </button>
@@ -549,6 +585,12 @@ export default function ProduitsPage() {
                   </span>
                 </div>
                 <div className="flex items-center justify-end gap-1 mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-gray-100">
+                  {!product.isActive && (
+                    <button onClick={() => setActive(product.id, product.name, true)} disabled={toggling}
+                      className="mr-auto flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+                      <Check className="h-3.5 w-3.5" /> Activer
+                    </button>
+                  )}
                   <button onClick={() => openEdit(product)} className="flex items-center gap-1 px-3 py-1.5 text-xs text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
                     <Edit className="h-3.5 w-3.5" /> Modifier
                   </button>
@@ -575,6 +617,29 @@ export default function ProduitsPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
+            {editingId && (
+              <div className={`mx-4 sm:mx-6 mt-4 sm:mt-6 flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between ${
+                form.isActive ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+              }`}>
+                <p className={`text-sm ${form.isActive ? "text-green-800" : "text-red-800"}`}>
+                  <span className="font-bold">{form.isActive ? "Produit actif" : "Produit inactif"}</span>
+                  {form.isActive
+                    ? " : visible sur le site, en caisse (Ventes) et dans les devis et bons de commande."
+                    : " : il n'apparaît ni sur le site, ni en caisse (Ventes), ni dans les devis et bons de commande."}
+                </p>
+                {form.isActive ? (
+                  <button type="button" onClick={() => setActive(editingId, form.name, false)} disabled={toggling}
+                    className="min-h-11 shrink-0 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                    {toggling ? "…" : "Désactiver"}
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setActive(editingId, form.name, true)} disabled={toggling}
+                    className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+                    <Check className="h-4 w-4" /> {toggling ? "Activation…" : "Activer le produit"}
+                  </button>
+                )}
+              </div>
+            )}
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <label className="block text-sm font-semibold sm:col-span-2">
@@ -628,7 +693,7 @@ export default function ProduitsPage() {
                   <input type="checkbox" checked={form.isActive}
                     onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
                     className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-                  <span className="text-sm font-semibold">Visible sur le site</span>
+                  <span className="text-sm font-semibold">Actif (site, caisse et devis)</span>
                 </label>
               </div>
 
