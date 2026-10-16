@@ -64,6 +64,13 @@ export const LEGACY_ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "
 export const COMMERCIAL_MODULES = ["commercial", "nouveau-client", "clients", "clients-b2b", "b2b", "contrats", "creances", "encaissements", "zone-commerciale"]
 
 /**
+ * Menu des commerciaux et du responsable commercial (demande du 2026-10-16) : Pilotage (tableau de bord,
+ * rapports), Ventes et Commercial. Ces écrans sont toujours visibles pour eux, quels que soient les droits cochés ;
+ * leurs données restent limitées à ce que chaque API leur ouvre (leurs clients, leurs ventes).
+ */
+export const COMMERCIAL_MENU_MODULES = ["dashboard", "rapports", "ventes", "tickets", "commandes", "caisse", ...COMMERCIAL_MODULES]
+
+/**
  * Rôles commerciaux. RESPONSABLE_COMMERCIAL est un profil créé par l'administrateur : il a les écrans
  * et les accès du commercial, et voit tout le portefeuille B2B (pas seulement ses propres clients).
  */
@@ -150,7 +157,8 @@ export function canSeeModule(user: PermissionUser, module: string): boolean {
   if (!isStaffRole(role)) return false
   if (role === "ADMIN") return true
   if (!moduleOpenTo(role, module)) return false
-  if (isCommercialManager(role) && COMMERCIAL_MODULES.includes(module)) return true
+  // commerciaux et responsable commercial : Pilotage, Ventes et Commercial toujours au menu
+  if (isCommercialRole(role) && COMMERCIAL_MENU_MODULES.includes(module)) return true
   // Inscrire un client fait partie du métier : tout commercial a l'écran « Nouveau client », quels que soient les droits cochés
   if (isCommercialRole(role) && module === NEW_CLIENT_MODULE) return true
   // La caisse tactile reste accessible aux profils de caisse même si « ventes » n'est pas coché

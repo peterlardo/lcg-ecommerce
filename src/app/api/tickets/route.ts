@@ -5,7 +5,8 @@ import { auth } from "@/lib/auth"
 import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
 
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMPTABLE", "OPERATEUR_ACCUEIL", ...CASHIER_ROLES])
+  // les commerciaux ont « Tickets de vente » dans leur menu Ventes : ils y voient leurs propres tickets
+  const forbidden = await requireManagementAccess(["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE", "OPERATEUR_ACCUEIL", ...CASHIER_ROLES])
   if (forbidden) return forbidden
 
   const session = await auth()

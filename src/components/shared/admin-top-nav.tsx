@@ -6,7 +6,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { formatPrice } from "@/lib/utils"
-import { canSeeModule, isCommercialManager, isCommercialRole, moduleOfPath } from "@/lib/permissions"
+import { canSeeModule, isCommercialRole, moduleOfPath } from "@/lib/permissions"
 import type { AppNotification } from "@/hooks/use-notifications"
 import {
   type LucideIcon,
@@ -130,10 +130,10 @@ interface NavLink {
 // il n'y a plus de menu « Plus » qui regroupait le reste.
 const newClientLink: NavLink = { href: "/admin/nouveau-client", label: "Nouveau client", icon: UserPlus }
 
-// Le responsable commercial (profil RESPONSABLE_COMMERCIAL) a son propre menu, limité à ses modules :
-// il remplace le menu général. Les autres commerciaux gardent le menu général.
+// Les commerciaux et le responsable commercial ont leur propre menu : Pilotage, Ventes et Commercial
+// (demande du 2026-10-16). Il remplace le menu général ; les écrans cochés en plus se rangent dans « Plus ».
 const commercialLinks: NavLink[] = [
-  { href: "/admin/commercial", label: "Tableau de bord", icon: BriefcaseBusiness },
+  { href: "/admin/commercial", label: "Tableau de bord commercial", icon: BriefcaseBusiness },
   { href: "/admin/nouveau-client", label: "Nouveau client", icon: UserPlus },
   {
     href: "/admin/clients-b2b",
@@ -168,9 +168,17 @@ const commercialLinks: NavLink[] = [
 ]
 // à plat pour le menu du téléphone : un lien à sous-menu y est remplacé par ses sous-liens
 const commercialFlatLinks = commercialLinks.flatMap((link) => link.children ?? [link])
-const commercialGroups = [{ title: "Commercial", icon: BriefcaseBusiness, links: commercialFlatLinks }]
-const commercialHrefs = new Set(commercialFlatLinks.map((link) => link.href))
-/** Les listes des liens de tête (responsable commercial) sont numérotées à part de celles des menus. */
+const pilotageGroup = navGroups.find((group) => group.title === "Pilotage")!
+const ventesGroup = navGroups.find((group) => group.title === "Ventes")!
+// Menus des commerciaux dans la barre : Pilotage, Ventes, Commercial (« Nouveau client » est à part, en accès direct)
+const commercialBarGroups = [
+  pilotageGroup,
+  ventesGroup,
+  { title: "Commercial", icon: BriefcaseBusiness, links: commercialFlatLinks.filter((link) => link.href !== newClientLink.href) },
+]
+// menu du téléphone : les mêmes, « Nouveau client » compris dans le menu Commercial
+const commercialGroups = [pilotageGroup, ventesGroup, { title: "Commercial", icon: BriefcaseBusiness, links: commercialFlatLinks }]
+const commercialHrefs = new Set(commercialGroups.flatMap((group) => group.links.map((link) => link.href)))
 const SUBMENU_OFFSET = 100
 
 interface AdminTopNavProps {
@@ -202,23 +210,22 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
   // Même règle que les API et l'écran « Utilisateurs » (src/lib/permissions.ts)
   const canSee = (module: string) => canSeeModule(session?.user, module)
 
-  // seul le responsable commercial a ce menu ; les autres commerciaux gardent le menu général
-  const isCommercial = isCommercialManager(session?.user?.role)
-  // Le responsable commercial garde, en plus de ses modules, les écrans que l'administrateur lui a cochés
-  // expressément (commandes, rapports…) : leurs menus suivent les siens dans la barre.
+  // commerciaux et responsable commercial : menus Pilotage, Ventes, Commercial (demande du 2026-10-16)
+  const isCommercial = isCommercialRole(session?.user?.role)
+  // Ils gardent, en plus, les écrans que l'administrateur leur a cochés expressément (livraisons, stock…) :
+  // leurs menus suivent les leurs dans la barre.
   const granted = (module: string) => (session?.user?.permissions ?? []).some((p) => p.module === module && p.canView)
   const commercialExtras = navGroups
+    .filter((group) => group.title !== "Pilotage" && group.title !== "Ventes")
     .map((group) => ({
       ...group,
-      links: group.links.filter((link) => link.href !== "/admin" && !commercialHrefs.has(link.href) && granted(moduleOfPath(link.href))),
+      links: group.links.filter((link) => !commercialHrefs.has(link.href) && granted(moduleOfPath(link.href))),
     }))
     .filter((group) => group.links.length > 0)
   const groups = isCommercial ? [...commercialGroups, ...commercialExtras] : navGroups
-  // Les commerciaux (menu général) ont « Nouveau client » en accès direct, en tête de la barre :
-  // c'est leur geste le plus fréquent sur le terrain.
-  const fieldCommercial = !isCommercial && isCommercialRole(session?.user?.role)
-  const topLinks = isCommercial ? commercialLinks : fieldCommercial ? [newClientLink] : []
-  const topHrefs = isCommercial ? commercialHrefs : fieldCommercial ? new Set([newClientLink.href]) : new Set<string>()
+  // « Nouveau client » en accès direct, en tête de la barre : c'est leur geste le plus fréquent sur le terrain.
+  const topLinks = isCommercial ? [newClientLink] : []
+  const topHrefs = isCommercial ? new Set([newClientLink.href]) : new Set<string>()
 
   // Certains écrans se pilotent depuis la permission d'un module voisin
   // (les livreurs sont gérés avec le module « livraisons »).
@@ -273,9 +280,9 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
     }
   }, [mobileOpen])
 
-  // Menus de la barre : ceux du menu général (ou, pour le responsable commercial, ceux des écrans cochés en plus),
-  // limités aux écrans que l'utilisateur peut ouvrir.
-  const barGroups = (isCommercial ? commercialExtras : navGroups)
+  // Menus de la barre : ceux du menu général (ou, pour les commerciaux, Pilotage, Ventes, Commercial puis ceux
+  // des écrans cochés en plus), limités aux écrans que l'utilisateur peut ouvrir.
+  const barGroups = (isCommercial ? [...commercialBarGroups, ...commercialExtras] : navGroups)
     .map((group) => ({
       ...group,
       links: group.links.filter((link) => {
