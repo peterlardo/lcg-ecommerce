@@ -3,11 +3,11 @@ import { getPrisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { CASHIER_ROLES } from "@/lib/permissions"
 
-// Liste des caissières actives : l'opérateur d'accueil n'a pas accès à
-// /api/utilisateurs (réservé à l'admin), il a besoin de cette liste pour
-// choisir la caissière à qui transmettre une commande.
+// Liste des caissières actives : l'opérateur d'accueil et les commerciaux (responsable compris) n'ont pas accès
+// à /api/utilisateurs (réservé à l'admin), ils ont besoin de cette liste pour choisir la caissière à qui
+// transmettre une commande.
 export async function GET() {
-  const forbidden = await requireManagementAccess(["ADMIN", "OPERATEUR_ACCUEIL"])
+  const forbidden = await requireManagementAccess(["ADMIN", "OPERATEUR_ACCUEIL", "COMMERCIAL"])
   if (forbidden) return forbidden
 
   try {

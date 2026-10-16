@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { formatPrice, getStatusLabel, getStatusColor } from "@/lib/utils"
 import { isArchivedOrder } from "@/lib/archives"
+import { isCommercialRole } from "@/lib/permissions"
 import type { Product } from "@/data/products"
 
 const statusFilters = [
@@ -122,7 +123,9 @@ export default function CommandesPage() {
   const PER_PAGE = 5
   const { data: session } = useSession()
   const role = (session?.user as { role?: string } | undefined)?.role
-  const isOperateur = role === "OPERATEUR_ACCUEIL"
+  // Profils qui transmettent leurs commandes à la caisse (ils n'établissent pas le ticket eux-mêmes) :
+  // l'accueil, et depuis le 2026-10-16 les commerciaux et le responsable commercial
+  const isOperateur = role === "OPERATEUR_ACCUEIL" || isCommercialRole(role)
   const [cashiers, setCashiers] = useState<{ id: string; name: string | null; email: string; role: string }[]>([])
   const [sendCashier, setSendCashier] = useState<Record<string, string>>({})
   const [sending, setSending] = useState<string | null>(null)

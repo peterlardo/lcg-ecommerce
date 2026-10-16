@@ -168,7 +168,6 @@ const commercialLinks: NavLink[] = [
 ]
 // à plat pour le menu du téléphone : un lien à sous-menu y est remplacé par ses sous-liens
 const commercialFlatLinks = commercialLinks.flatMap((link) => link.children ?? [link])
-const ventesGroup = navGroups.find((group) => group.title === "Ventes")!
 // Pilotage des commerciaux : leur tableau de bord est le tableau de bord commercial (le leur), pas le général
 const commercialPilotageGroup = {
   title: "Pilotage",
@@ -180,14 +179,20 @@ const commercialPilotageGroup = {
 }
 // menu Commercial : le reste du module (le tableau de bord est dans Pilotage)
 const commercialModuleLinks = commercialFlatLinks.filter((link) => link.href !== "/admin/commercial")
+// Menu Ventes des commerciaux : le menu général, sans l'élément « Ventes » (l'écran de caisse) — 2026-10-16
+const commercialVentesGroup = (() => {
+  const group = navGroups.find((g) => g.title === "Ventes")!
+  // Clients B2B est déjà dans leur menu Commercial
+  return { ...group, links: group.links.filter((link) => link.href !== "/admin/ventes" && link.href !== "/admin/clients-b2b") }
+})()
 // Menus des commerciaux dans la barre : Pilotage, Ventes, Commercial (« Nouveau client » est à part, en accès direct)
 const commercialBarGroups = [
   commercialPilotageGroup,
-  ventesGroup,
+  commercialVentesGroup,
   { title: "Commercial", icon: BriefcaseBusiness, links: commercialModuleLinks.filter((link) => link.href !== newClientLink.href) },
 ]
 // menu du téléphone : les mêmes, « Nouveau client » compris dans le menu Commercial
-const commercialGroups = [commercialPilotageGroup, ventesGroup, { title: "Commercial", icon: BriefcaseBusiness, links: commercialModuleLinks }]
+const commercialGroups = [commercialPilotageGroup, commercialVentesGroup, { title: "Commercial", icon: BriefcaseBusiness, links: commercialModuleLinks }]
 const commercialHrefs = new Set(commercialGroups.flatMap((group) => group.links.map((link) => link.href)))
 const SUBMENU_OFFSET = 100
 
@@ -226,6 +231,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
   // leurs menus suivent les leurs dans la barre.
   const granted = (module: string) => (session?.user?.permissions ?? []).some((p) => p.module === module && p.canView)
   const commercialExtras = navGroups
+    // ni Pilotage, ni Ventes : les leurs sont à part (sans l'écran de caisse), même si des cases sont cochées
     .filter((group) => group.title !== "Pilotage" && group.title !== "Ventes")
     .map((group) => ({
       ...group,

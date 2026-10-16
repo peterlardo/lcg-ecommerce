@@ -64,11 +64,11 @@ export const LEGACY_ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "
 export const COMMERCIAL_MODULES = ["commercial", "nouveau-client", "clients", "clients-b2b", "b2b", "contrats", "creances", "encaissements", "zone-commerciale"]
 
 /**
- * Menu des commerciaux et du responsable commercial (demande du 2026-10-16) : Pilotage (tableau de bord,
- * rapports), Ventes et Commercial. Ces écrans sont toujours visibles pour eux, quels que soient les droits cochés ;
- * leurs données restent limitées à ce que chaque API leur ouvre (leurs clients, leurs ventes).
+ * Menu des commerciaux et du responsable commercial (demandes du 2026-10-16) : Pilotage (leur tableau de bord,
+ * rapports), Ventes (sans l'écran de caisse « Ventes ») et Commercial. Ces écrans sont toujours visibles pour eux,
+ * quels que soient les droits cochés ; leurs données restent limitées à ce que chaque API leur ouvre.
  */
-export const COMMERCIAL_MENU_MODULES = ["dashboard", "rapports", "ventes", "tickets", "commandes", "caisse", ...COMMERCIAL_MODULES]
+export const COMMERCIAL_MENU_MODULES = ["dashboard", "rapports", "tickets", "commandes", "caisse", ...COMMERCIAL_MODULES]
 
 /**
  * Rôles commerciaux. RESPONSABLE_COMMERCIAL est un profil créé par l'administrateur : il a les écrans
