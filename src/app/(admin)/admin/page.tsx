@@ -254,6 +254,8 @@ export default function DashboardPage() {
   // section « Commandes en attente du jour » : pliée par défaut (demande du 2026-10-16)
   const [pendingOpen, setPendingOpen] = useState(false)
   const [pendingNotice, setPendingNotice] = useState<{ ok: boolean; text: string } | null>(null)
+  // section « Dernières ventes » : le retrait d'un ticket de caisse rend le stock sorti et sort la vente des totaux
+  const [saleNotice, setSaleNotice] = useState<{ ok: boolean; text: string } | null>(null)
   const deleteOrder = async (order: Order) => {
     if (deleting || !window.confirm(`Supprimer définitivement la commande ${order.orderNumber} (${order.customerName || "client"}, ${formatPrice(order.total)}) ?`)) return
     setDeleting(order.id)
@@ -269,6 +271,32 @@ export default function DashboardPage() {
       setPendingNotice({ ok: true, text: `Commande ${order.orderNumber} supprimée.` })
     } catch {
       setPendingNotice({ ok: false, text: "Connexion au serveur impossible : rien n'a été supprimé" })
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  // Suppression d'un ticket de caisse depuis « Dernières ventes » : administrateur seulement ; le serveur
+  // rend le stock réellement sorti et la vente quitte les totaux du jour.
+  const deleteSale = async (order: Order) => {
+    if (deleting || !window.confirm(`Supprimer le ticket ${order.orderNumber} (${order.customerName || "Client"}, ${formatPrice(order.total)}) ?\n\nLe stock vendu sera rendu et la vente quittera les totaux de la journée.`)) return
+    setDeleting(order.id)
+    setSaleNotice(null)
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restoreStock: true }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setSaleNotice({ ok: false, text: data?.error || "Suppression impossible" })
+        return
+      }
+      setOrders((current) => current.filter((o) => o.id !== order.id))
+      setSaleNotice({ ok: true, text: `Ticket ${order.orderNumber} supprimé${data?.restoredStock ? " · stock rendu" : ""}.` })
+    } catch {
+      setSaleNotice({ ok: false, text: "Connexion au serveur impossible : rien n'a été supprimé" })
     } finally {
       setDeleting(null)
     }
@@ -588,6 +616,12 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {saleNotice && (
+            <p className={`mt-3 rounded-lg border px-3 py-2 text-sm ${saleNotice.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+              {saleNotice.text}
+            </p>
+          )}
+
           <div className="mt-3 flex-1 divide-y divide-border">
             {pagedSales.map((order) => {
               const quantity = order.items.reduce((sum, item) => sum + item.quantity, 0)
@@ -613,6 +647,17 @@ export default function DashboardPage() {
                       {quantity} article{quantity > 1 ? "s" : ""}
                     </span>
                     <span className="whitespace-nowrap text-sm font-semibold text-foreground sm:text-base">{formatPrice(order.total)}</span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => deleteSale(order)}
+                        disabled={deleting !== null}
+                        title="Supprimer ce ticket de caisse (le stock vendu est rendu)"
+                        className="inline-flex min-h-11 items-center rounded-lg border border-red-200 bg-white px-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {deleting === order.id ? "Suppression…" : "Supprimer"}
+                      </button>
+                    )}
                   </div>
                 </div>
               )

@@ -325,20 +325,34 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 const DELETABLE_STATUS = ["PENDING", "SENT_TO_CASHIER"]
 
 /**
- * Suppression définitive d'une commande en attente, par l'administrateur (décision du 2026-10-16).
- * Seulement si elle n'a rien engagé : ni payée, ni ticket, ni confirmée, ni sortie de stock, ni issue d'une
- * pré-commande. Sinon on l'annule (le stock est rendu et la vente reste tracée dans les rapports).
+ * Suppression définitive d'une commande, par l'administrateur (décision du 2026-10-16).
+ *
+ * - Sans corps de requête : commande qui n'a rien engagé (ni payée, ni ticket, ni confirmée, ni sortie de
+ *   stock, ni issue d'une pré-commande). Sinon on l'annule (le stock est rendu et la trace reste au rapport).
+ * - Avec `{ restoreStock: true }` : suppression d'un TICKET DE CAISSE (vente comptoir déjà encaissée).
+ *   Le stock réellement sorti est rendu au point de vente (ou au stock global) : la vente quitte les
+ *   totaux du jour, sans laisser d'unités manquantes. Le journal d'activité garde la trace nominative
+ *   (client, montant, nom du vendeur) et mentionne si du stock a été rendu.
+ *   Une commande issue d'un document B2B ne se supprime pas ici : elle se gère dans les bons B2B.
  */
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const forbidden = await requireManagementAccess(["ADMIN"])
   if (forbidden) return forbidden
 
   try {
     const { id } = await params
+    const body = (await req.json().catch(() => null)) as { restoreStock?: boolean } | null
+    const restoreStock = body?.restoreStock === true
     const prisma = getPrisma()
+    const session = await auth()
+    const actorId = session?.user?.id
     const order = await prisma.order.findUnique({
       where: { id },
-      select: { id: true, orderNumber: true, status: true, paymentStatus: true, ticketGenerated: true, source: true, customerName: true, total: true },
+      select: {
+        id: true, orderNumber: true, status: true, paymentStatus: true, ticketGenerated: true,
+        source: true, customerName: true, total: true, pointOfSaleId: true, b2bClientId: true,
+        items: { select: { variantId: true, quantity: true } },
+      },
     })
     if (!order) return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
 
@@ -346,6 +360,69 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       prisma.stockMovement.count({ where: { reference: order.orderNumber } }),
       prisma.lotAllocation.count({ where: { reference: order.orderNumber } }),
     ])
+
+    if (restoreStock) {
+      if (order.b2bClientId) {
+        return NextResponse.json(
+          { error: `${order.orderNumber} est rattachée à un client B2B : elle se supprime depuis les bons B2B.` },
+          { status: 409 }
+        )
+      }
+
+      // Le stock rendu suit ce qui est réellement sorti (mouvements et lots au nom de la vente) : une vente
+      // jamais débitée (commande payée mais non facturée) se supprime telle quelle, sans créer de stock.
+      const shouldRestock = movements > 0 || allocations > 0
+
+      await prisma.$transaction(async (tx) => {
+        if (shouldRestock) {
+          if (order.pointOfSaleId) {
+            for (const item of order.items) {
+              await restockPointOfSaleStockTx(tx, {
+                variantId: item.variantId,
+                pointOfSaleId: order.pointOfSaleId,
+                quantity: item.quantity,
+                type: "CANCEL_RESTOCK",
+                reason: `Retour stock après suppression du ticket ${order.orderNumber}`,
+                reference: order.orderNumber,
+                userId: actorId,
+              })
+            }
+          } else {
+            for (const item of order.items) {
+              await tx.productVariant.update({
+                where: { id: item.variantId },
+                data: { stock: { increment: item.quantity } },
+              })
+              await tx.stockMovement.create({
+                data: {
+                  variantId: item.variantId,
+                  type: "RETURN",
+                  quantity: item.quantity,
+                  reason: `Retour stock après suppression du ticket ${order.orderNumber}`,
+                  reference: order.orderNumber,
+                  userId: actorId,
+                },
+              })
+            }
+          }
+          if (allocations > 0) await restoreLotAllocationsByReferenceTx(tx, order.orderNumber)
+        }
+
+        await tx.order.delete({ where: { id } })
+      })
+
+      await logActivity({
+        module: "commandes",
+        action: "Suppression",
+        entity: "order",
+        entityId: id,
+        summary: `Ticket ${order.orderNumber} supprimé (${order.customerName ?? "client comptoir"}, ${order.total} FCFA)${shouldRestock ? " · stock rendu" : ""}`,
+        userId: actorId,
+      })
+
+      return NextResponse.json({ deleted: true, orderNumber: order.orderNumber, restoredStock: shouldRestock })
+    }
+
     const reason =
       order.paymentStatus === "PAID" || order.paymentStatus === "REFUNDED" ? "elle est payée"
       : order.ticketGenerated ? "son ticket est émis"

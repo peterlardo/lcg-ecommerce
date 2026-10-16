@@ -1,7 +1,8 @@
 "use client"
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
-import { ChevronDown, Filter, Printer, ReceiptText, Search } from "lucide-react"
+import { ChevronDown, Filter, Printer, ReceiptText, Search, Trash2 } from "lucide-react"
+import { useSession } from "next-auth/react"
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml, printTicketWindow } from "@/lib/ticket-template"
 
@@ -110,6 +111,8 @@ function TicketPreview({ ticket }: { ticket: Ticket }) {
 }
 
 export default function TicketsPage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN"
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [pointsOfSale, setPointsOfSale] = useState<{ id: string; name: string; code: string }[]>([])
   const [search, setSearch] = useState("")
@@ -118,6 +121,8 @@ export default function TicketsPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
 
   const printTicket = (ticket: Ticket) => {
     const popup = window.open("", "ticket", "width=360,height=700")
@@ -138,6 +143,33 @@ export default function TicketsPage() {
     )
     popup.document.close()
     printTicketWindow(popup)
+  }
+
+  // Suppression d'un ticket : administrateur seulement ; le serveur rend le stock réellement sorti
+  // et la vente quitte les totaux du jour (décision du 2026-10-16).
+  const deleteTicket = async (ticket: Ticket) => {
+    if (deleting || !window.confirm(`Supprimer le ticket ${ticket.ticketNumber} (${ticket.customerName}, ${formatPrice(ticket.total)}) ?\n\nLe stock vendu sera rendu et la vente quittera les totaux de la journée.`)) return
+    setDeleting(ticket.id)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/orders/${ticket.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restoreStock: true }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setNotice({ ok: false, text: data?.error || "Suppression impossible" })
+        return
+      }
+      setTickets((current) => current.filter((t) => t.id !== ticket.id))
+      setExpanded(null)
+      setNotice({ ok: true, text: `Ticket ${ticket.ticketNumber} supprimé${data?.restoredStock ? " · stock rendu" : ""}.` })
+    } catch {
+      setNotice({ ok: false, text: "Connexion au serveur impossible : rien n'a été supprimé" })
+    } finally {
+      setDeleting(null)
+    }
   }
 
   useEffect(() => {
@@ -173,6 +205,12 @@ export default function TicketsPage() {
       </div>
       <p className="text-sm text-muted-foreground">{filtered.length} ticket(s)</p>
     </div>
+
+    {notice && (
+      <p className={`rounded-lg border px-3 py-2 text-sm ${notice.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+        {notice.text}
+      </p>
+    )}
 
     <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row">
       <div className="relative flex-1">
@@ -224,6 +262,16 @@ export default function TicketsPage() {
                     <td className="px-3 sm:px-5 py-3 sm:py-4 font-semibold text-foreground">{formatPrice(ticket.total)}</td>
                     <td className="px-3 sm:px-5 py-3 sm:py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteTicket(ticket) }}
+                            disabled={deleting !== null}
+                            className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            title="Supprimer ce ticket (le stock vendu est rendu)"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                         <button onClick={(e) => { e.stopPropagation(); printTicket(ticket) }} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" title="Imprimer">
                           <Printer className="h-4 w-4" />
                         </button>
