@@ -16,6 +16,7 @@ interface LinkedDoc {
   id: string
   reference: string
   type: DocType
+  status?: string
   total?: number
 }
 
@@ -54,37 +55,8 @@ interface ClientOption {
   isActive: boolean
 }
 
-/** Facture non soldée (écran Créances), pour l'encours du client dans le bon de commande. */
-interface OpenInvoice {
-  clientId: string | null
-  balance: number
-  overdue: boolean
-}
-
-/** Adresse d'un client, pour proposer le lieu de livraison. */
-const clientAddress = (c: ClientOption | undefined) => (c ? [c.address, c.city].filter(Boolean).join(", ") : "")
-
 /** Jour (AAAA-MM-JJ) à Brazzaville, pour les champs de type date. */
 const dayInBrazzaville = (d: Date) => d.toLocaleDateString("fr-CA", { timeZone: "Africa/Brazzaville" })
-
-/** Devis encore ouvert, qu'un bon de commande peut reprendre. */
-interface QuoteOption {
-  id: string
-  reference: string
-  clientId: string
-  clientName: string
-  total: number
-  status: string
-  validUntil: string | null
-  createdAt: string
-  discount: number
-  notes: string | null
-  deliveryTerms: string | null
-  requestedDeliveryDate: string | null
-  items: { productVariantId: string | null; quantity: number; unitPrice: number }[]
-  /** date de validité dépassée (calculée à la lecture) */
-  expired: boolean
-}
 
 interface VariantOption {
   id: string
@@ -108,13 +80,13 @@ interface DraftLine {
 }
 
 /**
- * Chaîne de vente : devis → bon de commande → facture → bon de livraison (une fois la facture payée).
- * `next` : libellé du bouton qui crée le document suivant. Un bon de livraison de l'ancienne chaîne
- * (établi depuis une commande) se facture encore.
+ * Chaîne de vente : devis validé par le client → facture → bon de livraison (une fois la facture payée).
+ * `next` : libellé du bouton qui crée le document suivant. Ancienne chaîne, encore servie : un bon de
+ * commande existant se facture, ainsi qu'un bon de livraison établi depuis une commande.
  */
 export const TYPE_LABEL: Record<DocType, { one: string; many: string; next?: string }> = {
-  DEVIS: { one: "Devis", many: "Devis", next: "Créer le bon de commande" },
-  COMMANDE: { one: "Bon de commande", many: "Commandes", next: "Créer la facture" },
+  DEVIS: { one: "Devis", many: "Devis", next: "Validé par le client : créer la facture" },
+  COMMANDE: { one: "Bon de commande", many: "Anciens bons de commande", next: "Créer la facture" },
   FACTURE: { one: "Facture", many: "Factures", next: "Créer le bon de livraison" },
   LIVRAISON: { one: "Bon de livraison", many: "Livraisons", next: "Créer la facture" },
   AVOIR: { one: "Avoir", many: "Avoirs" },
@@ -129,8 +101,12 @@ const STATUS_BY_TYPE: Record<DocType, string[]> = {
   AVOIR: [],
 }
 
-/** Document suivant dans la chaîne (les avoirs d'une facture n'en sont pas). */
-const nextInChain = <T extends { type: DocType }>(doc: { children: T[] }): T | undefined => doc.children.find((c) => c.type !== "AVOIR")
+/**
+ * Document suivant dans la chaîne. N'en sont pas : les avoirs d'une facture, ni un ancien bon de commande
+ * non facturé (le bon de commande est retiré de la chaîne : la facture du devis le remplace).
+ */
+const nextInChain = <T extends { type: DocType; status?: string }>(doc: { children: T[] }): T | undefined =>
+  doc.children.find((c) => c.type !== "AVOIR" && !(c.type === "COMMANDE" && c.status !== "INVOICED"))
 
 /** Facture : reste dû (avoirs déduits) et payée en entier ? Seuls les règlements validés comptent. */
 export function invoiceState(doc: { total: number; paid?: number; credited?: number }) {
@@ -140,10 +116,10 @@ export function invoiceState(doc: { total: number; paid?: number; credited?: num
 }
 
 /**
- * Le document peut-il donner le suivant ? Devis et commande : ouverts ; facture : émise et payée en entier ;
- * bon de livraison : seulement ceux de l'ancienne chaîne. Jamais deux fois.
+ * Le document peut-il donner le suivant ? Devis (et ancien bon de commande) : ouvert ; facture : émise et
+ * payée en entier ; bon de livraison : seulement ceux de l'ancienne chaîne. Jamais deux fois.
  */
-export function canCreateNext(doc: { type: DocType; status: string; total: number; paid?: number; credited?: number; parent: { type: DocType } | null; children: { type: DocType }[] }) {
+export function canCreateNext(doc: { type: DocType; status: string; total: number; paid?: number; credited?: number; parent: { type: DocType } | null; children: { type: DocType; status?: string }[] }) {
   if (nextInChain(doc)) return false
   const open = doc.status === "DRAFT" || doc.status === "SENT" || doc.status === "CONFIRMED"
   if (doc.type === "DEVIS" || doc.type === "COMMANDE") return open
@@ -154,6 +130,7 @@ export function canCreateNext(doc: { type: DocType; status: string; total: numbe
 
 /** Avertissement avant de créer le document suivant (ce qui sera irréversible). */
 const NEXT_CONFIRM: Partial<Record<DocType, string>> = {
+  DEVIS: "Le client a validé ce devis. La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
   COMMANDE: "La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
   FACTURE: "Les quantités sortiront du stock du comptoir.",
   LIVRAISON: "La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
@@ -208,21 +185,11 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [lines, setLines] = useState<DraftLine[]>([EMPTY_LINE])
   const [discount, setDiscount] = useState("")
   const [notes, setNotes] = useState("")
-  // livraison souhaitée
-  const [deliveryDate, setDeliveryDate] = useState("")
-  const [deliveryTerms, setDeliveryTerms] = useState("")
   const [today, setToday] = useState("")
-  // factures non soldées de la portée : encours du client affiché dans les informations financières
-  const [openInvoices, setOpenInvoices] = useState<OpenInvoice[] | null>(null)
   const [formError, setFormError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  // bon de commande : devis repris (ses articles, prix et remise remplissent le formulaire)
-  const [quotes, setQuotes] = useState<QuoteOption[]>([])
-  const [quotesLoaded, setQuotesLoaded] = useState(false)
-  const [quoteId, setQuoteId] = useState("")
-  // lu par l'effet du contrat : les prix d'un devis repris ne sont pas recalculés
+  // lu par l'effet du contrat : les prix d'un brouillon rouvert ne sont pas recalculés
   const quoteRef = useRef("")
-  const fromQuotes = creatable === "COMMANDE"
 
   useEffect(() => {
     const controller = new AbortController()
@@ -275,42 +242,6 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     void init()
     return () => controller.abort()
   }, [creating, clients.length, session?.user?.id, session?.user?.role])
-
-  // devis encore ouverts : lus dès l'arrivée sur l'écran (la liste est prête quand on ouvre le formulaire),
-  // puis relus à chaque ouverture et après chaque création
-  useEffect(() => {
-    if (!fromQuotes) return
-    const controller = new AbortController()
-    const init = async () => {
-      try {
-        const res = await fetch("/api/b2b-documents?available=1", { signal: controller.signal })
-        const data = await res.json().catch(() => null)
-        if (controller.signal.aborted) return
-        if (res.ok) {
-          const now = Date.now()
-          setQuotes((data?.documents ?? []).map((q: Omit<QuoteOption, "expired">) => ({ ...q, expired: q.validUntil !== null && new Date(q.validUntil).getTime() < now })))
-        }
-      } catch {}
-      if (!controller.signal.aborted) setQuotesLoaded(true)
-    }
-    void init()
-    return () => controller.abort()
-  }, [creating, fromQuotes, reload])
-
-  // encours des clients, relu à chaque ouverture du formulaire de bon de commande
-  useEffect(() => {
-    if (!creating || !fromQuotes) return
-    const controller = new AbortController()
-    const init = async () => {
-      try {
-        const res = await fetch("/api/commercial/creances", { signal: controller.signal })
-        const data = await res.json().catch(() => null)
-        if (!controller.signal.aborted) setOpenInvoices(res.ok ? (data?.creances ?? []) : null)
-      } catch {}
-    }
-    void init()
-    return () => controller.abort()
-  }, [creating, fromQuotes])
 
   // contrat du client choisi dans le formulaire : seul un contrat actif et dans sa période s'applique
   useEffect(() => {
@@ -404,21 +335,17 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     setEditing(null)
     setValidUntil(dayPlus(30))
     setCreating(true)
-    setQuoteId("")
     quoteRef.current = ""
     setClientId("")
     setContract(null)
-    // bon de commande : aucun article d'office, ils viennent du devis ou du bouton « Ajouter un article »
-    setLines(fromQuotes ? [] : [EMPTY_LINE])
+    setLines([EMPTY_LINE])
     setDiscount("")
     setNotes("")
-    setDeliveryDate("")
-    setDeliveryTerms("")
     setToday(dayInBrazzaville(new Date()))
     setFormError("")
   }
 
-  /** Modification d'un brouillon (devis ou bon de commande) : même formulaire, prérempli. */
+  /** Modification d'un brouillon de devis : même formulaire, prérempli. */
   const openEdit = async (doc: B2bDocument) => {
     if (busy) return
     setBusy(`edit-${doc.id}`)
@@ -429,13 +356,12 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
       if (!res.ok || !data?.document) { setError(data?.error || "Brouillon illisible"); return }
       const d = data.document as {
         id: string; reference: string; type: DocType; status: string; clientId: string | null; discount: number; notes: string | null
-        validUntil: string | null; deliveryTerms: string | null; requestedDeliveryDate: string | null
+        validUntil: string | null
         parent: { reference: string } | null
         items: { productVariantId: string | null; quantity: number; unitPrice: number }[]
       }
       if (d.status !== "DRAFT") { setError(`${d.reference} n'est plus un brouillon : il ne se modifie plus.`); return }
       setEditing({ id: d.id, reference: d.reference, type: d.type, parentReference: d.parent?.reference ?? null })
-      setQuoteId("")
       // les prix enregistrés sont gardés (pas de recalcul par le contrat à l'ouverture)
       quoteRef.current = d.id
       setClientId(d.clientId ?? "")
@@ -443,8 +369,6 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
       setDiscount(String(d.discount ?? 0))
       setNotes(d.notes ?? "")
       setValidUntil(d.validUntil ? dayInBrazzaville(new Date(d.validUntil)) : "")
-      setDeliveryDate(d.requestedDeliveryDate ? dayInBrazzaville(new Date(d.requestedDeliveryDate)) : "")
-      setDeliveryTerms(d.deliveryTerms ?? "")
       setToday(dayInBrazzaville(new Date()))
       setFormError("")
       setCreating(true)
@@ -455,50 +379,14 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     }
   }
 
-  /** Changement de client : son adresse est proposée comme lieu de livraison si rien n'est saisi. */
-  const chooseClient = (id: string) => {
-    setClientId(id)
-    setDeliveryTerms((current) => current || clientAddress(clients.find((c) => c.id === id)))
-  }
-
-  /** Reprend un devis : client, articles, prix, remise et remarques, tout reste modifiable. */
-  const chooseQuote = (id: string) => {
-    setFormError("")
-    const quote = quotes.find((q) => q.id === id)
-    if (!quote) {
-      quoteRef.current = ""
-      setQuoteId("")
-      // le client venait du devis : plus de devis, plus de client
-      setClientId("")
-      setContract(null)
-      setLines([])
-      setDiscount("")
-      setNotes("")
-      setDeliveryDate("")
-      setDeliveryTerms("")
-      return
-    }
-    quoteRef.current = id
-    setQuoteId(id)
-    setClientId(quote.clientId)
-    setLines(quote.items.filter((i) => i.productVariantId).map((i) => ({ variantId: i.productVariantId as string, quantity: String(i.quantity), unitPrice: String(i.unitPrice) })))
-    setDiscount(String(quote.discount ?? 0))
-    setNotes(quote.notes ?? "")
-    const quoteDay = quote.requestedDeliveryDate ? dayInBrazzaville(new Date(quote.requestedDeliveryDate)) : ""
-    setDeliveryDate(quoteDay && quoteDay >= today ? quoteDay : "")
-    setDeliveryTerms(quote.deliveryTerms || clientAddress(clients.find((c) => c.id === quote.clientId)))
-  }
-
   const submitCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (submitting || !creatable) return
     const items = lines.filter((l) => l.variantId).map((l) => ({ productVariantId: l.variantId, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice) }))
-    if (fromQuotes && !quoteId && !editing) { setFormError("Choisissez le devis à transformer en bon de commande"); return }
     if (!clientId) { setFormError("Choisissez un client"); return }
     if (items.length === 0) { setFormError("Ajoutez au moins un article"); return }
     if (items.some((i) => !Number.isInteger(i.quantity) || i.quantity < 1)) { setFormError("Les quantités doivent être des nombres entiers"); return }
     if (discountValue < 0 || discountValue > subtotal) { setFormError("La remise ne peut pas dépasser le total"); return }
-    if (deliveryDate && deliveryDate < today) { setFormError("La date de livraison souhaitée est déjà passée"); return }
     const formType = editing?.type ?? creatable
     if (formType === "DEVIS" && validUntil && validUntil < today) { setFormError("La date de validité du devis est déjà passée"); return }
     setSubmitting(true)
@@ -508,7 +396,6 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
       items,
       notes,
       ...(formType === "DEVIS" ? { validUntil: validUntil ? `${validUntil}T23:59:59+01:00` : null } : {}),
-      ...(formType === "COMMANDE" ? { deliveryTerms, requestedDeliveryDate: deliveryDate ? `${deliveryDate}T12:00:00+01:00` : null } : {}),
     }
     try {
       const res = editing
@@ -520,8 +407,8 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
         : await fetch("/api/b2b-documents", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            // remise non saisie : le serveur applique celle du contrat ; bon de commande : le client vient du devis
-            body: JSON.stringify({ type: creatable, clientId, ...fields, ...(discount === "" ? {} : { discount: discountValue }), ...(quoteId ? { parentId: quoteId } : {}) }),
+            // remise non saisie : le serveur applique celle du contrat
+            body: JSON.stringify({ type: creatable, clientId, ...fields, ...(discount === "" ? {} : { discount: discountValue }) }),
           })
       const data = await res.json().catch(() => null)
       if (!res.ok) { setFormError(data?.error || (editing ? "Modification impossible" : "Création impossible")); return }
@@ -532,8 +419,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
         setEditing(null)
         return
       }
-      const quoteRefLabel = quotes.find((q) => q.id === quoteId)?.reference
-      setMessage(`${TYPE_LABEL[creatable].one} ${data.document.reference} créé en brouillon${quoteRefLabel ? ` à partir du devis ${quoteRefLabel}` : ""}.`)
+      setMessage(`${TYPE_LABEL[creatable].one} ${data.document.reference} créé en brouillon.`)
       setCreating(false)
       showDocument(creatable, data.document.id)
     } catch {
@@ -719,21 +605,17 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                     <Link href={`/admin/bons-b2b/${doc.id}/document`} className={`${actionButton} border-gray-300 bg-white text-gray-700 hover:bg-gray-50`}>
                       <Printer className="h-4 w-4" /> Voir
                     </Link>
-                    {canWrite && doc.status === "DRAFT" && (doc.type === "DEVIS" || doc.type === "COMMANDE") && (
+                    {canWrite && doc.status === "DRAFT" && doc.type === "DEVIS" && (
                       <button type="button" onClick={() => openEdit(doc)} disabled={busy !== null} className={`${actionButton} border-gray-300 bg-white text-gray-700 hover:bg-gray-50`}>
                         <Pencil className="h-4 w-4" /> {busy === `edit-${doc.id}` ? "Ouverture…" : "Modifier"}
                       </button>
                     )}
-                    {canWrite && doc.status === "DRAFT" && (doc.type === "DEVIS" || doc.type === "COMMANDE") && (
+                    {canWrite && doc.status === "DRAFT" && doc.type === "DEVIS" && (
                       <button type="button" onClick={() => act(doc, "send")} disabled={busy !== null} className={`${actionButton} border-gray-300 bg-white text-gray-700 hover:bg-gray-50`}>
                         <Send className="h-4 w-4" /> Envoyé au client
                       </button>
                     )}
-                    {canWrite && open && doc.type === "DEVIS" && !next && (
-                      <button type="button" onClick={() => act(doc, "confirm")} disabled={busy !== null} className={`${actionButton} border-green-300 bg-white text-green-700 hover:bg-green-50`}>
-                        <Check className="h-4 w-4" /> Accepté par le client
-                      </button>
-                    )}
+                    {/* devis validé par le client : le bouton principal crée directement sa facture */}
                     {canWrite && doc.type === "LIVRAISON" && open && (
                       <button type="button" onClick={() => act(doc, "confirm")} disabled={busy !== null} className={`${actionButton} border-green-300 bg-white text-green-700 hover:bg-green-50`}>
                         <Check className="h-4 w-4" /> Reçu par le client
@@ -797,7 +679,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
               <button type="button" onClick={() => setCreating(false)} aria-label="Fermer" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><X className="h-5 w-5" /></button>
             </div>
 
-            {/* modification : le client (et, pour un bon de commande, le devis d'origine) ne changent pas */}
+            {/* modification : le client ne change pas */}
             {editing && (
               <p className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
                 Client : <span className="font-semibold">{clients.find((c) => c.id === clientId)?.companyName || documents.find((d) => d.id === editing.id)?.clientName || "—"}</span>
@@ -805,36 +687,11 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
               </p>
             )}
 
-            {fromQuotes && !editing && (
-              <label className="mb-4 block text-sm font-medium text-gray-700">
-                Devis à reprendre
-                <select value={quoteId} onChange={(e) => chooseQuote(e.target.value)} required className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5">
-                  <option value="">{quotesLoaded ? "Choisir un devis…" : "Chargement des devis…"}</option>
-                  {quotes.map((q) => (
-                      <option key={q.id} value={q.id}>
-                        {`${q.reference} — ${q.clientName} — ${formatPrice(q.total)}${q.status === "DRAFT" ? "" : ` (${STATUS_LABEL[q.status]?.label.toLowerCase() ?? q.status})`}${q.expired ? " — validité dépassée" : ""}`}
-                      </option>
-                    ))}
-                </select>
-                <span className="mt-1 block text-xs font-normal text-gray-500">
-                  {quoteId
-                    ? (() => {
-                        const q = quotes.find((x) => x.id === quoteId)
-                        return `${q ? `Devis du ${formatDate(q.createdAt)}, ${q.items.length} article${q.items.length > 1 ? "s" : ""}. ` : ""}Articles, prix et remise repris du devis : vous pouvez encore les modifier. Le devis passera à « Confirmé ».`
-                      })()
-                    : quotesLoaded && quotes.length === 0
-                      ? "Aucun devis en attente de commande : établissez d'abord un devis (écran Devis)."
-                      : "Le client, les articles et les prix viennent du devis. Les devis déjà transformés, refusés ou annulés ne sont pas proposés."}
-                </span>
-              </label>
-            )}
-
-            {/* bon de commande : pas de champ client, il vient du devis choisi */}
-            {!fromQuotes && !editing && (
+            {!editing && (
               <>
                 <label className="block text-sm font-medium text-gray-700">
                   Client B2B
-                  <select value={clientId} onChange={(e) => chooseClient(e.target.value)} required className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5">
+                  <select value={clientId} onChange={(e) => setClientId(e.target.value)} required className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5">
                     <option value="">Choisir un client…</option>
                     {clients.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.tradeName || c.contactName || "Client"}</option>)}
                   </select>
@@ -851,15 +708,13 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
               </p>
             )}
 
-            {/* bon de commande : rien à saisir avant d'avoir choisi le devis, tout en découle */}
-            {(!fromQuotes || quoteId || editing) && (<>
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-700">
-                  {quoteId ? `Produits du devis ${quotes.find((q) => q.id === quoteId)?.reference ?? ""}` : "Articles"}
+                  Articles
                   {lines.length > 0 && <span className="font-normal text-gray-500"> ({lines.length})</span>}
                 </p>
-                <button type="button" onClick={() => setLines((current) => [...current, EMPTY_LINE])} disabled={fromQuotes && !quoteId && !editing} className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-gray-50 disabled:opacity-40">
+                <button type="button" onClick={() => setLines((current) => [...current, EMPTY_LINE])} className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-gray-50 disabled:opacity-40">
                   <Plus className="h-4 w-4" /> Ajouter un article
                 </button>
               </div>
@@ -868,7 +723,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                     (sinon son nom était coupé). Les titres restent visibles une fois les cases remplies. */}
                 {lines.length === 0 && (
                   <p className="rounded-lg border border-dashed border-gray-300 p-4 text-center text-sm text-gray-500">
-                    {fromQuotes && !quoteId && !editing ? "Choisissez un devis : ses produits s'afficheront ici." : "Aucun article : ajoutez-en un."}
+                    Aucun article : ajoutez-en un.
                   </p>
                 )}
                 {lines.length > 0 && (
@@ -904,7 +759,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                       <span className="font-normal text-gray-600 md:hidden">Total : </span>
                       {formatPrice((Number(line.quantity) || 0) * (Number(line.unitPrice) || 0))}
                     </p>
-                    <button type="button" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} disabled={!fromQuotes && lines.length === 1} aria-label="Retirer l'article" className="justify-self-end rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30">
+                    <button type="button" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} disabled={lines.length === 1} aria-label="Retirer l'article" className="justify-self-end rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30">
                       <Trash2 className="h-4 w-4" />
                     </button>
                     {activeContract?.prices.has(line.variantId) && (
@@ -919,23 +774,11 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {!fromQuotes && (
-                <label className="block text-sm font-medium text-gray-700">
-                  Devis valable jusqu&apos;au
-                  <input type="date" value={validUntil} min={today || undefined} onChange={(e) => setValidUntil(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5" />
-                  <span className="mt-1 block text-xs font-normal text-gray-500">30 jours par défaut. Passé cette date, le devis est signalé « validité dépassée ».</span>
-                </label>
-              )}
-              {fromQuotes && (<>
               <label className="block text-sm font-medium text-gray-700">
-                Livraison souhaitée le
-                <input type="date" value={deliveryDate} min={today || undefined} onChange={(e) => setDeliveryDate(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5" />
+                Devis valable jusqu&apos;au
+                <input type="date" value={validUntil} min={today || undefined} onChange={(e) => setValidUntil(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5" />
+                <span className="mt-1 block text-xs font-normal text-gray-500">30 jours par défaut. Passé cette date, le devis est signalé « validité dépassée ».</span>
               </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Lieu et conditions de livraison
-                <input type="text" value={deliveryTerms} onChange={(e) => setDeliveryTerms(e.target.value)} maxLength={500} placeholder="Adresse, horaire, personne à contacter…" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5" />
-              </label>
-              </>)}
               <label className="block text-sm font-medium text-gray-700">
                 Remise (FCFA)
                 <input type="number" min={0} step={1} value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder={autoDiscount > 0 ? String(autoDiscount) : "0"} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5" />
@@ -953,114 +796,15 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
               </label>
             </div>
 
-            {!fromQuotes && (
-              <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm">
-                <p className="flex justify-between text-gray-600"><span>Sous-total</span><span>{formatPrice(subtotal)}</span></p>
-                {discountValue > 0 && <p className="flex justify-between text-gray-600"><span>{discount === "" ? `Remise du contrat (${activeContract?.discountPercent} %)` : "Remise"}</span><span>− {formatPrice(discountValue)}</span></p>}
-                <p className="mt-1 flex justify-between text-lg font-bold text-gray-900"><span>Total</span><span>{formatPrice(Math.max(0, subtotal - discountValue))}</span></p>
-              </div>
-            )}
-
-            {fromQuotes && (() => {
-              const chosen = lines.filter((l) => l.variantId)
-              const units = chosen.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0)
-              const totalDue = Math.max(0, subtotal - discountValue)
-              const termsDays = activeContract ? activeContract.paymentTermsDays : 30
-              const dueDate = today ? formatDate(new Date(new Date(`${today}T12:00:00+01:00`).getTime() + termsDays * 864e5).toISOString()) : ""
-              const client = clients.find((c) => c.id === clientId)
-              const creditLimit = client?.creditLimit ?? null
-              const owed = (openInvoices ?? []).filter((i) => i.clientId === clientId).reduce((sum, i) => sum + Math.max(0, i.balance), 0)
-              const late = (openInvoices ?? []).filter((i) => i.clientId === clientId && i.overdue).reduce((sum, i) => sum + Math.max(0, i.balance), 0)
-              const after = owed + totalDue
-              const row = "flex justify-between gap-3 py-1"
-              return (
-                <div className="mt-4 space-y-3">
-                  <section className="rounded-lg border border-gray-200 p-3 text-sm">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Récapitulatif des produits commandés</h3>
-                    {chosen.length === 0 ? (
-                      <p className="mt-2 text-gray-500">Aucun produit pour l&apos;instant.</p>
-                    ) : (
-                      <table className="mt-2 w-full text-left">
-                        <thead>
-                          <tr className="border-b border-gray-200 text-xs text-gray-500">
-                            <th className="py-1 font-medium">Produit</th>
-                            <th className="py-1 text-right font-medium">Qté</th>
-                            <th className="py-1 text-right font-medium">Montant</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {chosen.map((l, i) => {
-                            const q = Number(l.quantity) || 0
-                            const pu = Number(l.unitPrice) || 0
-                            return (
-                              <tr key={i} className="border-b border-gray-100 align-top">
-                                <td className="py-1.5 pr-2 text-gray-800">
-                                  {variants.find((v) => v.id === l.variantId)?.label ?? "Produit"}
-                                  <span className="block text-xs text-gray-500">{formatPrice(pu)} l&apos;unité</span>
-                                </td>
-                                <td className="whitespace-nowrap py-1.5 text-right">{q}</td>
-                                <td className="whitespace-nowrap py-1.5 text-right font-medium">{formatPrice(q * pu)}</td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr className="text-gray-700">
-                            <td className="pt-2">{chosen.length} produit{chosen.length > 1 ? "s" : ""}</td>
-                            <td className="whitespace-nowrap pt-2 text-right">{units} unité{units > 1 ? "s" : ""}</td>
-                            <td className="whitespace-nowrap pt-2 text-right font-semibold">{formatPrice(subtotal)}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    )}
-                    {(deliveryDate || deliveryTerms) && (
-                      <p className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-600">
-                        Livraison{deliveryDate ? ` souhaitée le ${formatDate(`${deliveryDate}T12:00:00+01:00`)}` : ""}{deliveryTerms ? ` · ${deliveryTerms}` : ""}
-                      </p>
-                    )}
-                  </section>
-
-                  <section className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Informations financières</h3>
-                    <div className="mt-2 text-gray-700">
-                      <p className={row}><span>Sous-total</span><span>{formatPrice(subtotal)}</span></p>
-                      {discountValue > 0 && (
-                        <p className={row}>
-                          <span>{discount === "" ? `Remise du contrat (${activeContract?.discountPercent} %)` : `Remise (${(subtotal > 0 ? Math.round((discountValue / subtotal) * 1000) / 10 : 0).toLocaleString("fr-FR")} %)`}</span>
-                          <span>− {formatPrice(discountValue)}</span>
-                        </p>
-                      )}
-                      <p className={`${row} border-t border-gray-300 text-lg font-bold text-gray-900`}><span>Total à payer</span><span>{formatPrice(totalDue)}</span></p>
-                      <p className={row}><span>Paiement</span><span className="text-right">à {termsDays} jour{termsDays > 1 ? "s" : ""} après la facture{activeContract ? " (contrat)" : " (sans contrat)"}</span></p>
-                      {dueDate && <p className={row}><span>Échéance si facturée aujourd&apos;hui</span><span>{dueDate}</span></p>}
-                      {clientId && (
-                        <>
-                          <p className={`${row} mt-1 border-t border-gray-200`}><span>Plafond de crédit du client</span><span>{creditLimit ? formatPrice(creditLimit) : "non défini"}</span></p>
-                          <p className={row}>
-                            <span>Encours actuel{late > 0 ? ` (dont ${formatPrice(late)} en retard)` : ""}</span>
-                            <span>{openInvoices === null ? "—" : formatPrice(owed)}</span>
-                          </p>
-                          <p className={`${row} font-semibold`}><span>Encours après cette commande</span><span>{openInvoices === null ? "—" : formatPrice(after)}</span></p>
-                          {creditLimit !== null && creditLimit > 0 && openInvoices !== null && after > creditLimit && (
-                            <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
-                              Le plafond de crédit est dépassé de {formatPrice(after - creditLimit)}.
-                            </p>
-                          )}
-                          {late > 0 && (
-                            <p className="mt-1 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-800">Ce client a des factures en retard de paiement.</p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </section>
-                </div>
-              )
-            })()}
+            <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm">
+              <p className="flex justify-between text-gray-600"><span>Sous-total</span><span>{formatPrice(subtotal)}</span></p>
+              {discountValue > 0 && <p className="flex justify-between text-gray-600"><span>{discount === "" ? `Remise du contrat (${activeContract?.discountPercent} %)` : "Remise"}</span><span>− {formatPrice(discountValue)}</span></p>}
+              <p className="mt-1 flex justify-between text-lg font-bold text-gray-900"><span>Total</span><span>{formatPrice(Math.max(0, subtotal - discountValue))}</span></p>
+            </div>
 
             {activeContract && activeContract.minOrderAmount > 0 && subtotal > 0 && subtotal - discountValue < activeContract.minOrderAmount && (
               <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Le contrat prévoit une commande minimum de {formatPrice(activeContract.minOrderAmount)} : ce document est en dessous.</p>
             )}
-            </>)}
 
             {formError && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</p>}
 

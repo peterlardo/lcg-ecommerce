@@ -306,7 +306,7 @@ export default function ProduitsPage() {
       if (editingId === id) setForm((prev) => ({ ...prev, isActive }))
       setNotice(
         isActive
-          ? `« ${name} » est actif : visible sur le site, en caisse (Ventes) et dans les devis et bons de commande.`
+          ? `« ${name} » est actif : visible sur le site, en caisse (Ventes) et dans les devis.`
           : `« ${name} » est désactivé : masqué du site, de la caisse et des devis.`
       )
       await fetchProducts()
@@ -686,8 +686,8 @@ export default function ProduitsPage() {
                 <p className={`text-sm ${form.isActive ? "text-green-800" : "text-red-800"}`}>
                   <span className="font-bold">{form.isActive ? "Produit actif" : "Produit inactif"}</span>
                   {form.isActive
-                    ? " : visible sur le site, en caisse (Ventes) et dans les devis et bons de commande."
-                    : " : il n'apparaît ni sur le site, ni en caisse (Ventes), ni dans les devis et bons de commande."}
+                    ? " : visible sur le site, en caisse (Ventes) et dans les devis."
+                    : " : il n'apparaît ni sur le site, ni en caisse (Ventes), ni dans les devis."}
                 </p>
                 {form.isActive ? (
                   <button type="button" onClick={() => setActive(editingId, form.name, false)} disabled={toggling}

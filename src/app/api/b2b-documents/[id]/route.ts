@@ -30,7 +30,7 @@ async function getDocOrNull(id: string, userId: string, role: string, seesAll: b
       items: { include: { productVariant: { include: { product: { select: { name: true } } } } }, orderBy: { createdAt: "asc" } },
       client: true,
       parent: { select: { id: true, reference: true, type: true, deliveredAt: true, createdAt: true } },
-      children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true, total: true, createdAt: true, notes: true } },
+      children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true, status: true, total: true, createdAt: true, notes: true } },
     },
   })
   if (!doc) return { doc: null, status: 404 as const }
@@ -277,11 +277,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (action === "transform") {
     // La cible se dérive TOUJOURS du type du document : le client ne choisit
     // jamais la cible (un body.target éventuel est ignoré).
-    // Chaîne de vente : devis → bon de commande → facture → bon de livraison (facture entièrement payée).
-    // Un bon de livraison de l'ancienne chaîne (établi depuis une commande) se facture encore.
+    // Chaîne de vente : devis validé par le client → facture → bon de livraison (facture entièrement payée).
+    // Ancienne chaîne, encore servie : un bon de commande existant se facture, ainsi qu'un bon de
+    // livraison établi depuis une commande.
     const legacyDelivery = doc.type === "LIVRAISON" && doc.parent?.type === "COMMANDE"
-    const toType = ({ DEVIS: "COMMANDE", COMMANDE: "FACTURE", FACTURE: "LIVRAISON" } as Record<string, string>)[doc.type] ?? (legacyDelivery ? "FACTURE" : undefined)
+    const toType = ({ DEVIS: "FACTURE", COMMANDE: "FACTURE", FACTURE: "LIVRAISON" } as Record<string, string>)[doc.type] ?? (legacyDelivery ? "FACTURE" : undefined)
     if (!toType) return NextResponse.json({ error: "Ce document est le dernier de la chaîne" }, { status: 400 })
+    // Le bon de commande est retiré de la chaîne. Un devis repris dans un ancien bon de commande déjà
+    // facturé l'est par ce bon ; un ancien bon de commande non facturé est annulé, remplacé par la facture.
+    const legacyOrder = doc.type === "DEVIS" ? doc.children.find((c) => c.type === "COMMANDE") : undefined
+    if (legacyOrder?.status === "INVOICED") {
+      return NextResponse.json({ error: `${doc.reference} est déjà facturé (par l'ancien bon de commande ${legacyOrder.reference})` }, { status: 400 })
+    }
     // Un document déjà transformé (document suivant non annulé) ne peut pas l'être une seconde fois :
     // pas de double sortie de stock ni de double facture. Les avoirs d'une facture ne comptent pas.
     const alreadyTransformed = await prisma.b2bDocument.count({
@@ -301,7 +308,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json({ error: `Le bon de livraison s'établit une fois la facture payée : il reste ${formatPrice(situation.balance)} à encaisser${situation.pending > 0 ? " (ou à valider)" : ""}` }, { status: 400 })
       }
     } else if (doc.status !== "CONFIRMED" && doc.status !== "DRAFT" && doc.status !== "SENT") {
-      // un document envoyé au client se transforme aussi (même règle que le formulaire de bon de commande)
+      // un devis envoyé au client se transforme aussi
       return NextResponse.json({ error: "Le document doit être en brouillon, envoyé ou confirmé pour être transformé" }, { status: 400 })
     }
     if (doc.items.some((i) => !i.productVariantId)) {
@@ -313,6 +320,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const pointOfSaleId = stockLocations.find((l) => l.code === COMPTOIR_CODE)?.id
 
       const created = await prisma.$transaction(async (tx) => {
+        if (legacyOrder) {
+          await tx.b2bDocument.update({
+            where: { id: legacyOrder.id },
+            data: { status: "CANCELLED", cancelledAt: new Date(), cancelledById: selfId, cancelReason: "Bon de commande retiré de la chaîne : remplacé par la facture du devis" },
+          })
+        }
         const reference = await nextDocumentReference(tx, REF_PREFIX[toType] as "BC" | "BL" | "FAC")
         // Le bon de LIVRAISON débite le stock physique du Comptoir (même helper que la
         // vente) : la marchandise part. Stock insuffisant → exception → rollback → 400.

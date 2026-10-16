@@ -75,7 +75,7 @@ const navGroups = [
       { href: "/admin/commercial", label: "Tableau de bord commercial", icon: BriefcaseBusiness },
       { href: "/admin/nouveau-client", label: "Nouveau client", icon: UserPlus },
       { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
-      { href: "/admin/bons-b2b", label: "Commandes, livraisons, factures", icon: ReceiptText },
+      { href: "/admin/bons-b2b", label: "Factures et livraisons", icon: ReceiptText },
       { href: "/admin/creances", label: "Créances", icon: HandCoins },
       { href: "/admin/encaissements", label: "Encaissements", icon: Banknote },
       { href: "/admin/contrats-b2b", label: "Contrats B2B", icon: FileSignature },
@@ -145,7 +145,7 @@ const commercialLinks: NavLink[] = [
     ],
   },
   { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
-  { href: "/admin/bons-b2b", label: "Commandes, livraisons, factures", icon: ReceiptText },
+  { href: "/admin/bons-b2b", label: "Factures et livraisons", icon: ReceiptText },
   {
     href: "/admin/creances",
     label: "Créances",

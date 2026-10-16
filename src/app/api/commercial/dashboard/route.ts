@@ -29,16 +29,18 @@ export async function GET() {
     const thisMonth = { gte: start, lt: end }
 
     const [
-      ca, target, inProgress, newClients, contractsActive, contractsCreated, encaissements, devisOuverts,
-      paiementsPending, promesses, commandesRecues, bonsLivraison, factures, avoirs, recentDevis, recentLivraisons, lines,
+      ca, target, avoirsMois, newClients, contractsActive, contractsCreated, encaissements, devisOuverts,
+      paiementsPending, promesses, bonsLivraison, factures, avoirs, recentDevis, recentLivraisons, lines,
     ] = await Promise.all([
-      // chiffre d'affaires du mois : bons de commande confirmés, livrés ou facturés
+      // chiffre d'affaires du mois : factures émises ce mois-ci (chaîne devis → facture → livraison)
       prisma.b2bDocument.aggregate({
-        where: { type: "COMMANDE", status: { in: ["CONFIRMED", "DELIVERED", "INVOICED"] }, createdAt: thisMonth, ...inScope },
+        where: { type: "FACTURE", status: "INVOICED", createdAt: thisMonth, ...inScope },
         _sum: { total: true },
+        _count: { _all: true },
       }),
       prisma.commercialTarget.findUnique({ where: { userId_yearMonth: { userId: selfId, yearMonth } } }),
-      prisma.b2bDocument.count({ where: { type: "COMMANDE", status: { in: ["DRAFT", "SENT"] }, ...inScope } }),
+      // avoirs du mois : déduits du chiffre d'affaires du mois
+      prisma.b2bDocument.aggregate({ where: { type: "AVOIR", status: "INVOICED", createdAt: thisMonth, ...inScope }, _sum: { total: true } }),
       prisma.client.count({ where: { type: "B2B", createdAt: { gte: start }, ...scope } }),
       prisma.b2bContract.count({ where: { status: "ACTIVE", ...inScope } }),
       prisma.b2bContract.count({ where: { createdAt: thisMonth, ...inScope } }),
@@ -46,13 +48,20 @@ export async function GET() {
         where: { validationStatus: "VALIDATED", createdAt: thisMonth, b2bDocument: { is: inScope } },
         _sum: { amount: true },
       }),
-      prisma.b2bDocument.count({ where: { type: "DEVIS", status: { in: ["SENT", "CONFIRMED"] }, ...inScope } }),
+      // devis en attente de la validation du client : ouverts et pas encore facturés
+      prisma.b2bDocument.count({
+        where: {
+          type: "DEVIS",
+          status: { in: ["DRAFT", "SENT", "CONFIRMED"] },
+          children: { none: { type: { in: ["FACTURE", "COMMANDE"] }, status: { not: "CANCELLED" } } },
+          ...inScope,
+        },
+      }),
       prisma.customerPayment.aggregate({
         where: { validationStatus: "PENDING", b2bDocument: { is: inScope } },
         _sum: { amount: true },
       }),
       prisma.paymentPromise.aggregate({ where: { status: "PENDING", b2bDocument: { is: inScope } }, _sum: { amount: true } }),
-      prisma.b2bDocument.count({ where: { type: "COMMANDE", status: { not: "CANCELLED" }, ...inScope } }),
       prisma.b2bDocument.count({ where: { type: "LIVRAISON", status: { not: "CANCELLED" }, ...inScope } }),
       prisma.b2bDocument.aggregate({ where: { type: "FACTURE", status: "INVOICED", ...inScope }, _count: { _all: true }, _sum: { total: true } }),
       // avoirs émis : ils viennent en déduction du montant facturé
@@ -72,27 +81,19 @@ export async function GET() {
       creanceLines(user),
     ])
 
-    // derniers bons de commande et dernières factures (avec leur état de paiement)
-    const [recentCommandes, recentFactures] = await Promise.all([
-      prisma.b2bDocument.findMany({
-        where: { type: "COMMANDE", ...inScope },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        select: { id: true, reference: true, status: true, total: true, createdAt: true, client: { select: clientNames } },
-      }),
-      prisma.b2bDocument.findMany({
-        where: { type: "FACTURE", ...inScope },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        select: {
-          id: true, reference: true, status: true, total: true, createdAt: true, client: { select: clientNames },
-          payments: { select: { amount: true, validationStatus: true } },
-          children: INVOICE_CREDITS,
-        },
-      }),
-    ])
+    // dernières factures (avec leur état de paiement)
+    const recentFactures = await prisma.b2bDocument.findMany({
+      where: { type: "FACTURE", ...inScope },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        id: true, reference: true, status: true, total: true, createdAt: true, client: { select: clientNames },
+        payments: { select: { amount: true, validationStatus: true } },
+        children: INVOICE_CREDITS,
+      },
+    })
 
-    const caMonth = ca._sum.total ?? 0
+    const caMonth = Math.round(((ca._sum.total ?? 0) - (avoirsMois._sum.total ?? 0)) * 100) / 100
     const targetAmount = target?.targetAmount ?? 0
     const recent = (rows: typeof recentDevis) =>
       rows.map((r) => ({ id: r.id, reference: r.reference, status: r.status, clientName: clientDisplayName(r.client), total: r.total, createdAt: r.createdAt.toISOString() }))
@@ -111,7 +112,8 @@ export async function GET() {
         ca: caMonth,
         target: targetAmount,
         rate: targetAmount > 0 ? Math.round((caMonth / targetAmount) * 1000) / 10 : null,
-        inProgress,
+        /** factures émises ce mois-ci */
+        facturesMois: ca._count._all,
         newClients,
         contractsActive,
         contractsCreated,
@@ -121,14 +123,12 @@ export async function GET() {
         promesses: promesses._sum.amount ?? 0,
         receivables: Math.round(lines.reduce((s, l) => s + Math.max(0, l.balance), 0) * 100) / 100,
         toRemind: lines.filter((l) => l.overdue).length,
-        commandesRecues,
         bonsLivraison,
         facturesCount: factures._count._all,
         facturesMontant: Math.round(((factures._sum.total ?? 0) - (avoirs._sum.total ?? 0)) * 100) / 100,
         avoirsMontant: avoirs._sum.total ?? 0,
         recentDevis: recent(recentDevis),
         recentLivraisons: recent(recentLivraisons),
-        recentCommandes: recent(recentCommandes),
         recentFactures: invoiceRows,
       },
     })

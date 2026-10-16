@@ -30,7 +30,7 @@ interface CommercialDashboard {
   ca: number
   target: number
   rate: number | null
-  inProgress: number
+  facturesMois: number
   newClients: number
   contractsActive: number
   contractsCreated: number
@@ -40,13 +40,11 @@ interface CommercialDashboard {
   promesses: number
   receivables: number
   toRemind: number
-  commandesRecues: number
   bonsLivraison: number
   facturesCount: number
   facturesMontant: number
   recentDevis: RecentDocument[]
   recentLivraisons: RecentDocument[]
-  recentCommandes?: RecentDocument[]
   recentFactures?: RecentDocument[]
 }
 
@@ -189,7 +187,7 @@ export default function CommercialDashboardPage() {
       {dash && (
         <>
           <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
-            <Kpi label="Chiffre d'affaires du mois" value={formatPrice(dash.ca)} hint={`${dash.inProgress} commande${dash.inProgress > 1 ? "s" : ""} en cours`} />
+            <Kpi label="Chiffre d'affaires du mois" value={formatPrice(dash.ca)} hint={`${dash.facturesMois} facture${dash.facturesMois > 1 ? "s" : ""} émise${dash.facturesMois > 1 ? "s" : ""} ce mois-ci`} />
             {dash.target > 0 && (
               <Kpi label="Objectif du mois" value={formatPrice(dash.target)} hint={`Réalisé à ${dash.rate ?? 0} %`} />
             )}
@@ -204,8 +202,7 @@ export default function CommercialDashboardPage() {
             <Kpi label="Promesses de paiement" value={formatPrice(dash.promesses)} hint="en cours" />
             <Kpi label="Contrats actifs" value={dash.contractsActive} hint={`${dash.contractsCreated} créé${dash.contractsCreated > 1 ? "s" : ""} ce mois-ci`} />
             <Kpi label="Nouveaux clients B2B" value={dash.newClients} hint="ce mois-ci" />
-            <Kpi label="Devis ouverts" value={dash.devisOuverts} hint="à convertir en commande" />
-            <Kpi label="Bons de commande" value={dash.commandesRecues} hint="reçus, hors annulés" />
+            <Kpi label="Devis ouverts" value={dash.devisOuverts} hint="en attente de la validation du client" />
             <Kpi label="Bons de livraison" value={dash.bonsLivraison} hint="émis, hors annulés" />
             <Kpi label="Factures émises" value={dash.facturesCount} hint={formatPrice(dash.facturesMontant)} />
           </div>
@@ -220,9 +217,8 @@ export default function CommercialDashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-            {/* dans l'ordre de la chaîne : devis → bon de commande → facture → bon de livraison */}
+            {/* dans l'ordre de la chaîne : devis → facture → bon de livraison */}
             <RecentTable title="Devis récents" empty="Aucun devis" rows={dash.recentDevis} seeAll="/admin/devis-b2b" />
-            <RecentTable title="Bons de commande récents" empty="Aucun bon de commande" rows={dash.recentCommandes ?? []} seeAll="/admin/bons-b2b?type=COMMANDE" />
             <RecentTable title="Factures récentes" empty="Aucune facture" rows={dash.recentFactures ?? []} seeAll="/admin/bons-b2b?type=FACTURE" />
             <RecentTable title="Bons de livraison récents" empty="Aucun bon de livraison" rows={dash.recentLivraisons} seeAll="/admin/bons-b2b?type=LIVRAISON" />
           </div>

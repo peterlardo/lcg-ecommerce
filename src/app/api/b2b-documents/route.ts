@@ -20,7 +20,7 @@ const REF_PREFIX: Record<string, string> = {
 }
 
 /** Documents qui se saisissent ; les autres naissent du document précédent de la chaîne. */
-const CREATABLE_TYPES = ["DEVIS", "COMMANDE"]
+const CREATABLE_TYPES = ["DEVIS"]
 
 const DOCUMENT_STATUSES =["DRAFT", "SENT", "CONFIRMED", "REJECTED", "DELIVERED", "INVOICED", "CANCELLED"]
 
@@ -108,7 +108,7 @@ export async function GET(req: Request) {
           client: { select: { id: true, companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true } },
           parent: { select: { id: true, reference: true, type: true } },
           // document suivant de la chaîne (devis -> commande -> livraison -> facture), s'il existe
-          children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true, total: true } },
+          children: { where: { status: { not: "CANCELLED" } }, select: { id: true, reference: true, type: true, status: true, total: true } },
           _count: { select: { items: true } },
           // factures : règlements validés, pour afficher « payée / reste à payer » dans la liste
           payments: { where: { validationStatus: "VALIDATED" }, select: { amount: true } },
@@ -156,10 +156,14 @@ export async function POST(req: Request) {
     }
 
     const docType = String(body.type ?? "").toUpperCase()
-    // Chaîne de vente : devis → bon de commande → facture → bon de livraison. Seuls le devis et le bon de
-    // commande se saisissent ; la facture naît du bon de commande, le bon de livraison de la facture payée.
+    // Chaîne de vente : devis → facture → bon de livraison. Seul le devis se saisit ; la facture naît du
+    // devis validé par le client, le bon de livraison de la facture payée. Le bon de commande n'est plus utilisé.
     if (!CREATABLE_TYPES.includes(docType)) {
-      return NextResponse.json({ error: docType === "FACTURE" || docType === "LIVRAISON" ? "Une facture se crée depuis son bon de commande, un bon de livraison depuis sa facture payée" : "Type de document invalide" }, { status: 400 })
+      return NextResponse.json({
+        error: docType === "FACTURE" || docType === "LIVRAISON" || docType === "COMMANDE"
+          ? "Une facture se crée depuis son devis validé par le client, un bon de livraison depuis sa facture payée"
+          : "Type de document invalide",
+      }, { status: 400 })
     }
     // le bon de commande naît toujours d'un devis : c'est le devis qui donne le client
     if (docType === "COMMANDE" && !body.parentId) {

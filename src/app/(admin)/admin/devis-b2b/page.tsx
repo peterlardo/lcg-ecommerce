@@ -4,7 +4,7 @@ export default function DevisB2bPage() {
   return (
     <B2bDocumentsScreen
       title="Devis"
-      subtitle="Première étape de la vente B2B : le devis. Accepté par le client, il devient un bon de commande, puis une facture."
+      subtitle="Première étape de la vente B2B : le devis. Validé par le client, il donne lieu à la facture, puis au bon de livraison une fois la facture payée."
       types={["DEVIS"]}
       creatable="DEVIS"
     />

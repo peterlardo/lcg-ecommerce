@@ -88,7 +88,7 @@ const DOC_TEXT: Record<DocType, { number: string; client: string; arrete: string
     number: "N° Devis",
     client: "Devis établi pour",
     arrete: "Arrêté le présent devis",
-    conditions: "Ce devis est sans engagement de vente. Il est confirmé par sa transformation en bon de commande.",
+    conditions: "Ce devis est sans engagement de vente. Validé par le client, il donne lieu à la facture.",
   },
   COMMANDE: {
     number: "N° Commande",
@@ -133,6 +133,7 @@ const fieldClass = "mt-1 w-full min-h-11 rounded-lg border border-gray-300 px-3 
 
 /** Avertissement avant l'étape suivante (ce qui devient irréversible). */
 const NEXT_WARNING: Partial<Record<DocType, string>> = {
+  DEVIS: "Le client a validé ce devis. La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
   COMMANDE: "La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
   FACTURE: "Les quantités sortiront du stock du comptoir.",
   LIVRAISON: "La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
