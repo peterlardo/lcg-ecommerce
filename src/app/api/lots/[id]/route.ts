@@ -135,10 +135,12 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Lot introuvable" }, { status: 404 })
     }
 
-    // Seul un lot épuisé se supprime : il ne porte plus aucun stock, donc rien ne bouge dans les points de vente.
-    // Un lot actif ou expiré a encore du stock : il se corrige par une perte ou un ajustement, pas par une suppression.
-    if (lot.status !== "EXHAUSTED" || lot.remainingQuantity > 0) {
-      return NextResponse.json({ error: "Seul un lot epuise peut etre supprime" }, { status: 400 })
+    // Se suppriment : un lot épuisé (plus aucun stock), et un lot expiré (il n'est plus vendable).
+    // Un lot actif se corrige par une perte ou un ajustement, pas par une suppression.
+    // Supprimer un lot ne change aucune quantité dans les points de vente.
+    const exhausted = lot.status === "EXHAUSTED" && lot.remainingQuantity <= 0
+    if (!exhausted && lot.status !== "EXPIRED") {
+      return NextResponse.json({ error: "Seul un lot épuisé ou expiré peut être supprimé" }, { status: 400 })
     }
 
     // Les allocations du lot partent avec lui. Les mouvements de stock et les lignes de vente sont
@@ -150,7 +152,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       action: "suppression",
       entity: "ProductionLot",
       entityId: id,
-      summary: `Suppression du lot épuisé ${lot.lotNumber} (${lot.initialQuantity} unités produites)`,
+      summary: exhausted
+        ? `Suppression du lot épuisé ${lot.lotNumber} (${lot.initialQuantity} unités produites)`
+        : `Suppression du lot expiré ${lot.lotNumber} (${lot.initialQuantity} unités produites, reste ${lot.remainingQuantity})`,
     })
 
     return NextResponse.json({ ok: true })

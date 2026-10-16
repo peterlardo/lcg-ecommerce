@@ -194,8 +194,11 @@ export default function LotsPage() {
     await load()
   }
 
-  const deleteLot = async (lotId: string) => {
-    if (!confirm("Supprimer ce lot epuise ?\n\nSon historique d'allocations sera efface. Les ventes et les mouvements de stock sont conserves.")) return
+  const deleteLot = async (lotId: string, expired = false) => {
+    const message = expired
+      ? "Supprimer ce lot expiré ?\n\nLe stock des points de vente ne change pas : si des produits de ce lot ont été jetés, sortez-les aussi du stock par une perte. Les ventes et les mouvements de stock sont conservés."
+      : "Supprimer ce lot epuise ?\n\nSon historique d'allocations sera efface. Les ventes et les mouvements de stock sont conserves."
+    if (!confirm(message)) return
     setError("")
     const res = await fetch(`/api/lots/${lotId}`, { method: "DELETE" })
     if (!res.ok) {
@@ -401,8 +404,8 @@ export default function LotsPage() {
                     <button onClick={updateLot} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100">
                       Enregistrer
                     </button>
-                    {selectedLot.status === "EXHAUSTED" && (
-                      <button onClick={() => deleteLot(selectedLot.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+                    {(selectedLot.status === "EXHAUSTED" || selectedLot.status === "EXPIRED") && (
+                      <button onClick={() => deleteLot(selectedLot.id, selectedLot.status === "EXPIRED")} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
                         <Trash2 className="h-3 w-3" /> Supprimer
                       </button>
                     )}
