@@ -271,7 +271,7 @@ export default function DashboardPage() {
   const soldToday = summary?.todayOrdersDelivered ?? 0
   const stats: { label: string; value: string; detail: string; icon: typeof Clock; tone: string; href?: string; hrefLabel?: string }[] = [
     { label: "Ventes du jour", value: formatPrice(summary?.todayRevenue ?? 0), detail: `Chiffre d'affaires de ${soldToday} commande${soldToday > 1 ? "s" : ""} payée${soldToday > 1 ? "s" : ""} ou livrée${soldToday > 1 ? "s" : ""}`, icon: CircleDollarSign, tone: "text-emerald-600 bg-emerald-100" },
-    { label: "Commandes du jour", value: String(summary?.todayOrders ?? 0), detail: `${soldToday} vendue${soldToday > 1 ? "s" : ""} · ${summary?.todayWaiting ?? pendingOrders.length} en attente`, icon: ShoppingCart, tone: "text-primary bg-primary/10", href: todayOrdersHref, hrefLabel: "Voir les commandes du jour" },
+    { label: "Commandes du jour", value: String(summary?.todayOrders ?? 0), detail: `${soldToday} vendue${soldToday > 1 ? "s" : ""} · ${summary?.todayWaiting ?? pendingOrders.length} en attente`, icon: ShoppingCart, tone: "text-primary bg-primary/10", href: todayOrdersHref, hrefLabel: "Voir les commandes" },
     { label: "Articles vendus", value: String(summary?.todayItems ?? 0), detail: `Payés ou livrés · hier : ${summary?.yesterdayItems ?? 0}`, icon: Boxes, tone: "text-green-600 bg-green-100" },
     { label: "Commandes en attente", value: String(pendingOrders.length), detail: pendingOrders.length > 0 ? "Du jour, à traiter" : "Aucune commande en attente aujourd'hui", icon: Clock, tone: "text-yellow-600 bg-yellow-100" },
     { label: "Livraisons du jour", value: String(summary?.deliveredToday ?? 0), detail: `${summary?.todayInDelivery ?? 0} en cours de livraison`, icon: Truck, tone: "text-orange-600 bg-orange-100" },
@@ -354,7 +354,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-5">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (
@@ -365,8 +365,8 @@ export default function DashboardPage() {
               </div>
               <p className="mt-3 text-xs text-muted-foreground sm:mt-4">{stat.detail}</p>
               {stat.href && (
-                <Link href={stat.href} className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 text-sm font-semibold text-primary hover:bg-primary/10">
-                  {stat.hrefLabel} <ArrowRight className="h-4 w-4" />
+                <Link href={stat.href} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-2 py-2 text-center text-sm font-semibold leading-tight text-white shadow-sm hover:opacity-90">
+                  <span>{stat.hrefLabel}</span>
                 </Link>
               )}
               {stat.label === "Articles vendus" && todayArticles.length > 0 && (
