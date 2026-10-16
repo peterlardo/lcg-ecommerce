@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, getUserPointOfSaleIds, saleMovementsFilter, isComptable, b2bOrderScope, seesOnlyOwnOrders } from "@/lib/api-auth"
@@ -530,7 +531,7 @@ export async function GET(request: Request) {
       count: activeAllDelivered.filter((o) => o.paymentMethod === method).length,
     }))
 
-    const stockAlerts = variants.filter((v) => v.stock <= 20).map((v) => ({
+    const stockAlerts = variants.filter((v) => v.stock <= LOW_STOCK_THRESHOLD).map((v) => ({
       variantId: v.id, productName: v.product.name, format: v.format, stock: v.stock, categoryName: v.product.category?.name ?? "Sans categorie",
     })).sort((a, b) => a.stock - b.stock)
 

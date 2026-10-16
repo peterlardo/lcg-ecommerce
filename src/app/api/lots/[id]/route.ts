@@ -4,6 +4,7 @@ import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from 
 import { auth } from "@/lib/auth"
 import { LOT_STATUSES } from "@/lib/lot-input"
 import { logActivity } from "@/lib/activity"
+import { startOfToday } from "@/lib/lot-utils"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const forbidden = await requireManagementAccess(undefined, [["production", "lots", "tracabilite"], "view"])
@@ -95,16 +96,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Statut de lot inconnu" }, { status: 400 })
     }
 
+    const newExpiry = expiryDate !== undefined ? (expiryDate ? new Date(expiryDate) : null) : undefined
+    if (newExpiry && Number.isNaN(newExpiry.getTime())) {
+      return NextResponse.json({ error: "Date de péremption invalide" }, { status: 400 })
+    }
+    // Repousser la péremption d'un lot expiré (aujourd'hui ou plus tard, ou sans date) le rend de
+    // nouveau vendable ; sans cela, il restait « expiré » et la caisse refusait toujours la vente.
+    const reactivated = !status && newExpiry !== undefined && lot.status === "EXPIRED" && lot.remainingQuantity > 0
+      && (newExpiry === null || newExpiry >= startOfToday())
+
     const updated = await getPrisma().productionLot.update({
       where: { id },
       data: {
-        ...(status ? { status } : {}),
-        ...(expiryDate !== undefined ? { expiryDate: expiryDate ? new Date(expiryDate) : null } : {}),
+        ...(status ? { status } : reactivated ? { status: "ACTIVE" } : {}),
+        ...(newExpiry !== undefined ? { expiryDate: newExpiry } : {}),
         ...(notes !== undefined ? { notes } : {}),
       },
     })
+    if (reactivated) {
+      await logActivity({ module: "production", action: "Réactivation", entity: "ProductionLot", entityId: id, summary: `Lot ${lot.lotNumber} de nouveau vendable : péremption repoussée` })
+    }
 
-    return NextResponse.json({ lot: updated })
+    return NextResponse.json({ lot: updated, reactivated })
   } catch (error) {
     console.error("PATCH lots error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })

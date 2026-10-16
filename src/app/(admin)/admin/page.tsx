@@ -25,6 +25,7 @@ import {
   Truck,
 } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
+import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
 
 interface ReportData {
   summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; todayDeliveries: number; todayReservations: number; todayReservationsPending: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string; todayInDelivery: number; todayConfirmed: number; todayItems: number; yesterdayItems: number; todayProducts: { name: string; quantity: number; revenue: number }[]; todayWaiting?: number; todaySalesByCashier?: { id: string | null; name: string; sales: number; items: number; revenue: number; byMethod: Record<string, number> }[] }
@@ -772,7 +773,7 @@ export default function DashboardPage() {
                   <p className="truncate text-sm font-medium text-foreground">{alert.productName}</p>
                   <p className="min-w-0 text-xs text-muted-foreground">{alert.format} · {alert.categoryName}</p>
                 </div>
-                <div className={`ml-3 shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${alert.stock <= 0 ? "bg-red-100 text-red-700" : alert.stock <= 10 ? "bg-orange-100 text-orange-700" : "bg-yellow-100 text-yellow-700"}`}>
+                <div className={`ml-3 shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${alert.stock <= 0 ? "bg-red-100 text-red-700" : alert.stock <= LOW_STOCK_THRESHOLD ? "bg-orange-100 text-orange-700" : "bg-yellow-100 text-yellow-700"}`}>
                   {alert.stock <= 0 ? "Rupture" : `${alert.stock} unités`}
                 </div>
               </div>

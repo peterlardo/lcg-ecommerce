@@ -188,7 +188,8 @@ export default function LotsPage() {
       setError(body?.error ?? "Erreur de modification")
       return
     }
-    setSuccess("Lot modifie")
+    const body = await res.json().catch(() => null)
+    setSuccess(body?.reactivated ? `Lot ${selectedLot.lotNumber} de nouveau vendable en caisse` : "Lot modifie")
     setSelectedLot(null)
     await load()
   }

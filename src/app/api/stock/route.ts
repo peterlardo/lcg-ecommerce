@@ -3,6 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, saleMovementsFilter } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
+import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
 import { allocateStockFIFOTx, createCoverageLotTx } from "@/lib/lot-utils"
 import { COMPTOIR_CODE, fetchCachedLocations, ensureOperationalStockLocations, OPERATIONAL_STOCK_CODES } from "@/lib/stock-service"
 
@@ -102,7 +103,7 @@ export async function GET() {
           price: variant.price,
           stock: variant.stock,
           unit: variant.unit,
-          lowThreshold: 20,
+          lowThreshold: LOW_STOCK_THRESHOLD,
           storageStocks,
         }
       })
@@ -135,7 +136,7 @@ export async function GET() {
       summary: {
         totalVariants: mappedVariants.length,
         totalUnits: mappedVariants.reduce((sum, item) => sum + item.stock, 0),
-        lowStock: mappedVariants.filter((item) => item.stock > 0 && item.stock < item.lowThreshold).length,
+        lowStock: mappedVariants.filter((item) => item.stock > 0 && item.stock <= item.lowThreshold).length,
         outOfStock: mappedVariants.filter((item) => item.stock <= 0).length,
       },
       locations: locationData,

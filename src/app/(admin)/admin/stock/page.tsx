@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Clock, Minus, Package, Plus, RefreshCw, ShoppingCart, TrendingDown, TrendingUp } from "lucide-react"
+import { isLowStock } from "@/lib/stock-threshold"
 
 interface StockVariant {
   variantId: string
@@ -86,13 +87,6 @@ export default function StockPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [selectedLocationId, setSelectedLocationId] = useState("")
-  const [lowStockThreshold] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("lowStockThreshold")
-      return saved ? Number(saved) : 10
-    }
-    return 10
-  })
 
   const load = useCallback(async () => {
     try {
@@ -138,10 +132,10 @@ export default function StockPage() {
     return {
       totalVariants: variants.length,
       totalUnits: variants.reduce((sum, item) => sum + item.stock, 0),
-      lowStock: variants.filter((item) => item.stock > 0 && item.stock < lowStockThreshold).length,
+      lowStock: variants.filter((item) => isLowStock(item.stock)).length,
       outOfStock: variants.filter((item) => item.stock <= 0).length,
     }
-  }, [payload, lowStockThreshold])
+  }, [payload])
 
   const locationDashboard = useMemo(() => {
     if (!selectedLocationId || !payload) return null

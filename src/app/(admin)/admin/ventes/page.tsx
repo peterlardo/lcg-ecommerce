@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Banknote, ChevronDown, CreditCard, Minus, Plus, Printer, ReceiptText, RefreshCw, Search, Smartphone, Trash2 } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml, printTicketWindow } from "@/lib/ticket-template"
-import { useLowStockThreshold } from "@/hooks/use-low-stock-threshold"
+import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
 
 interface ProductVariant {
   id: string
@@ -37,9 +37,9 @@ interface B2BClient {
   status: string
 }
 
-interface PosStock { variantId: string; quantity: number }
+interface PosStock { variantId: string; quantity: number; lotsAvailable: number }
 
-interface PosStockApiItem { variantId: string; quantity: number }
+interface PosStockApiItem { variantId: string; quantity: number; lotsAvailable?: number }
 
 interface SaleReceipt {
   orderNumber: string
@@ -140,7 +140,7 @@ export default function VentesPage() {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [lowStockThreshold] = useLowStockThreshold()
+  const lowStockThreshold = LOW_STOCK_THRESHOLD
   const [posStocks, setPosStocks] = useState<PosStock[]>([])
 
   const [salesHistory, setSalesHistory] = useState<SaleHistoryItem[]>([])
@@ -266,7 +266,7 @@ export default function VentesPage() {
       const res = await fetch(`/api/points-de-vente/${posId}/stocks`)
       if (res.ok) {
         const data = await res.json()
-        setPosStocks((data.stocks ?? []).map((s: PosStockApiItem) => ({ variantId: s.variantId, quantity: s.quantity })))
+        setPosStocks((data.stocks ?? []).map((s: PosStockApiItem) => ({ variantId: s.variantId, quantity: s.quantity, lotsAvailable: s.lotsAvailable ?? 0 })))
       }
     } catch { setPosStocks([]) }
   }, [])
@@ -278,7 +278,7 @@ export default function VentesPage() {
         const res = await fetch(`/api/points-de-vente/${pointOfSaleId}/stocks`, { signal: controller.signal })
         if (res.ok && !controller.signal.aborted) {
           const data = await res.json()
-          setPosStocks((data.stocks ?? []).map((s: PosStockApiItem) => ({ variantId: s.variantId, quantity: s.quantity })))
+          setPosStocks((data.stocks ?? []).map((s: PosStockApiItem) => ({ variantId: s.variantId, quantity: s.quantity, lotsAvailable: s.lotsAvailable ?? 0 })))
         }
       } catch {
         if (!controller.signal.aborted) setPosStocks([])
@@ -395,17 +395,21 @@ export default function VentesPage() {
 
   const variants = useMemo(() => {
     const posMap = new Map(posStocks.map((s) => [s.variantId, s.quantity]))
+    const lotsMap = new Map(posStocks.map((s) => [s.variantId, s.lotsAvailable]))
     const hasPos = pointOfSaleId !== ""
     return products.flatMap((product) =>
       product.variants.map((variant) => {
         const inPos = posMap.has(variant.id)
         const effectiveStock = hasPos ? (inPos ? posMap.get(variant.id)! : 0) : variant.stock
+        // Vendable = en stock ET couvert par un lot non périmé (sinon la vente serait refusée au paiement).
+        const sellable = hasPos ? Math.min(effectiveStock, lotsMap.get(variant.id) ?? 0) : effectiveStock
         return {
           productId: product.id,
           productName: product.name,
           categoryName: product.categoryName ?? "Sans catégorie",
           ...variant,
           stock: effectiveStock,
+          sellable,
           _isPosStock: inPos,
         }
       })
@@ -439,7 +443,7 @@ export default function VentesPage() {
           productName: variant.productName,
           format: variant.format,
           price: variant.price,
-          stock: variant.stock,
+          stock: variant.sellable,
           quantity: 1,
         },
       ]
@@ -751,7 +755,8 @@ export default function VentesPage() {
                 {!loading && pointOfSaleId && filteredVariants.map((variant) => {
                   const outOfStock = variant.stock <= 0
                   const lowStock = variant.stock > 0 && variant.stock <= lowStockThreshold
-                  const disabled = outOfStock
+                  const lotExpired = !outOfStock && variant.sellable <= 0
+                  const disabled = outOfStock || lotExpired
                   const inCart = cart.some((item) => item.variantId === variant.id)
                   const cartQty = cart.find((item) => item.variantId === variant.id)?.quantity ?? 0
                   return (
@@ -773,6 +778,12 @@ export default function VentesPage() {
                         </div>
                       </div>
                       <p className={`mt-2 sm:mt-3 text-sm sm:text-base font-semibold ${variant.stock <= lowStockThreshold ? "text-red-600" : "text-gray-500"}`}>Stock : {variant.stock} {variant.unit ?? ""}</p>
+                      {lotExpired && (
+                        <p className="mt-1 text-sm font-semibold text-red-700">Lot périmé : non vendable. Repoussez la date de péremption dans Lots, ou enregistrez une nouvelle production.</p>
+                      )}
+                      {!lotExpired && variant.sellable < variant.stock && (
+                        <p className="mt-1 text-sm font-semibold text-amber-700">Vendable : {variant.sellable} (le reste est dans un lot périmé)</p>
+                      )}
                     </div>
                   )
                 })}
