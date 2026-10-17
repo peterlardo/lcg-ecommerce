@@ -5,6 +5,7 @@ import { AlertCircle, BellRing, Camera, Check, HandCoins, Paperclip, Search, X }
 import { formatPrice } from "@/lib/utils"
 import { PROOF_LABEL, PROOF_MAX_BYTES, PROOF_REQUIRED, RECEIPT_METHODS, RECEIPT_METHOD_LABEL, REFERENCE_EXPECTED, REFERENCE_LABEL, REFERENCE_REQUIRED } from "@/lib/payment-methods"
 import { prepareProof } from "@/lib/proof-file"
+import type { AgingBucket, ClientCreance, CreanceSummary } from "@/lib/commercial"
 
 interface Creance {
   id: string
@@ -53,6 +54,11 @@ export default function CreancesPage() {
   const [preparing, setPreparing] = useState(false)
   const [payError, setPayError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [tab, setTab] = useState<"factures" | "aging" | "clients">("factures")
+  const [summary, setSummary] = useState<CreanceSummary | null>(null)
+  const [aging, setAging] = useState<AgingBucket[]>([])
+  const [byClient, setByClient] = useState<ClientCreance[]>([])
+  const [clientFilter, setClientFilter] = useState<string | null>(null)
 
   // arrivée depuis une facture (« Encaisser ») : ?q=<référence> pré-remplit la recherche
   useEffect(() => {
@@ -74,6 +80,9 @@ export default function CreancesPage() {
         }
         setCreances(data.creances ?? [])
         setCanValidate(Boolean(data.canValidate))
+        setSummary(data.summary ?? null)
+        setAging(Array.isArray(data.aging) ? data.aging : [])
+        setByClient(Array.isArray(data.byClient) ? data.byClient : [])
       } catch (e) {
         if (!(e instanceof DOMException && e.name === "AbortError")) setError("Connexion au serveur impossible")
       } finally {
@@ -87,9 +96,12 @@ export default function CreancesPage() {
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
     return creances.filter(
-      (c) => (!term || c.clientName.toLowerCase().includes(term) || c.reference.toLowerCase().includes(term)) && (!onlyOverdue || c.overdue),
+      (c) =>
+        (!clientFilter || c.clientId === clientFilter) &&
+        (!term || c.clientName.toLowerCase().includes(term) || c.reference.toLowerCase().includes(term)) &&
+        (!onlyOverdue || c.overdue),
     )
-  }, [creances, search, onlyOverdue])
+  }, [creances, search, onlyOverdue, clientFilter])
 
   // encours par client : sert à signaler le dépassement du plafond de crédit
   const exposure = useMemo(() => {
@@ -204,24 +216,32 @@ export default function CreancesPage() {
             Créances
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Factures B2B émises et pas encore soldées · {filtered.length} facture{filtered.length > 1 ? "s" : ""} · reste à recouvrer {formatPrice(totalBalance)}
+            {tab === "factures"
+              ? `Factures B2B émises et pas encore soldées · ${filtered.length} facture${filtered.length > 1 ? "s" : ""} · reste à recouvrer ${formatPrice(totalBalance)}`
+              : tab === "aging"
+                ? `Balance âgée par échéance · ${aging.reduce((n, b) => n + b.count, 0)} facture(s) ouverte(s)`
+                : `Encours par client · ${byClient.length} client(s) débiteur(s)`}
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Client ou référence..."
-              className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:w-64"
-            />
-          </div>
-          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
-            <input type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
-            À relancer (échéance dépassée)
-          </label>
+          {tab === "factures" && (
+            <>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Client ou référence..."
+                  className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:w-64"
+                />
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+                <input type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
+                À relancer (échéance dépassée)
+              </label>
+            </>
+          )}
         </div>
       </div>
 
@@ -237,6 +257,62 @@ export default function CreancesPage() {
         </div>
       )}
 
+      {summary && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {(
+            [
+              { label: "À recevoir", value: formatPrice(summary.totalBalance), detail: "", tone: "text-gray-900" },
+              { label: "En retard", value: formatPrice(summary.overdueBalance), detail: "", tone: "text-red-700" },
+              {
+                label: "Promesses en cours",
+                value: formatPrice(summary.promisePendingAmount),
+                detail: `${summary.promisePendingCount} promesse${summary.promisePendingCount > 1 ? "s" : ""}`,
+                tone: "text-blue-700",
+              },
+              { label: "Clients débiteurs", value: String(summary.debtorClients), detail: "", tone: "text-gray-900" },
+              { label: "Au-dessus du plafond", value: String(summary.clientsOverLimit), detail: "", tone: summary.clientsOverLimit > 0 ? "text-red-700" : "text-gray-900" },
+              { label: "Plafonds accordés", value: formatPrice(summary.creditLimitTotal), detail: "", tone: "text-gray-900" },
+            ] as { label: string; value: string; detail: string; tone: string }[]
+          ).map((kpi) => (
+            <div key={kpi.label} className="rounded-xl border border-gray-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{kpi.label}</p>
+              <p className={`mt-1 text-lg font-bold sm:text-xl ${kpi.tone}`}>{kpi.value}</p>
+              {kpi.detail && <p className="text-xs text-gray-500">{kpi.detail}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {(
+          [
+            { key: "factures", label: "Factures ouvertes" },
+            { key: "aging", label: "Balance âgée" },
+            { key: "clients", label: "Par client" },
+          ] as { key: "factures" | "aging" | "clients"; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${tab === t.key ? "bg-primary text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+        {clientFilter && (
+          <button
+            type="button"
+            onClick={() => setClientFilter(null)}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Client : {byClient.find((c) => c.clientId === clientFilter)?.clientName ?? "sélectionné"}
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {tab === "factures" && (
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         {loading && <p className="p-4 text-sm text-gray-500">Chargement des créances...</p>}
         {!loading && filtered.length === 0 && (
@@ -336,6 +412,97 @@ export default function CreancesPage() {
           </div>
         )}
       </div>
+      )}
+
+      {tab === "aging" && (
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <div className="grid min-w-[900px] grid-cols-5 divide-x divide-gray-100">
+            {aging.map((bucket) => (
+              <div key={bucket.key} className="p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{bucket.label}</p>
+                <p className={`mt-1 text-lg font-bold ${bucket.key === "not_due" ? "text-gray-900" : "text-red-700"}`}>{formatPrice(bucket.balance)}</p>
+                <p className="text-xs text-gray-500">
+                  {bucket.count} facture{bucket.count > 1 ? "s" : ""} · {bucket.clients} client{bucket.clients > 1 ? "s" : ""}
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {bucket.lines.map((line) => (
+                    <li key={line.id} className="rounded-lg bg-gray-50 p-2 text-xs">
+                      <p className="font-mono text-gray-700">{line.reference}</p>
+                      <p className="truncate font-semibold text-gray-900">{line.clientName}</p>
+                      <p className="font-bold text-gray-900">{formatPrice(line.balance)}</p>
+                      <p className="text-gray-500">
+                        {formatDate(line.dueDate)} · {line.daysLate > 0 ? `${line.daysLate} j de retard` : "à échoir"}
+                      </p>
+                    </li>
+                  ))}
+                  {bucket.lines.length === 0 && <li className="text-gray-400">Aucune facture</li>}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "clients" && (
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+          {byClient.length === 0 ? (
+            <p className="p-8 text-center text-sm text-gray-500">Aucun client débiteur.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <th className="px-3 py-2.5 sm:px-4">Client</th>
+                    <th className="px-3 py-2.5 text-right">Encours</th>
+                    <th className="px-3 py-2.5 text-right">Dont en retard</th>
+                    <th className="px-3 py-2.5 text-right">Plus ancien retard</th>
+                    <th className="px-3 py-2.5 text-right">Factures</th>
+                    <th className="px-3 py-2.5">Prochaine échéance</th>
+                    <th className="px-3 py-2.5">Plafond</th>
+                    <th className="px-3 py-2.5 text-right sm:px-4">Détail</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {byClient.map((client) => (
+                    <tr key={client.clientId} className={client.overLimit ? "bg-red-50/60" : ""}>
+                      <td className="px-3 py-2.5 sm:px-4">
+                        <p className="font-semibold text-gray-900">{client.clientName}</p>
+                        {client.commercialName && <p className="text-xs text-gray-500">Commercial : {client.commercialName}</p>}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right text-base font-bold text-gray-900">{formatPrice(client.balance)}</td>
+                      <td className={`whitespace-nowrap px-3 py-2.5 text-right font-semibold ${client.overdueBalance > 0 ? "text-red-700" : "text-gray-500"}`}>{formatPrice(client.overdueBalance)}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right text-gray-700">{client.oldestOverdueDays > 0 ? `${client.oldestOverdueDays} j` : "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right text-gray-700">{client.openInvoices}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-gray-700">{client.nextDueDate ? formatDate(client.nextDueDate) : "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5">
+                        {client.creditLimit !== null ? (
+                          <span className={client.overLimit ? "font-semibold text-red-700" : "text-gray-700"}>
+                            {formatPrice(client.creditLimit)}{client.overLimit ? " · dépassé" : ""}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right sm:px-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClientFilter(client.clientId)
+                            setTab("factures")
+                          }}
+                          className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                        >
+                          Voir les factures
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {paying && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={(e) => { if (e.target === e.currentTarget && !submitting) setPaying(null) }}>
