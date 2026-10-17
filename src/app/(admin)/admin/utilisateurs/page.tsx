@@ -13,7 +13,7 @@ const labels = PERMISSION_MODULE_LABELS
 interface RoleProfile { id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean }
 interface Permission { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
 interface PointOfSale { id: string; name: string; code: string }
-interface User { id: string; name: string | null; email: string; phone: string | null; role: string; isActive: boolean; image: string | null; permissions: Permission[]; managedPointOfSales: PointOfSale[]; openSession: { deviceName: string | null; deviceType: string | null; lastActiveAt: string } | null }
+interface User { id: string; name: string | null; email: string; phone: string | null; role: string; isActive: boolean; image: string | null; permissions: Permission[]; managedPointOfSales: PointOfSale[]; openSession: { deviceName: string | null; deviceType: string | null; lastActiveAt: string } | null; sessionLimit: number }
 const empty = { name: "", email: "", phone: "", password: "", role: "STOCK_MANAGER", image: "" }
 const emptyPermissions = () => modules.map((module) => ({ module, canView: false, canCreate: false, canEdit: false, canDelete: false }))
 
@@ -33,6 +33,7 @@ export default function UtilisateursPage() {
   const [editEmail, setEditEmail] = useState("")
   const [editPhone, setEditPhone] = useState("")
   const [editPassword, setEditPassword] = useState("")
+  const [editSessionLimit, setEditSessionLimit] = useState(1)
   const [showCreatePassword, setShowCreatePassword] = useState(false)
   const [showEditPassword, setShowEditPassword] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
@@ -195,6 +196,7 @@ export default function UtilisateursPage() {
     setEditPassword("")
     setEditRole(user.role)
     setEditActive(user.isActive)
+    setEditSessionLimit(user.sessionLimit || 1)
     setPermissions(modules.map((module) => user.permissions.find((permission) => permission.module === module) || { module, canView: user.role === "ADMIN", canCreate: user.role === "ADMIN", canEdit: user.role === "ADMIN", canDelete: user.role === "ADMIN" }))
     setEditPosIds(user.managedPointOfSales.map((p) => p.id))
   }
@@ -204,7 +206,7 @@ export default function UtilisateursPage() {
 
   const saveUser = async () => {
     if (!selected || saving) return
-    const payload: Record<string, unknown> = { name: editName, email: editEmail, phone: editPhone, role: editRole, isActive: editActive, permissions, posIds: editPosIds }
+    const payload: Record<string, unknown> = { name: editName, email: editEmail, phone: editPhone, role: editRole, isActive: editActive, sessionLimit: editSessionLimit, permissions, posIds: editPosIds }
     if (editPassword.trim()) payload.password = editPassword.trim()
     setSaving(true)
     setSaveStatus(null)
@@ -536,6 +538,27 @@ export default function UtilisateursPage() {
                 </button>
               </div>
             )}
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">Connexions simultanées</p>
+                <p className="text-sm text-muted-foreground">
+                  {editSessionLimit > 1
+                    ? `Ce compte peut être connecté sur ${editSessionLimit} appareils à la fois (compte partagé).`
+                    : "Une seule session à la fois : se connecter ailleurs déconnecte l'autre appareil."}
+                </p>
+              </div>
+              <select
+                value={editSessionLimit}
+                onChange={(e) => setEditSessionLimit(Number(e.target.value))}
+                className="w-44 rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground"
+                aria-label="Sessions simultanées autorisées"
+              >
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>{n === 1 ? "1 appareil (défaut)" : `${n} appareils`}</option>
+                ))}
+              </select>
+            </div>
 
             {(() => {
               const user = users.find((u) => u.id === selected)

@@ -42,6 +42,22 @@ export async function openSessionElsewhere(userId: string, fingerprint: string, 
   })
 }
 
+/**
+ * Nombre de sessions encore ouvertes sur un AUTRE appareil (dans la fenêtre d'inactivité).
+ * Sert à faire respecter la limite de connexions simultanées d'un compte partagé.
+ */
+export async function countActiveSessionsElsewhere(userId: string, fingerprint: string, userAgent: string | null | undefined): Promise<number> {
+  const sameDevice = [fingerprint, deviceFingerprint(userAgent)]
+  return getPrisma().userDeviceSession.count({
+    where: {
+      userId,
+      isActive: true,
+      fingerprint: { notIn: sameDevice },
+      lastActiveAt: { gt: new Date(Date.now() - SESSION_IDLE_MS) },
+    },
+  })
+}
+
 /** Ferme toutes les sessions du compte, sauf celle de l'appareil indiqué. Renvoie le nombre de sessions fermées. */
 export async function closeUserSessions(userId: string, exceptFingerprint?: string): Promise<number> {
   const { count } = await getPrisma().userDeviceSession.updateMany({

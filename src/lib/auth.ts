@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs"
 import { getPrisma } from "./prisma"
 import { parseUserAgent } from "./device"
 import { COMMERCIAL_MANAGER_ROLE } from "./permissions"
-import { SESSION_OPEN_CODE, SESSION_TOUCH_MS, closeUserSessions, deviceKey, openSessionElsewhere } from "./device-session"
+import { SESSION_OPEN_CODE, SESSION_TOUCH_MS, closeUserSessions, countActiveSessionsElsewhere, deviceKey } from "./device-session"
 
 type Role = string
 
@@ -80,10 +80,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
-        // Une seule session ouverte par compte : si le compte est ouvert sur un autre appareil, on refuse.
+        // Limite de sessions simultanées du compte (1 par défaut). Un compte partagé
+        // (ex. un poste de caisse utilisé par deux personnes) peut être autorisé à en ouvrir plusieurs.
         const fingerprint = deviceKey(credentials.deviceId, userAgent)
-        const elsewhere = await openSessionElsewhere(user.id, fingerprint, userAgent)
-        if (elsewhere) {
+        const sessionLimit = Math.max(1, user.sessionLimit || 1)
+        const othersOpen = await countActiveSessionsElsewhere(user.id, fingerprint, userAgent)
+        if (othersOpen >= sessionLimit) {
           await getPrisma().loginLog.create({
             data: {
               userId: user.id,
@@ -98,8 +100,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }).catch(() => {})
           throw new SessionOpenError()
         }
-        // Les sessions restées ouvertes ailleurs sans activité sont fermées : leur appareil sera déconnecté.
-        await closeUserSessions(user.id, fingerprint)
+        // Comportement historique (une seule session) : les sessions des autres appareils
+        // sont fermées. Au-delà d'une session autorisée, on les laisse ouvertes.
+        if (sessionLimit <= 1) {
+          await closeUserSessions(user.id, fingerprint)
+        }
 
         let deviceSession = await getPrisma().userDeviceSession.findUnique({
           where: { userId_fingerprint: { userId: user.id, fingerprint } },

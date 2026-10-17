@@ -58,6 +58,8 @@ model User {
   role          String    @default("CUSTOMER")
   isActive      Boolean   @default(true)
   supervisesB2b Boolean   @default(false)
+  // Nombre de connexions simultanées autorisées pour ce compte (défaut : 1 seule).
+  sessionLimit  Int       @default(1)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
