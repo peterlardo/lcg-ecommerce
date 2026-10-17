@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, saleMovementsFilter } from "@/lib/api-auth"
+import { requireManagementAccess, saleMovementsFilter, seesAllOrders } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { ensurePointOfSaleStockRows } from "@/lib/stock-service"
 
@@ -17,7 +17,7 @@ export async function GET(_request: Request, context: { params: Promise<unknown>
   const actorSelfId = authSession?.user?.id
   const movementWhere = saleMovementsFilter(actorRole, actorSelfId)
   const orderWhere: Prisma.OrderWhereInput =
-    actorRole === "ADMIN" || !actorRole
+    seesAllOrders(actorRole) || !actorRole
       ? { pointOfSaleId: id }
       : {
           pointOfSaleId: id,

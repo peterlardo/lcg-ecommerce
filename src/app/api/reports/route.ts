@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds, saleMovementsFilter, isComptable, b2bOrderScope, seesOnlyOwnOrders } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds, saleMovementsFilter, isComptable, b2bOrderScope, seesOnlyOwnOrders, seesAllOrders } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
 function startOfDay(date: Date) {
@@ -199,7 +199,7 @@ export async function GET(request: Request) {
       ? // Filtre strict B2B : les rapports du comptable ne portent que sur
         // les commandes des clients B2B.
           b2bScope
-      : role === "ADMIN"
+      : seesAllOrders(role)
         ? (posClause ?? {})
         : seesOnlyOwnOrders(role)
           ? { OR: [{ userId: selfId }, { cashierId: selfId }] }
@@ -261,7 +261,7 @@ export async function GET(request: Request) {
     // Comparaison entre points de vente : toujours tous les PDV visibles, quel que soit le filtre.
     const comparisonOrderFilter: Prisma.OrderWhereInput = b2bOnly
       ? b2bScope
-      : role === "ADMIN"
+      : seesAllOrders(role)
         ? {}
         : seesOnlyOwnOrders(role)
           ? { OR: [{ userId: selfId }, { cashierId: selfId }] }

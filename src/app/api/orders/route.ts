@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds, b2bOrderScope, seesOnlyOwnOrders } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds, b2bOrderScope, seesOnlyOwnOrders, seesAllOrders } from "@/lib/api-auth"
 import { CASHIER_ROLES, isCashierRole, isCommercialRole } from "@/lib/permissions"
 import { auth } from "@/lib/auth"
 import { createOrder, type OrderInput } from "@/data/store"
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
       role === "COMPTABLE"
         ? // Filtre strict B2B : aucune commande hors client B2B.
           { AND: [b2bOrderScope(role)] }
-        : role === "ADMIN"
+        : seesAllOrders(role)
           ? (posClause ?? {})
           : isCashierRole(role)
             ? // La caissière voit les commandes qu'elle a créées et celles

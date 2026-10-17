@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, seesAllOrders } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
 
@@ -19,7 +19,7 @@ export async function GET() {
   // - les autres comptes voient les tickets dont ils sont l'auteur.
   // Le point de vente n'entre pas en compte : un compte qui n'en gère aucun ne voyait aucun de ses tickets.
   const scope =
-    role === "ADMIN"
+    seesAllOrders(role)
       ? []
       : !selfId
         ? [{ id: { in: [] as string[] } }]

@@ -6,6 +6,7 @@ import {
   requireManagementAccess,
   getUserPointOfSaleIds,
   seesOnlyOwnOrders,
+  seesAllOrders,
   isComptable,
   b2bOrderScope,
 } from "@/lib/api-auth"
@@ -78,7 +79,7 @@ export async function GET(request: Request) {
 
     const orderPosFilter: Prisma.OrderWhereInput = b2bOnly
       ? (b2bScope as Prisma.OrderWhereInput)
-      : role === "ADMIN"
+      : seesAllOrders(role)
         ? (posClause ?? {})
         : seesOnlyOwnOrders(role)
           ? { OR: [{ userId: selfId }, { cashierId: selfId }] }

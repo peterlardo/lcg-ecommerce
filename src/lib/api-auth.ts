@@ -29,10 +29,19 @@ export function isOperateurAccueil(role: string | undefined): boolean {
   return role === OPERATEUR_ACCUEIL_ROLE
 }
 
-/** Rôles qui ne voient QUE leurs propres commandes/ventes (auteur = eux-mêmes).
- *  Règle générale : tout compte non-ADMIN ne voit que ce qu'il a créé ou vendu. */
+/** Rôles qui voient TOUTES les commandes/ventes, sans isolation par vendeur ni
+ *  par point de vente (comme ADMIN) : l'encadrement et la gestion de stock. */
+export const ALL_ORDERS_ROLES: Role[] = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
+
+/** true pour un rôle qui voit tout le parc de commandes/ventes (comme ADMIN). */
+export function seesAllOrders(role: string | undefined): boolean {
+  return !!role && ALL_ORDERS_ROLES.includes(role)
+}
+
+/** Rôles qui ne voient QUE leurs propres commandes/ventes (auteur = eux-mêmes,
+ *  ou caissière à qui la commande a été transmise). Tout compte hors encadrement. */
 export function seesOnlyOwnOrders(role: string | undefined): boolean {
-  return !!role && role !== "ADMIN"
+  return !!role && !seesAllOrders(role)
 }
 
 /** Portée B2B stricte : seules les commandes rattachées à un client B2B.
@@ -84,7 +93,8 @@ export function isRestrictedOrder(
   role: string | undefined,
   selfId: string | undefined
 ): boolean {
-  if (role === "ADMIN") return false
+  // Encadrement et gestion de stock : accès à toutes les commandes/ventes.
+  if (seesAllOrders(role)) return false
   if (!role || !selfId) return true
   // Responsable comptable : uniquement les commandes des clients B2B.
   if (isComptable(role)) return !order.b2bClientId
@@ -105,7 +115,7 @@ export function saleMovementsFilter(
   role: string | undefined,
   selfId: string | undefined
 ): Prisma.StockMovementWhereInput {
-  if (!role || role === "ADMIN" || isComptable(role)) return {}
+  if (!role || seesAllOrders(role) || isComptable(role)) return {}
   // Tous les autres rôles ne voient QUE leurs propres ventes (mouvements SALE
   // dont le `userId` est le leur). Les mouvements hors vente restent partagés :
   // le stock est une ressource commune au point de vente.
@@ -122,7 +132,7 @@ export async function getUserPointOfSaleIds(): Promise<UserPOSFilter | null> {
   const role = session.user.role as Role
   const userId = session.user.id
 
-  if (role === "ADMIN") return { userId, role, posIds: null }
+  if (seesAllOrders(role)) return { userId, role, posIds: null }
 
   const posList = await getPrisma().pointOfSale.findMany({
     where: { managerUserId: userId },

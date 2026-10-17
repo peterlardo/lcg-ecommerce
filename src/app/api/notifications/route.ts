@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { requireManagementAccess, seesAllOrders } from "@/lib/api-auth"
 import { CASHIER_ROLES } from "@/lib/permissions"
 import { auth } from "@/lib/auth"
 
@@ -45,12 +45,12 @@ export async function GET() {
   if (forbidden) return forbidden
 
   const session = await auth()
-  const isAdmin = session?.user?.role === "ADMIN"
+  const seesAll = seesAllOrders(session?.user?.role)
   const isComptableRole = session?.user?.role === "COMPTABLE"
   const selfId = (session?.user?.id as string | undefined) ?? ""
   // Site vitrine : tout le monde ; poste de l'application et caisse : l'auteur (et l'admin) ;
   // commande transmise par l'opérateur : la caissière ciblée (et l'admin).
-  const orderVisible = isAdmin
+  const orderVisible = seesAll
     ? { source: { in: NOTIFIED_SOURCES } }
     : {
         OR: [
@@ -61,7 +61,7 @@ export async function GET() {
         ],
       }
   // Les pré-commandes ne portent pas de caissière ciblée.
-  const reservationVisible = isAdmin
+  const reservationVisible = seesAll
     ? { source: { in: NOTIFIED_SOURCES } }
     : { OR: [{ source: "WEB" }, { source: "OPERATOR", userId: selfId }, { source: "CAISSE", userId: selfId }] }
   const since = new Date(Date.now() - DAY_MS)

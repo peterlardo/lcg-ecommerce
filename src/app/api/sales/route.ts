@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess, getUserPointOfSaleIds } from "@/lib/api-auth"
+import { requireManagementAccess, getUserPointOfSaleIds, seesAllOrders } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { generateOrderNumber } from "@/lib/utils"
 import {
@@ -52,7 +52,7 @@ export async function GET() {
   if (forbidden) return forbidden
 
   const session = await auth()
-  const isAdmin = session?.user?.role === "ADMIN"
+  const seesAll = seesAllOrders(session?.user?.role)
   const isComptableRole = session?.user?.role === "COMPTABLE"
 
   const posFilter = await getUserPointOfSaleIds()
@@ -68,7 +68,7 @@ export async function GET() {
         isComptableRole
           ? // Filtre strict B2B : le comptable ne voit que les ventes rattachées à un client B2B.
             { b2bClientId: { not: null } }
-          : isAdmin
+          : seesAll
             ? posIds !== null
               ? { pointOfSaleId: posIds.length > 0 ? { in: posIds } : { in: [] } }
               : {}
