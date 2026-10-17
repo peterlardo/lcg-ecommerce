@@ -11,7 +11,7 @@ export const PERMISSION_MODULES = [
   "dashboard", "ventes", "tickets", "commandes", "caisse", "reservations",
   "stock", "etat-stock", "production", "lots", "tracabilite", "distribution", "livraisons",
   "points-de-vente", "produits", "promotions", "rapports",
-  "clients", "clients-b2b", "nouveau-client", "zone-commerciale", "commercial", "creances", "encaissements", "b2b", "contrats",
+  "clients", "clients-b2b", "partenaires", "nouveau-client", "zone-commerciale", "commercial", "creances", "encaissements", "b2b", "contrats",
   "messages", "parametres", "controle-distant", "utilisateurs", "activite",
 ] as const
 
@@ -23,7 +23,7 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   caisse: "Caisse", reservations: "Pré-commandes", stock: "Stock", "etat-stock": "État de stock & caisse",
   production: "Production", lots: "Lots", tracabilite: "Traçabilité", distribution: "Distribution",
   livraisons: "Livraisons & livreurs", "points-de-vente": "Points de vente", produits: "Produits",
-  promotions: "Promotions & coupons", rapports: "Rapports", clients: "Clients", "clients-b2b": "Clients B2B",
+  promotions: "Promotions & coupons", rapports: "Rapports", clients: "Clients", "clients-b2b": "Clients B2B", partenaires: "Partenaires",
   "nouveau-client": "Nouveau client (B2B / B2C)",
   "zone-commerciale": "Zone commerciale", commercial: "Tableau de bord commercial", creances: "Créances",
   encaissements: "Encaissements (règlements reçus)",
@@ -49,6 +49,7 @@ export const MODULE_ROLES: Record<string, string[]> = {
   // le comptable lit les devis, commandes, factures et avoirs (sans en créer)
   b2b: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   contrats: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
+  partenaires: ["ADMIN"],
 }
 
 /** Écrans pilotés par le droit d'un module voisin. */
