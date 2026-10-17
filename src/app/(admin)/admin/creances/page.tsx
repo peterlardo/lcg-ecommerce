@@ -300,7 +300,7 @@ export default function CreancesPage() {
             {t.label}
           </button>
         ))}
-        {clientFilter && (
+        {tab === "factures" && clientFilter && (
           <button
             type="button"
             onClick={() => setClientFilter(null)}
