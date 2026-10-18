@@ -37,6 +37,20 @@ interface B2BClient {
   status: string
 }
 
+interface PartnerPriceEntry {
+  variantId: string
+  price: number
+}
+
+interface Partner {
+  id: string
+  name: string
+  companyName: string | null
+  phone: string | null
+  isActive: boolean
+  prices?: PartnerPriceEntry[]
+}
+
 interface PosStock { variantId: string; quantity: number; lotsAvailable: number }
 
 interface PosStockApiItem { variantId: string; quantity: number; lotsAvailable?: number }
@@ -138,6 +152,10 @@ export default function VentesPage() {
   const [selectedB2bClient, setSelectedB2bClient] = useState<B2BClient | null>(null)
   const [clientSearch, setClientSearch] = useState("")
   const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [partners, setPartners] = useState<Partner[]>([])
+  const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null)
+  const [partnerSearch, setPartnerSearch] = useState("")
+  const [showPartnerDropdown, setShowPartnerDropdown] = useState(false)
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const lowStockThreshold = LOW_STOCK_THRESHOLD
@@ -150,7 +168,7 @@ export default function VentesPage() {
   const [expandedSale, setExpandedSale] = useState<string | null>(null)
   const [historyPage, setHistoryPage] = useState(1)
   const HISTORY_PER_PAGE = 15
-  const [pendingPayment, setPendingPayment] = useState<{ transactionId: string; reference: string; provider: string; paymentMethod: string; items: SaleCartItem[]; customerName: string; customerPhone: string; pointOfSaleId: string; notes: string } | null>(null)
+  const [pendingPayment, setPendingPayment] = useState<{ transactionId: string; reference: string; provider: string; paymentMethod: string; items: SaleCartItem[]; customerName: string; customerPhone: string; pointOfSaleId: string; notes: string; partnerId?: string | null } | null>(null)
   const [pollingStatus, setPollingStatus] = useState<string | null>(null)
   const [todayStr] = useState(() => new Date().toISOString().slice(0, 10))
 
@@ -198,10 +216,11 @@ export default function VentesPage() {
 
   const loadProducts = useCallback(async () => {
     try {
-      const [res, pointsRes, b2bRes] = await Promise.all([
+      const [res, pointsRes, b2bRes, partnersRes] = await Promise.all([
         fetch("/api/produits"),
         fetch("/api/points-de-vente/list"),
         fetch("/api/clients-b2b"),
+        fetch("/api/partenaires?active=1&withPrices=1"),
       ])
       if (!res.ok) throw new Error("Impossible de charger les produits")
       setProducts(await res.json())
@@ -215,6 +234,10 @@ export default function VentesPage() {
         const b2bData = await b2bRes.json()
         if (Array.isArray(b2bData)) setB2bClients(b2bData)
       }
+      if (partnersRes.ok) {
+        const partnersData = await partnersRes.json()
+        if (Array.isArray(partnersData)) setPartners(partnersData)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de chargement")
     } finally {
@@ -226,10 +249,11 @@ export default function VentesPage() {
     const controller = new AbortController()
     const init = async () => {
       try {
-        const [res, pointsRes, b2bRes] = await Promise.all([
+        const [res, pointsRes, b2bRes, partnersRes] = await Promise.all([
           fetch("/api/produits", { signal: controller.signal }),
           fetch("/api/points-de-vente/list", { signal: controller.signal }),
           fetch("/api/clients-b2b", { signal: controller.signal }),
+          fetch("/api/partenaires?active=1&withPrices=1", { signal: controller.signal }),
         ])
         if (!res.ok) throw new Error("Impossible de charger les produits")
         if (controller.signal.aborted) return
@@ -243,6 +267,10 @@ export default function VentesPage() {
         if (b2bRes.ok) {
           const b2bData = await b2bRes.json()
           if (Array.isArray(b2bData)) setB2bClients(b2bData)
+        }
+        if (partnersRes.ok) {
+          const partnersData = await partnersRes.json()
+          if (Array.isArray(partnersData)) setPartners(partnersData)
         }
       } catch (err) {
         if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Erreur de chargement")
@@ -259,6 +287,41 @@ export default function VentesPage() {
     const term = clientSearch.toLowerCase()
     return b2bClients.filter((c) => c.name.toLowerCase().includes(term) || c.phone.includes(term) || c.category.toLowerCase().includes(term))
   }, [b2bClients, clientSearch])
+
+  const filteredPartners = useMemo(() => {
+    if (!partnerSearch.trim()) return partners
+    const term = partnerSearch.toLowerCase()
+    return partners.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        (p.companyName ?? "").toLowerCase().includes(term) ||
+        (p.phone ?? "").includes(term)
+    )
+  }, [partners, partnerSearch])
+
+  const partnerPriceOf = (partner: Partner | null, variantId: string): number | undefined =>
+    partner?.prices?.find((p) => p.variantId === variantId)?.price
+
+  const selectPartner = (partner: Partner) => {
+    setSelectedPartner(partner)
+    setPartnerSearch("")
+    setShowPartnerDropdown(false)
+    setCustomerName((current) => current || partner.name)
+    setCustomerPhone((current) => current || partner.phone || "")
+    // Ré-prixer les lignes existantes avec la grille du partenaire
+    setCart((current) =>
+      current.map((item) => ({ ...item, price: partnerPriceOf(partner, item.variantId) ?? item.price }))
+    )
+  }
+
+  const clearPartner = () => {
+    setSelectedPartner(null)
+    setPartnerSearch("")
+    // Repasser au prix public
+    setCart((current) =>
+      current.map((item) => ({ ...item, price: publicPriceOf(item.variantId) ?? item.price }))
+    )
+  }
 
   const loadPosStock = useCallback(async (posId: string) => {
     if (!posId) { setPosStocks([]); return }
@@ -360,7 +423,8 @@ export default function VentesPage() {
                 paymentMethod: paymentMethodToApi[pendingPayment.paymentMethod] || "CASH_ON_DELIVERY",
                 pointOfSaleId: pendingPayment.pointOfSaleId,
                 notes: `Paiement ${pendingPayment.provider} - ${pendingPayment.transactionId}`,
-                items: pendingPayment.items.map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
+                partnerId: pendingPayment.partnerId || undefined,
+                items: pendingPayment.items.map((item) => ({ variantId: item.variantId, quantity: item.quantity, unitPrice: item.price })),
               }),
             })
             if (saleRes.ok) {
@@ -416,6 +480,9 @@ export default function VentesPage() {
     )
   }, [products, posStocks, pointOfSaleId])
 
+  const publicPriceOf = (variantId: string): number | undefined =>
+    variants.find((v) => v.id === variantId)?.price
+
   const filteredVariants = variants.filter((variant) => {
     if (variant.stock <= 0) return false
     const term = search.toLowerCase()
@@ -442,7 +509,7 @@ export default function VentesPage() {
           variantId: variant.id,
           productName: variant.productName,
           format: variant.format,
-          price: variant.price,
+          price: selectedPartner ? (partnerPriceOf(selectedPartner, variant.id) ?? variant.price) : variant.price,
           stock: variant.sellable,
           quantity: 1,
         },
@@ -525,6 +592,7 @@ export default function VentesPage() {
           customerPhone,
           pointOfSaleId,
           notes,
+          partnerId: selectedPartner?.id || null,
         })
         setSuccess(`Paiement initié ${isMobile ? `- En attente de confirmation (${provider === "MTN_MOMO" ? "MTN MoMo" : "Airtel Money"})` : "- Veuillez compléter le paiement par carte"}`)
         setCart([])
@@ -532,6 +600,8 @@ export default function VentesPage() {
         setCustomerPhone("")
         setSelectedB2bClient(null)
         setClientSearch("")
+        setSelectedPartner(null)
+        setPartnerSearch("")
         setNotes("")
         return
       }
@@ -543,10 +613,11 @@ export default function VentesPage() {
           customerName,
           customerPhone,
           b2bClientId: selectedB2bClient?.id || undefined,
+          partnerId: selectedPartner?.id || undefined,
           paymentMethod: paymentMethodToApi[paymentMethod] || "CASH_ON_DELIVERY",
           pointOfSaleId,
           notes,
-          items: cart.map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
+          items: cart.map((item) => ({ variantId: item.variantId, quantity: item.quantity, unitPrice: item.price })),
         }),
       })
 
@@ -560,6 +631,8 @@ export default function VentesPage() {
       setCustomerPhone("")
       setSelectedB2bClient(null)
       setClientSearch("")
+      setSelectedPartner(null)
+      setPartnerSearch("")
       setNotes("")
       await loadProducts()
       await loadPosStock(pointOfSaleId)
@@ -838,6 +911,50 @@ export default function VentesPage() {
                     </div>
                   )}
                 </div>
+                <div className="relative">
+                  <label className="block   font-medium text-gray-600">Partenaire (prix négociés)</label>
+                  <input
+                    value={selectedPartner ? selectedPartner.name : partnerSearch}
+                    onChange={(e) => {
+                      setPartnerSearch(e.target.value)
+                      setSelectedPartner(null)
+                      setShowPartnerDropdown(true)
+                    }}
+                    onFocus={() => setShowPartnerDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowPartnerDropdown(false), 200)}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm"
+                    placeholder="Rechercher un partenaire..."
+                  />
+                  {selectedPartner && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={clearPartner}
+                      className="absolute right-2 top-7 rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                    >
+                      Retirer
+                    </button>
+                  )}
+                  {showPartnerDropdown && !selectedPartner && filteredPartners.length > 0 && (
+                    <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                      {filteredPartners.map((partner) => (
+                        <button
+                          key={partner.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            selectPartner(partner)
+                            setShowPartnerDropdown(false)
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs sm:text-sm hover:bg-primary/5 border-b border-gray-50 last:border-0"
+                        >
+                          <p className="font-medium text-gray-900">{partner.name}</p>
+                          <p className="text-xs text-gray-500">{partner.companyName || ""}{partner.companyName && partner.phone ? " · " : ""}{partner.phone || ""}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <label className="block   font-medium text-gray-600">Téléphone
                   <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm sm:text-base" placeholder="Optionnel" />
                 </label>
@@ -865,7 +982,24 @@ export default function VentesPage() {
                         <span className="min-w-8 text-center text-xs sm:text-sm font-semibold">{item.quantity}</span>
                         <button onClick={() => updateQuantity(item.variantId, item.quantity + 1)} className="p-1.5 text-gray-500"><Plus className="h-3.5 w-3.5" /></button>
                       </div>
-                      <span className="text-xs sm:text-sm font-semibold text-gray-900">{formatPrice(item.price * item.quantity)}</span>
+                      {selectedPartner ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            step={25}
+                            value={item.price}
+                            onChange={(e) => {
+                              const next = Math.max(0, Number(e.target.value) || 0)
+                              setCart((current) => current.map((row) => row.variantId === item.variantId ? { ...row, price: next } : row))
+                            }}
+                            className="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-right text-xs sm:text-sm font-semibold"
+                          />
+                          <span className="text-xs sm:text-sm font-semibold text-gray-900">{formatPrice(item.price * item.quantity)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs sm:text-sm font-semibold text-gray-900">{formatPrice(item.price * item.quantity)}</span>
+                      )}
                     </div>
                   </div>
                 ))}
