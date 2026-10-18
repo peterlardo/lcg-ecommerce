@@ -9,6 +9,7 @@ import {
   ensureOperationalStockLocations,
 } from "@/lib/stock-service"
 import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
+import { logActivity } from "@/lib/activity"
 
 const PAYMENT_METHODS = ["CASH_ON_DELIVERY", "MOBILE_MONEY", "CARD"] as const
 
@@ -17,6 +18,7 @@ type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 interface SaleItemInput {
   variantId: string
   quantity: number
+  unitPrice?: number
 }
 
 interface SaleRequestBody {
@@ -27,6 +29,7 @@ interface SaleRequestBody {
   notes?: string
   pointOfSaleId?: string
   b2bClientId?: string
+  partnerId?: string
   items?: SaleItemInput[]
 }
 
@@ -42,9 +45,11 @@ function normalizeItems(value: unknown): SaleItemInput[] {
       const record = item as Record<string, unknown>
       const variantId = String(record.variantId || "")
       const quantity = Math.max(1, Number(record.quantity) || 1)
-      return variantId ? { variantId, quantity } : null
+      const rawUnit = Number(record.unitPrice)
+      const unitPrice = Number.isFinite(rawUnit) && rawUnit >= 0 ? rawUnit : undefined
+      return variantId ? { variantId, quantity, unitPrice } : null
     })
-    .filter((item): item is SaleItemInput => Boolean(item))
+    .filter((item) => Boolean(item)) as SaleItemInput[]
 }
 
 export async function GET() {
@@ -156,13 +161,35 @@ export async function POST(request: Request) {
     })
     const variantMap = new Map(variants.map((v) => [v.id, v]))
 
+    // Partenaire + grille de prix négociés (Task 7)
+    const partnerId = typeof body.partnerId === "string" && body.partnerId ? body.partnerId : null
+    let partnerPrices = new Map<string, number>()
+    let partner: { id: string; name: string } | null = null
+    if (partnerId) {
+      const found = await getPrisma().partner.findFirst({
+        where: { id: partnerId, isActive: true },
+        select: { id: true, name: true, prices: { select: { variantId: true, price: true } } },
+      })
+      if (!found) return NextResponse.json({ error: "Partenaire introuvable ou inactif." }, { status: 400 })
+      partner = { id: found.id, name: found.name }
+      partnerPrices = new Map(found.prices.map((p) => [p.variantId, p.price]))
+    }
+
+    // Prix appliqué par ligne : avec partenaire → unitPrice demandé ?? prix négocié ?? prix public ; sans partenaire → prix public
+    const pricedItems = items.map((item) => {
+      const variant = variantMap.get(item.variantId)
+      if (!variant) throw new Error("Produit introuvable")
+      const publicPrice = variant.price
+      const negotiated = partner ? partnerPrices.get(item.variantId) : undefined
+      const requested = item.unitPrice
+      const applied = partner ? (requested ?? negotiated ?? publicPrice) : publicPrice
+      return { variant, quantity: item.quantity, applied, publicPrice }
+    })
+
     const orderNumber = generateOrderNumber()
 
     const order = await getPrisma().$transaction(async (tx) => {
-      const subtotal = items.reduce((sum, item) => {
-        const variant = variantMap.get(item.variantId)
-        return sum + (variant?.price ?? 0) * item.quantity
-      }, 0)
+      const subtotal = pricedItems.reduce((sum, it) => sum + it.applied * it.quantity, 0)
 
       const createdOrder = await tx.order.create({
         data: {
@@ -172,6 +199,7 @@ export async function POST(request: Request) {
           customerEmail: body.customerEmail?.trim() || "",
           customerPhone: body.customerPhone?.trim() || "",
           b2bClientId: body.b2bClientId || null,
+          partnerId: partner?.id || null,
           paymentMethod: normalizePaymentMethod(body.paymentMethod),
           paymentStatus: "PAID",
           status: "DELIVERED",
@@ -182,17 +210,13 @@ export async function POST(request: Request) {
           pointOfSaleId,
           source: "CAISSE",
           items: {
-            create: items.map((item) => {
-              const variant = variantMap.get(item.variantId)
-              if (!variant) throw new Error("Produit introuvable")
-              return {
-                productId: variant.productId,
-                variantId: variant.id,
-                quantity: item.quantity,
-                price: variant.price,
-                total: variant.price * item.quantity,
-              }
-            }),
+            create: pricedItems.map((it) => ({
+              productId: it.variant.productId,
+              variantId: it.variant.id,
+              quantity: it.quantity,
+              price: it.applied,
+              total: it.applied * it.quantity,
+            })),
           },
         },
         include: { items: { include: { variant: { include: { product: true } } } } },
@@ -222,6 +246,18 @@ export async function POST(request: Request) {
 
       return createdOrder
     })
+
+    // Journaliser si un prix ≠ public a été appliqué
+    const adjusted = pricedItems.filter((it) => it.applied !== it.publicPrice)
+    if (adjusted.length) {
+      await logActivity({
+        module: "ventes",
+        action: "ajustement-prix",
+        entity: "Order",
+        entityId: order.id,
+        summary: `Vente ${order.orderNumber}${partner ? ` (partenaire ${partner.name})` : ""} : ${adjusted.length} ligne(s) à prix ajusté (${adjusted.map((i) => `${i.variant.format}: ${i.publicPrice}->${i.applied}`).join(", ")})`,
+      })
+    }
 
     return NextResponse.json(
       {
