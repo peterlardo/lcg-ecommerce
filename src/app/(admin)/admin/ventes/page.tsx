@@ -5,6 +5,7 @@ import { Banknote, ChevronDown, CreditCard, Minus, Plus, Printer, ReceiptText, R
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml, printTicketWindow } from "@/lib/ticket-template"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
+import { repriceCart } from "@/lib/partner-cart"
 
 interface ProductVariant {
   id: string
@@ -308,19 +309,15 @@ export default function VentesPage() {
     setShowPartnerDropdown(false)
     setCustomerName((current) => current || partner.name)
     setCustomerPhone((current) => current || partner.phone || "")
-    // Ré-prixer les lignes existantes avec la grille du partenaire
-    setCart((current) =>
-      current.map((item) => ({ ...item, price: partnerPriceOf(partner, item.variantId) ?? item.price }))
-    )
+    // Ré-prixer : grille du partenaire, sinon prix PUBLIC (jamais le prix d'un ancien partenaire)
+    setCart((current) => repriceCart(current, partner, publicPriceOf))
   }
 
   const clearPartner = () => {
     setSelectedPartner(null)
     setPartnerSearch("")
     // Repasser au prix public
-    setCart((current) =>
-      current.map((item) => ({ ...item, price: publicPriceOf(item.variantId) ?? item.price }))
-    )
+    setCart((current) => repriceCart(current, null, publicPriceOf))
   }
 
   const loadPosStock = useCallback(async (posId: string) => {
@@ -917,7 +914,11 @@ export default function VentesPage() {
                     value={selectedPartner ? selectedPartner.name : partnerSearch}
                     onChange={(e) => {
                       setPartnerSearch(e.target.value)
-                      setSelectedPartner(null)
+                      if (selectedPartner) {
+                        // Effacement par saisie : repasser le panier au prix public
+                        setSelectedPartner(null)
+                        setCart((current) => repriceCart(current, null, publicPriceOf))
+                      }
                       setShowPartnerDropdown(true)
                     }}
                     onFocus={() => setShowPartnerDropdown(true)}
