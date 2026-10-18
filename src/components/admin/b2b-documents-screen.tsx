@@ -220,9 +220,11 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     return () => controller.abort()
   }, [type, status, query, page, reload])
 
-  // clients et produits du formulaire, chargés à sa première ouverture
+  // clients et produits du formulaire, chargés à chaque ouverture.
+  // Ne jamais dépendre de clients.length ici : setClients relancerait l'effet,
+  // ce qui annulerait (abort) le fetch produits encore en vol — select bloqué sur « Chargement… ».
   useEffect(() => {
-    if (!creating || clients.length > 0) return
+    if (!creating) return
     const controller = new AbortController()
     const init = async () => {
       try {
@@ -241,7 +243,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     }
     void init()
     return () => controller.abort()
-  }, [creating, clients.length, session?.user?.id, session?.user?.role])
+  }, [creating, session?.user?.id, session?.user?.role])
 
   // contrat du client choisi dans le formulaire : seul un contrat actif et dans sa période s'applique
   useEffect(() => {
