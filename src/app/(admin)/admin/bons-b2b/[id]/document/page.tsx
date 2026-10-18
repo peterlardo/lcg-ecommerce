@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useParams, useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { AlertCircle, ArrowLeft, ArrowRight, Check, HandCoins, Mail, Printer, ReceiptText, X } from "lucide-react"
+import { AlertCircle, ArrowLeft, ArrowRight, Check, HandCoins, Link2, Mail, Printer, ReceiptText, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { canCreateNext, STATUS_LABEL, TYPE_LABEL, type DocType } from "@/components/admin/b2b-documents-screen"
 import { montantEnLettres } from "@/lib/montant-en-lettres"
@@ -154,6 +154,7 @@ export default function B2bDocumentPage() {
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
   const [reload, setReload] = useState(0)
+  const [sharingLink, setSharingLink] = useState(false)
 
   const [mailOpen, setMailOpen] = useState(false)
   const [mailTo, setMailTo] = useState("")
@@ -250,6 +251,31 @@ export default function B2bDocumentPage() {
     }
   }
 
+  const sharePublicLink = async () => {
+    if (!doc || sharingLink) return
+    setSharingLink(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/b2b-documents/${doc.id}/public-token`)
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.path) {
+        setError(data?.error || "Impossible de générer le lien public.")
+        return
+      }
+      const url = `${window.location.origin}${data.path}`
+      try {
+        await navigator.clipboard.writeText(url)
+        setMessage("Lien public du devis copié dans le presse-papiers")
+      } catch {
+        setMessage(`Lien public du devis : ${url}`)
+      }
+    } catch {
+      setError("Connexion au serveur impossible : le lien n'a pas pu être généré.")
+    } finally {
+      setSharingLink(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
@@ -277,6 +303,11 @@ export default function B2bDocumentPage() {
             {canEmail && (
               <button type="button" onClick={openMail} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                 <Mail className="h-4 w-4" /> Envoyer par e-mail
+              </button>
+            )}
+            {doc.type === "DEVIS" && doc.status !== "CANCELLED" && (
+              <button type="button" onClick={sharePublicLink} disabled={sharingLink} title="Copier un lien que le client peut ouvrir sans compte" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+                <Link2 className="h-4 w-4" /> {sharingLink ? "Génération…" : "Lien public"}
               </button>
             )}
             <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90">

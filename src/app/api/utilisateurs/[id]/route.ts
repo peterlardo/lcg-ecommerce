@@ -24,6 +24,9 @@ export async function PATCH(request: Request, context: { params: Promise<unknown
     }
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive)
     if (body.sessionLimit !== undefined) data.sessionLimit = Math.max(1, Math.trunc(Number(body.sessionLimit)) || 1)
+    // Superviseur B2B : voit et gère le portefeuille de TOUS les clients B2B
+    // (sinon un commercial ne voit que ses propres clients).
+    if (body.supervisesB2b !== undefined) data.supervisesB2b = Boolean(body.supervisesB2b)
     if (body.password) data.password = await bcrypt.hash(String(body.password), 12)
     if (body.image !== undefined) data.image = body.image || null
     // Promotion vers un rôle hors STAFF_ROLES (ex. COMPTABLE) : sans

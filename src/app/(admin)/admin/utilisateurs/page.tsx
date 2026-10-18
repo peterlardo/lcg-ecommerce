@@ -13,7 +13,7 @@ const labels = PERMISSION_MODULE_LABELS
 interface RoleProfile { id: string; key: string; label: string; description: string | null; color: string | null; isActive: boolean; isSystem: boolean }
 interface Permission { module: string; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
 interface PointOfSale { id: string; name: string; code: string }
-interface User { id: string; name: string | null; email: string; phone: string | null; role: string; isActive: boolean; image: string | null; permissions: Permission[]; managedPointOfSales: PointOfSale[]; openSession: { deviceName: string | null; deviceType: string | null; lastActiveAt: string } | null; sessionLimit: number }
+interface User { id: string; name: string | null; email: string; phone: string | null; role: string; isActive: boolean; image: string | null; permissions: Permission[]; managedPointOfSales: PointOfSale[]; openSession: { deviceName: string | null; deviceType: string | null; lastActiveAt: string } | null; sessionLimit: number; supervisesB2b: boolean }
 const empty = { name: "", email: "", phone: "", password: "", role: "STOCK_MANAGER", image: "" }
 const emptyPermissions = () => modules.map((module) => ({ module, canView: false, canCreate: false, canEdit: false, canDelete: false }))
 
@@ -34,6 +34,7 @@ export default function UtilisateursPage() {
   const [editPhone, setEditPhone] = useState("")
   const [editPassword, setEditPassword] = useState("")
   const [editSessionLimit, setEditSessionLimit] = useState(1)
+  const [editSupervisesB2b, setEditSupervisesB2b] = useState(false)
   const [showCreatePassword, setShowCreatePassword] = useState(false)
   const [showEditPassword, setShowEditPassword] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
@@ -197,6 +198,7 @@ export default function UtilisateursPage() {
     setEditRole(user.role)
     setEditActive(user.isActive)
     setEditSessionLimit(user.sessionLimit || 1)
+    setEditSupervisesB2b(user.supervisesB2b === true)
     setPermissions(modules.map((module) => user.permissions.find((permission) => permission.module === module) || { module, canView: user.role === "ADMIN", canCreate: user.role === "ADMIN", canEdit: user.role === "ADMIN", canDelete: user.role === "ADMIN" }))
     setEditPosIds(user.managedPointOfSales.map((p) => p.id))
   }
@@ -206,7 +208,7 @@ export default function UtilisateursPage() {
 
   const saveUser = async () => {
     if (!selected || saving) return
-    const payload: Record<string, unknown> = { name: editName, email: editEmail, phone: editPhone, role: editRole, isActive: editActive, sessionLimit: editSessionLimit, permissions, posIds: editPosIds }
+    const payload: Record<string, unknown> = { name: editName, email: editEmail, phone: editPhone, role: editRole, isActive: editActive, sessionLimit: editSessionLimit, supervisesB2b: editSupervisesB2b, permissions, posIds: editPosIds }
     if (editPassword.trim()) payload.password = editPassword.trim()
     setSaving(true)
     setSaveStatus(null)
@@ -479,6 +481,15 @@ export default function UtilisateursPage() {
                   </button>
                 </div>
               </div>
+              {isCommercialRole(editRole) && (
+                <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                  <input type="checkbox" checked={editSupervisesB2b} onChange={(e) => setEditSupervisesB2b(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-foreground">Voit tous les clients B2B</span>
+                    <span className="block text-xs text-muted-foreground">Superviseur : accès au portefeuille complet (devis, factures, contrats, créances). Sinon, ce commercial ne voit que ses propres clients.</span>
+                  </span>
+                </label>
+              )}
             </div>
 
             <div className="mt-5 border-t border-border pt-4">
