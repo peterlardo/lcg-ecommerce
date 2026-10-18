@@ -6,8 +6,9 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { formatPrice } from "@/lib/utils"
-import { canSeeModule, isCommercialRole, moduleOfPath } from "@/lib/permissions"
+import { canSeeModule, isCashierRole, isCommercialRole, moduleOfPath } from "@/lib/permissions"
 import type { AppNotification } from "@/hooks/use-notifications"
+import type { PosModeOverride } from "@/hooks/use-pos-mode"
 import {
   type LucideIcon,
   Activity,
@@ -202,9 +203,12 @@ interface AdminTopNavProps {
   recent: AppNotification[]
   newCount: number
   onMarkAllRead: () => void
+  /** Caisse tactile : barre réduite au logo, aux écrans de vente et à la déconnexion. */
+  posMode: boolean
+  onPosModeChange: (value: PosModeOverride) => void
 }
 
-export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProps) {
+export function AdminTopNav({ recent, newCount, onMarkAllRead, posMode, onPosModeChange }: AdminTopNavProps) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const [openIndex, setOpenIndex] = useState<number | null>(null)
@@ -320,9 +324,15 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
     }))
     .filter((section) => section.links.length > 0)
 
+  // Barre de la caisse tactile : les gestes du comptoir, rien d'autre.
+  const posLinks = [
+    { href: "/admin/caisse", label: "Caisse", icon: CircleDollarSign },
+    { href: "/admin/ventes", label: "Ventes", icon: ReceiptText },
+  ].filter((link) => isCashierRole(session?.user?.role) || canSee(moduleOf(link.href)))
+
   return (
     <header ref={navRef} className="sticky top-0 z-40 border-b border-[#123b82] bg-[#16489f] shadow-sm">
-      <div className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-1.5 px-2 pb-2 pt-10 sm:gap-x-4 sm:px-4">
+      <div className={posMode ? "flex flex-nowrap items-center gap-x-1.5 px-2 py-1.5 sm:gap-x-2 sm:px-3" : "flex min-h-16 flex-wrap items-center gap-x-3 gap-y-1.5 px-2 pb-2 pt-10 sm:gap-x-4 sm:px-4"}>
         <Link href={isCommercial ? "/admin/commercial" : "/admin"} className="flex shrink-0 items-center gap-2">
           <Image
             src="/logo-lcg-white-hd.png"
@@ -342,14 +352,32 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
             setOpenIndex(null)
             setNotifOpen(false)
           }}
-          className="rounded-lg p-2.5 text-white/85 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
+          className={`rounded-lg p-2.5 text-white/85 transition-colors hover:bg-white/10 hover:text-white ${posMode ? "" : "lg:hidden"}`}
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
 
+        {posMode &&
+          posLinks.map((link) => {
+            const Icon = link.icon
+            const active = isLinkActive(link.href)
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-base font-semibold transition-colors ${
+                  active ? "bg-white text-[#16489f]" : "text-white/90 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                <span className="whitespace-nowrap">{link.label}</span>
+              </Link>
+            )
+          })}
+
         <nav
           aria-label="Menu principal"
-          className="hidden min-w-0 flex-1 flex-wrap items-center gap-1.5 lg:flex"
+          className={posMode ? "hidden" : "hidden min-w-0 flex-1 flex-wrap items-center gap-1.5 lg:flex"}
         >
           {topLinks.map((link, linkIndex) => {
             const activeModule = moduleOf(link.href)
@@ -503,7 +531,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
           })}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className={`${posMode ? "ml-auto " : ""}flex shrink-0 items-center gap-1 sm:gap-2`}>
           <div ref={notifRef} className="relative">
             <button
               type="button"
@@ -578,12 +606,14 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-[15px]">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-sm font-semibold text-white">
-              {session?.user?.name?.charAt(0) || "U"}
+          {!posMode && (
+            <div className="flex items-center gap-2 text-[15px]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-sm font-semibold text-white">
+                {session?.user?.name?.charAt(0) || "U"}
+              </div>
+              <span className="hidden max-w-[160px] truncate text-white 2xl:inline">{session?.user?.name}</span>
             </div>
-            <span className="hidden max-w-[160px] truncate text-white 2xl:inline">{session?.user?.name}</span>
-          </div>
+          )}
 
           <button
             type="button"
@@ -597,7 +627,7 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
       </div>
 
       {mobileOpen && mobileSections.length > 0 && (
-        <div className="max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t border-white/15 bg-[#16489f] px-2 pb-4 lg:hidden">
+        <div className={`overflow-y-auto overscroll-contain border-t border-white/15 bg-[#16489f] px-2 pb-4 ${posMode ? "max-h-[calc(100dvh-3.5rem)]" : "max-h-[calc(100dvh-4rem)] lg:hidden"}`}>
           {mobileSections.map((section, sectionIndex) => (
             <div
               key={section.title}
@@ -629,6 +659,20 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead }: AdminTopNavProp
               </div>
             </div>
           ))}
+          <div className="mt-3 border-t border-white/15 pt-3">
+            <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-white/60">Affichage</p>
+            <button
+              type="button"
+              onClick={() => {
+                onPosModeChange(posMode ? "off" : "on")
+                setMobileOpen(false)
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-base font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <Menu className="h-5 w-5 shrink-0" />
+              <span className="min-w-0 truncate">{posMode ? "Afficher le menu complet" : "Passer en mode caisse"}</span>
+            </button>
+          </div>
         </div>
       )}
     </header>

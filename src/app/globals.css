@@ -241,6 +241,17 @@
   }
 }
 
+/* ─── MODE CAISSE (barre réduite) ──────────────────────────────
+   Sur une caisse tactile, la barre du haut se réduit au logo, aux écrans de vente et à la
+   déconnexion : l'enveloppe porte `.pos-compact`. Le bandeau d'annonces, qui prend de la
+   hauteur utile, disparaît ; le contenu respire au maximum. */
+.pos-compact .announcement-banner {
+  display: none;
+}
+.pos-compact > main {
+  padding-top: 0.75rem;
+}
+
 /* ─── IMPRESSION ───────────────────────────────────────────────
    Sur le papier, il ne reste que le contenu de l'écran : ni menu, ni messagerie, ni notifications. */
 @media print {
