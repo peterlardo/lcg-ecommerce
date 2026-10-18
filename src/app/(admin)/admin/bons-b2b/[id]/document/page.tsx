@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useParams, useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { AlertCircle, ArrowLeft, ArrowRight, Check, HandCoins, Link2, Mail, Printer, ReceiptText, X } from "lucide-react"
+import { AlertCircle, ArrowLeft, ArrowRight, CalendarClock, Check, HandCoins, Link2, Mail, Printer, ReceiptText, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { canCreateNext, STATUS_LABEL, TYPE_LABEL, type DocType } from "@/components/admin/b2b-documents-screen"
 import { montantEnLettres } from "@/lib/montant-en-lettres"
@@ -162,6 +162,10 @@ export default function B2bDocumentPage() {
   const [creditOpen, setCreditOpen] = useState(false)
   const [creditAmount, setCreditAmount] = useState("")
   const [creditReason, setCreditReason] = useState("")
+  const [promiseOpen, setPromiseOpen] = useState(false)
+  const [promiseAmount, setPromiseAmount] = useState("")
+  const [promiseDue, setPromiseDue] = useState("")
+  const [promiseNotes, setPromiseNotes] = useState("")
   const [formError, setFormError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -231,6 +235,14 @@ export default function B2bDocumentPage() {
     setCreditOpen(true)
   }
 
+  const openPromise = () => {
+    setPromiseAmount(invoice ? String(Math.round(invoice.balance)) : "")
+    setPromiseDue(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+    setPromiseNotes("")
+    setFormError("")
+    setPromiseOpen(true)
+  }
+
   const submit = async (path: string, payload: Record<string, unknown>, done: (data: Record<string, unknown>) => void) => {
     if (submitting) return
     setSubmitting(true)
@@ -298,6 +310,11 @@ export default function B2bDocumentPage() {
             {canCredit && invoice && invoice.creditable > 0 && (
               <button type="button" onClick={openCredit} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
                 <ReceiptText className="h-4 w-4" /> Établir un avoir
+              </button>
+            )}
+            {doc.type === "FACTURE" && doc.status === "INVOICED" && invoice && invoice.balance > 0.005 && (
+              <button type="button" onClick={openPromise} title="Enregistrer une date de règlement promise par le client" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                <CalendarClock className="h-4 w-4" /> Promesse de paiement
               </button>
             )}
             {canEmail && (
@@ -627,6 +644,51 @@ export default function B2bDocumentPage() {
               <button type="button" onClick={() => setCreditOpen(false)} disabled={submitting} className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">Annuler</button>
               <button type="submit" disabled={submitting || !creditReason.trim()} className="min-h-11 rounded-lg bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
                 {submitting ? "Enregistrement…" : "Établir l'avoir"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {promiseOpen && doc && invoice && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4 print:hidden" onClick={(e) => { if (e.target === e.currentTarget && !submitting) setPromiseOpen(false) }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              void submit(`/api/encaissements/${doc.id}`, { action: "promise", amount: Number(promiseAmount), dueDate: promiseDue, notes: promiseNotes }, () => {
+                setPromiseOpen(false)
+                setMessage(`Promesse de paiement enregistrée sur ${doc.reference}`)
+              })
+            }}
+            className="w-full rounded-t-2xl bg-white p-4 shadow-xl sm:max-w-lg sm:rounded-2xl sm:p-6"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Promesse de paiement — {doc.reference}</h2>
+                <p className="text-sm text-gray-500">{clientName} · reste à recouvrer {formatPrice(invoice.balance)}</p>
+              </div>
+              <button type="button" onClick={() => setPromiseOpen(false)} aria-label="Fermer" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                Montant promis (FCFA)
+                <input type="number" min={1} max={Math.max(1, Math.round(invoice.balance))} step="1" required value={promiseAmount} onChange={(e) => setPromiseAmount(e.target.value)} className={`${fieldClass} text-lg font-bold`} />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Échéance promise
+                <input type="date" required value={promiseDue} onChange={(e) => setPromiseDue(e.target.value)} className={fieldClass} />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Note (optionnel)
+                <textarea rows={2} maxLength={500} value={promiseNotes} onChange={(e) => setPromiseNotes(e.target.value)} placeholder="Ex. : règlement annoncé par le comptable du client…" className={`${fieldClass} min-h-16`} />
+              </label>
+              <p className="text-sm text-gray-500">La promesse est affichée dans le suivi du recouvrement. Elle n&apos;enregistre pas de règlement : le client doit toujours payer.</p>
+              {formError && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</p>}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setPromiseOpen(false)} disabled={submitting} className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">Annuler</button>
+              <button type="submit" disabled={submitting || !(Number(promiseAmount) > 0) || !promiseDue} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                <CalendarClock className="h-4 w-4" /> {submitting ? "Enregistrement…" : "Enregistrer la promesse"}
               </button>
             </div>
           </form>

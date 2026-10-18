@@ -23,6 +23,7 @@ async function invoiceInScope(id: string, user: SessionUser) {
       id: true, reference: true, type: true, status: true, total: true, createdAt: true,
       client: { select: { commercialId: true, b2bContracts: { where: { status: "ACTIVE" }, orderBy: { startsAt: "desc" }, take: 1, select: { paymentTermsDays: true } } } },
       payments: { select: { amount: true, validationStatus: true } },
+      promises: { select: { amount: true, status: true } },
       children: INVOICE_CREDITS,
     },
   })
@@ -133,7 +134,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 }
 
-/** Relance du client (`action: "reminder"`) ou validation des règlements en attente (`action: "validate"`). */
+/** Relance du client (`action: "reminder"`), promesse de paiement (`action: "promise"`) ou validation des règlements en attente (`action: "validate"`). */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const forbidden = await requireManagementAccess(ALLOWED)
   if (forbidden) return forbidden
@@ -144,10 +145,38 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const user = session?.user as SessionUser
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
     const action = String(body.action || "")
-    if (action !== "reminder" && action !== "validate") return NextResponse.json({ error: "Action invalide" }, { status: 400 })
+    if (action !== "reminder" && action !== "validate" && action !== "promise") return NextResponse.json({ error: "Action invalide" }, { status: 400 })
 
     const doc = await invoiceInScope(id, user)
     if (!doc) return NextResponse.json({ error: "Document introuvable" }, { status: 404 })
+
+    if (action === "promise") {
+      if (doc.type !== "FACTURE" || doc.status !== "INVOICED") {
+        return NextResponse.json({ error: "Seule une facture émise accepte une promesse de paiement" }, { status: 400 })
+      }
+      const amount = Number(body.amount)
+      if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
+      const dueDate = new Date(typeof body.dueDate === "string" ? body.dueDate : "")
+      if (Number.isNaN(dueDate.getTime())) return NextResponse.json({ error: "Date d'échéance invalide" }, { status: 400 })
+      const situation = invoiceSituation(doc.total, doc.payments, doc.children)
+      const promised = doc.promises.filter((p) => p.status === "PENDING").reduce((s, p) => s + p.amount, 0)
+      const available = Math.round((situation.open - promised) * 100) / 100
+      if (amount > available + 0.01) {
+        return NextResponse.json({ error: `Le montant dépasse le reste à recouvrer (${available.toFixed(0)} FCFA)` }, { status: 400 })
+      }
+      const promise = await getPrisma().paymentPromise.create({
+        data: {
+          b2bDocumentId: id,
+          amount: Math.round(amount * 100) / 100,
+          dueDate,
+          status: "PENDING",
+          notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 500) : null,
+          createdById: user?.id ?? null,
+        },
+      })
+      await logActivity({ module: "encaissements", action: "Promesse", entity: "b2bDocument", entityId: id, summary: `Promesse de paiement sur la facture ${doc.reference}` })
+      return NextResponse.json({ id: promise.id }, { status: 201 })
+    }
 
     if (action === "reminder") {
       const channel = CHANNELS.includes(String(body.channel || "").toUpperCase()) ? String(body.channel).toUpperCase() : "WHATSAPP"
