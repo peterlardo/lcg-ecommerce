@@ -26,9 +26,15 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       seen.add(variantId)
       rows.push({ partnerId: id, variantId, price })
     }
+    const exists = await prisma.partner.findUnique({ where: { id }, select: { id: true } })
+    if (!exists) return NextResponse.json({ error: "Partenaire introuvable." }, { status: 404 })
+    if (rows.length) {
+      const known = await prisma.productVariant.count({ where: { id: { in: rows.map((row) => row.variantId) } } })
+      if (known !== rows.length) {
+        return NextResponse.json({ error: "Format inconnu du catalogue." }, { status: 400 })
+      }
+    }
     const partner = await prisma.$transaction(async (tx) => {
-      const exists = await tx.partner.findUnique({ where: { id }, select: { id: true } })
-      if (!exists) return null
       await tx.partnerPrice.deleteMany({ where: { partnerId: id } })
       if (rows.length) await tx.partnerPrice.createMany({ data: rows })
       return tx.partner.findUnique({
@@ -36,7 +42,6 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         select: { id: true, name: true, isActive: true, prices: { select: { variantId: true, price: true } } },
       })
     })
-    if (!partner) return NextResponse.json({ error: "Partenaire introuvable." }, { status: 404 })
     return NextResponse.json(partner)
   } catch (error) {
     console.error("Erreur PUT /api/partenaires/[id]/prix:", error)

@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
   const active = searchParams.get("active")
   const withPrices = searchParams.get("withPrices") === "1"
 
+  try {
   const prisma = getPrisma()
   const partners = await prisma.partner.findMany({
     where: {
@@ -55,6 +56,10 @@ export async function GET(request: NextRequest) {
   })
 
   return NextResponse.json(partners)
+  } catch (error) {
+    console.error("GET /api/partenaires error", error)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -85,6 +90,7 @@ export async function POST(request: NextRequest) {
       email: str(body.email),
       address: str(body.address),
       notes: str(body.notes),
+      isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
       createdById: user?.id ?? null,
     },
     select: partnerSummary,
