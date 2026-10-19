@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
       },
     ]
   },
+  async redirects() {
+    return [{ source: "/admin/distribution", destination: "/admin/livraisons", permanent: false }]
+  },
   serverExternalPackages: [
     "prisma",
     "@prisma/client",

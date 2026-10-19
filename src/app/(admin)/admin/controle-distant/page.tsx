@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
-import { AlertCircle, Banknote, BarChart3, CalendarRange, LockKeyhole, Package, RefreshCw, ShieldCheck, Truck, Wifi } from "lucide-react"
+import { AlertCircle, Banknote, BarChart3, CalendarRange, LockKeyhole, Package, RefreshCw, ShieldCheck, Wifi } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 
 interface ReportPayload {
@@ -24,7 +24,6 @@ interface ReportPayload {
 const quickLinks = [
   { href: "/admin/ventes", label: "Ventes", icon: Banknote },
   { href: "/admin/stock", label: "Stock", icon: Package },
-  { href: "/admin/distribution", label: "Distribution", icon: Truck },
   { href: "/admin/rapports", label: "Rapports", icon: BarChart3 },
 ]
 

@@ -93,7 +93,6 @@ const navGroups = [
       { href: "/admin/production", label: "Production", icon: Factory },
       { href: "/admin/lots", label: "Lots", icon: ScanBarcode },
       { href: "/admin/tracabilite", label: "Traçabilité", icon: ScanBarcode },
-      { href: "/admin/distribution", label: "Distribution", icon: Truck },
       { href: "/admin/livraisons", label: "Livraisons", icon: Truck },
       { href: "/admin/livreurs", label: "Livreurs", icon: Bike },
     ],
