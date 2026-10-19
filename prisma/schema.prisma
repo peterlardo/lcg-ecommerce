@@ -57,6 +57,7 @@ model User {
   image         String?
   role          String    @default("CUSTOMER")
   isActive      Boolean   @default(true)
+  discountPercent Int      @default(0)
   supervisesB2b Boolean   @default(false)
   // Nombre de connexions simultanées autorisées pour ce compte (défaut : 1 seule).
   sessionLimit  Int       @default(1)
@@ -99,6 +100,7 @@ model RoleProfile {
   description String?
   color       String?
   isActive    Boolean  @default(true)
+  discountPercent Int      @default(0)
   isSystem    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -211,6 +213,7 @@ model Product {
   categoryId  String?
   isFeatured  Boolean  @default(false)
   isActive    Boolean  @default(true)
+  discountPercent Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -236,7 +239,6 @@ model ProductVariant {
   productionLots    ProductionLot[]
   b2bDocumentItems  B2bDocumentItem[]
   contractItems     B2bContractItem[]
-  partnerPrices     PartnerPrice[]
 }
 
 enum CouponType {
@@ -253,6 +255,7 @@ model Promotion {
   startsAt   DateTime
   endsAt     DateTime
   isActive   Boolean  @default(true)
+  discountPercent Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -276,6 +279,7 @@ model Coupon {
   maxUses     Int?
   usedCount   Int        @default(0)
   isActive    Boolean    @default(true)
+  discountPercent Int      @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -353,31 +357,14 @@ model Partner {
   address     String?
   notes       String?
   isActive    Boolean  @default(true)
+  discountPercent Int      @default(0)
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  prices PartnerPrice[]
   orders Order[]
 
   @@index([isActive])
   @@index([name])
-}
-
-model PartnerPrice {
-  id        String   @id @default(cuid())
-  partnerId String
-  variantId String
-  price     Float
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  partner Partner        @relation(fields: [partnerId], references: [id], onDelete: Cascade)
-  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-
-  @@unique([partnerId, variantId])
-  @@index([partnerId])
-  @@index([variantId])
 }
 
 model Delivery {
@@ -417,6 +404,7 @@ model DeliveryZone {
   name      String   @unique
   baseFee   Float    @default(0)
   isActive  Boolean  @default(true)
+  discountPercent Int      @default(0)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -438,6 +426,7 @@ model DeliveryAgent {
   zonesLabel  String?
   isAvailable Boolean  @default(true)
   isActive    Boolean  @default(true)
+  discountPercent Int      @default(0)
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -570,6 +559,7 @@ model B2BClient {
   phone      String
   status     String   @default("Validé")
   isActive   Boolean  @default(true)
+  discountPercent Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -612,6 +602,7 @@ model Client {
   longitude    Float?
   notes        String?
   isActive     Boolean    @default(true)
+  discountPercent Int      @default(0)
   commercialId String?
   creditLimit  Float?
   category     String?
@@ -640,6 +631,7 @@ model PointOfSale {
   plateNumber   String? // Immatriculation (véhicules uniquement)
   capacity      Int? // Capacité max en unités (null = illimité)
   isActive      Boolean  @default(true)
+  discountPercent Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -731,6 +723,7 @@ model Announcement {
   startsAt      DateTime  @default(now())
   expiresAt     DateTime?
   isActive      Boolean   @default(true)
+  discountPercent Int      @default(0)
   createdById   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -754,6 +747,7 @@ model UserDeviceSession {
   lastActiveAt DateTime  @default(now())
   expiresAt    DateTime?
   isActive     Boolean   @default(true)
+  discountPercent Int      @default(0)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
