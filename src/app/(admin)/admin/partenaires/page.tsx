@@ -70,7 +70,11 @@ export default function PartenairesPage() {
   const loadPartners = useCallback(async () => {
     try {
       const res = await fetch("/api/partenaires?withPrices=1")
-      if (res.ok) setPartners(await res.json())
+      if (!res.ok) {
+        setError("Impossible de charger les partenaires.")
+        return
+      }
+      setPartners(await res.json())
     } catch {
       setError("Impossible de charger les partenaires.")
     }
@@ -89,7 +93,7 @@ export default function PartenairesPage() {
       }
       setVariants(rows)
     } catch {
-      /*chargement optionnel*/
+      setError("Impossible de charger le catalogue des formats.")
     }
   }, [])
 
@@ -161,6 +165,9 @@ export default function PartenairesPage() {
           name: form.name,
           companyName: form.companyName || undefined,
           phone: form.phone || undefined,
+          email: form.email || undefined,
+          address: form.address || undefined,
+          notes: form.notes || undefined,
         }),
       })
       const data = await res.json().catch(() => null)
@@ -331,6 +338,18 @@ export default function PartenairesPage() {
             <div>
               <label className={labelCls}>Téléphone</label>
               <input className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600">Email</label>
+              <input className={inputCls} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600">Adresse</label>
+              <input className={inputCls} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600">Notes</label>
+              <input className={inputCls} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
           </div>
           <button onClick={createPartner} disabled={saving || !form.name.trim()} className={btnPrimary}>

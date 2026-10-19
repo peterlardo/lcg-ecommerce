@@ -157,6 +157,7 @@ export default function VentesPage() {
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null)
   const [partnerSearch, setPartnerSearch] = useState("")
   const [showPartnerDropdown, setShowPartnerDropdown] = useState(false)
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const lowStockThreshold = LOW_STOCK_THRESHOLD
@@ -307,6 +308,7 @@ export default function VentesPage() {
     setSelectedPartner(partner)
     setPartnerSearch("")
     setShowPartnerDropdown(false)
+    setPriceDraft({})
     setCustomerName((current) => current || partner.name)
     setCustomerPhone((current) => current || partner.phone || "")
     // Ré-prixer : grille du partenaire, sinon prix PUBLIC (jamais le prix d'un ancien partenaire)
@@ -316,6 +318,7 @@ export default function VentesPage() {
   const clearPartner = () => {
     setSelectedPartner(null)
     setPartnerSearch("")
+    setPriceDraft({})
     // Repasser au prix public
     setCart((current) => repriceCart(current, null, publicPriceOf))
   }
@@ -421,7 +424,7 @@ export default function VentesPage() {
                 pointOfSaleId: pendingPayment.pointOfSaleId,
                 notes: `Paiement ${pendingPayment.provider} - ${pendingPayment.transactionId}`,
                 partnerId: pendingPayment.partnerId || undefined,
-                items: pendingPayment.items.map((item) => ({ variantId: item.variantId, quantity: item.quantity, unitPrice: item.price })),
+                items: pendingPayment.items.map((item) => (pendingPayment.partnerId ? { variantId: item.variantId, quantity: item.quantity, unitPrice: item.price } : { variantId: item.variantId, quantity: item.quantity })),
               }),
             })
             if (saleRes.ok) {
@@ -614,7 +617,7 @@ export default function VentesPage() {
           paymentMethod: paymentMethodToApi[paymentMethod] || "CASH_ON_DELIVERY",
           pointOfSaleId,
           notes,
-          items: cart.map((item) => ({ variantId: item.variantId, quantity: item.quantity, unitPrice: item.price })),
+          items: cart.map((item) => (selectedPartner ? { variantId: item.variantId, quantity: item.quantity, unitPrice: item.price } : { variantId: item.variantId, quantity: item.quantity })),
         }),
       })
 
@@ -630,6 +633,7 @@ export default function VentesPage() {
       setClientSearch("")
       setSelectedPartner(null)
       setPartnerSearch("")
+      setPriceDraft({})
       setNotes("")
       await loadProducts()
       await loadPosStock(pointOfSaleId)
@@ -917,6 +921,7 @@ export default function VentesPage() {
                       if (selectedPartner) {
                         // Effacement par saisie : repasser le panier au prix public
                         setSelectedPartner(null)
+                        setPriceDraft({})
                         setCart((current) => repriceCart(current, null, publicPriceOf))
                       }
                       setShowPartnerDropdown(true)
@@ -989,12 +994,22 @@ export default function VentesPage() {
                             type="number"
                             min={0}
                             step={25}
-                            value={item.price}
+                            value={priceDraft[item.variantId] ?? String(item.price)}
                             onChange={(e) => {
-                              const next = Math.max(0, Number(e.target.value) || 0)
+                              const rawPrice = e.target.value
+                              setPriceDraft((current) => ({ ...current, [item.variantId]: rawPrice }))
+                              if (rawPrice === "") return
+                              const next = Number(rawPrice)
+                              if (!Number.isFinite(next) || next < 0) return
                               setCart((current) => current.map((row) => row.variantId === item.variantId ? { ...row, price: next } : row))
                             }}
-                            className="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-right text-xs sm:text-sm font-semibold"
+                            onBlur={() => setPriceDraft((current) => {
+                              if (!(item.variantId in current)) return current
+                              const next = { ...current }
+                              delete next[item.variantId]
+                              return next
+                            })}
+                            className="w-24 min-h-11 rounded-lg border border-gray-300 px-2 py-1.5 text-right text-xs sm:text-sm font-semibold"
                           />
                           <span className="text-xs sm:text-sm font-semibold text-gray-900">{formatPrice(item.price * item.quantity)}</span>
                         </div>
