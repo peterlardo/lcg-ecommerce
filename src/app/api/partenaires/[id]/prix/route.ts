@@ -18,7 +18,13 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     const rows: { partnerId: string; variantId: string; price: number }[] = []
     for (const entry of raw) {
       const variantId = typeof entry?.variantId === "string" ? entry.variantId : ""
-      const price = Number(entry?.price)
+      const value = entry?.price
+      const price =
+        typeof value === "number"
+          ? value
+          : typeof value === "string" && value.trim() !== ""
+            ? Number(value)
+            : Number.NaN
       if (!variantId || !Number.isFinite(price) || price < 0) {
         return NextResponse.json({ error: "Prix invalide (valeur numerique positive requise)." }, { status: 400 })
       }
