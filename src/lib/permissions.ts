@@ -49,7 +49,6 @@ export const MODULE_ROLES: Record<string, string[]> = {
   // le comptable lit les devis, commandes, factures et avoirs (sans en créer)
   b2b: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
   contrats: ["ADMIN", "COMMERCIAL", "COMPTABLE"],
-  partenaires: ["ADMIN"],
 }
 
 /** Écrans pilotés par le droit d'un module voisin. */
