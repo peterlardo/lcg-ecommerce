@@ -4,10 +4,6 @@ import { useSession } from "next-auth/react"
 import { hasPermission } from "@/lib/permissions"
 import { Handshake, Plus, Search, Trash2, X, Loader2, Power, PowerOff, Save } from "lucide-react"
 
-interface PartnerPriceRow {
-  variantId: string
-  price: number
-}
 
 interface Partner {
   id: string
@@ -18,15 +14,9 @@ interface Partner {
   address: string | null
   notes: string | null
   isActive: boolean
-  prices?: PartnerPriceRow[]
+  discountPercent: number
 }
 
-interface VariantRow {
-  variantId: string
-  productName: string
-  format: string
-  publicPrice: number
-}
 
 const inputCls =
   "w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
@@ -54,14 +44,13 @@ export default function PartenairesPage() {
   const canDelete = hasPermission(session?.user, ["partenaires"], "delete")
 
   const [partners, setPartners] = useState<Partner[]>([])
-  const [variants, setVariants] = useState<VariantRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Partner | null>(null)
   const [form, setForm] = useState(emptyForm)
-  const [priceInputs, setPriceInputs] = useState<Record<string, string>>({})
+  const [discount, setDiscount] = useState("0")
   const [showCreate, setShowCreate] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -69,7 +58,7 @@ export default function PartenairesPage() {
 
   const loadPartners = useCallback(async () => {
     try {
-      const res = await fetch("/api/partenaires?withPrices=1")
+      const res = await fetch("/api/partenaires")
       if (!res.ok) {
         setError("Impossible de charger les partenaires.")
         return
@@ -80,31 +69,15 @@ export default function PartenairesPage() {
     }
   }, [])
 
-  const loadVariants = useCallback(async () => {
-    try {
-      const res = await fetch("/api/produits?all=1")
-      if (!res.ok) return
-      const products = await res.json()
-      const rows: VariantRow[] = []
-      for (const p of products) {
-        for (const v of p.variants ?? []) {
-          rows.push({ variantId: v.id, productName: p.name, format: v.format, publicPrice: v.price })
-        }
-      }
-      setVariants(rows)
-    } catch {
-      setError("Impossible de charger le catalogue des formats.")
-    }
-  }, [])
 
   useEffect(() => {
     const init = async () => {
       setLoading(true)
-      await Promise.all([loadPartners(), loadVariants()])
+      await loadPartners()
       setLoading(false)
     }
     void init()
-  }, [loadPartners, loadVariants])
+  }, [loadPartners])
 
   useEffect(() => {
     if (!toast) return
@@ -131,9 +104,7 @@ export default function PartenairesPage() {
         address: p.address ?? "",
         notes: p.notes ?? "",
       })
-      const inputs: Record<string, string> = {}
-      for (const row of p.prices ?? []) inputs[row.variantId] = String(row.price)
-      setPriceInputs(inputs)
+      setDiscount(String(p.discountPercent ?? 0))
       setError("")
     } catch {
       setError("Impossible de charger le partenaire.")
@@ -168,6 +139,7 @@ export default function PartenairesPage() {
           email: form.email || undefined,
           address: form.address || undefined,
           notes: form.notes || undefined,
+          discountPercent: Number(discount) || 0,
         }),
       })
       const data = await res.json().catch(() => null)
@@ -177,6 +149,7 @@ export default function PartenairesPage() {
       }
       setShowCreate(false)
       setForm(emptyForm)
+      setDiscount("0")
       await loadPartners()
       await loadDetail(data.id)
       setToast("Partenaire créé.")
@@ -202,6 +175,7 @@ export default function PartenairesPage() {
           email: form.email || null,
           address: form.address || null,
           notes: form.notes || null,
+          discountPercent: Number(discount) || 0,
         }),
       })
       const data = await res.json().catch(() => null)
@@ -219,33 +193,6 @@ export default function PartenairesPage() {
     }
   }
 
-  async function savePrices() {
-    if (!selected) return
-    setSaving(true)
-    setError("")
-    try {
-      const prices = Object.entries(priceInputs)
-        .filter(([, v]) => v.trim() !== "")
-        .map(([variantId, v]) => ({ variantId, price: Number(v) }))
-      const res = await fetch(`/api/partenaires/${selected.id}/prix`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prices }),
-      })
-      const data = await res.json().catch(() => null)
-      if (!res.ok) {
-        setError(data?.error ?? "Erreur lors de l'enregistrement des prix.")
-        return
-      }
-      await loadPartners()
-      await loadDetail(selected.id)
-      setToast("Grille de prix enregistrée.")
-    } catch {
-      setError("Erreur réseau.")
-    } finally {
-      setSaving(false)
-    }
-  }
 
   async function toggleActive() {
     if (!selected) return
@@ -285,7 +232,7 @@ export default function PartenairesPage() {
       setSelected(null)
       setSelectedId(null)
       setForm(emptyForm)
-      setPriceInputs({})
+      setDiscount("0")
       await loadPartners()
       setToast("Partenaire supprimé.")
     } catch {
@@ -302,7 +249,7 @@ export default function PartenairesPage() {
           <Handshake className="h-5 w-5 text-primary-600" /> Partenaires
         </h1>
         {canCreate && (
-          <button onClick={() => { setForm(emptyForm); setShowCreate(true) }} className={btnPrimary}>
+          <button onClick={() => { setForm(emptyForm); setDiscount("0"); setShowCreate(true) }} className={btnPrimary}>
             <Plus className="h-4 w-4" /> Nouveau partenaire
           </button>
         )}
@@ -350,6 +297,10 @@ export default function PartenairesPage() {
             <div>
               <label className="block text-xs font-medium text-gray-600">Notes</label>
               <input className={inputCls} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600">Remise (%)</label>
+              <input className={inputCls} type="number" min={0} max={100} value={discount} onChange={(e) => setDiscount(e.target.value)} />
             </div>
           </div>
           <button onClick={createPartner} disabled={saving || !form.name.trim()} className={btnPrimary}>
@@ -459,48 +410,23 @@ export default function PartenairesPage() {
               )}
 
               <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-2">Grille de prix négociés</h3>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Remise partenaires</h3>
                 <p className="text-xs text-gray-500 mb-2">
-                  Laissez vide pour un format : le prix public s&apos;applique à la vente.
+                  Pourcentage de remise appliqué aux prix publics lors des ventes à ce partenaire. Les prix sont arrondis au multiple de 25 FCFA.
                 </p>
-                <div className="overflow-x-auto rounded-lg border border-gray-200">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500">
-                      <tr>
-                        <th className="px-3 py-2">Produit</th>
-                        <th className="px-3 py-2">Format</th>
-                        <th className="px-3 py-2 text-right">Prix public</th>
-                        <th className="px-3 py-2 text-right">Prix partenaire</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {variants.map((v) => (
-                        <tr key={v.variantId}>
-                          <td className="px-3 py-2 text-gray-900">{v.productName}</td>
-                          <td className="px-3 py-2 text-gray-600">{v.format}</td>
-                          <td className="px-3 py-2 text-right text-gray-600">{v.publicPrice.toLocaleString("fr-FR")}</td>
-                          <td className="px-3 py-2 text-right">
-                            <input
-                              type="number"
-                              min={0}
-                              step={25}
-                              disabled={!canEdit}
-                              className="w-28 px-2 py-2 text-right text-sm border border-gray-300 rounded-lg disabled:bg-gray-50"
-                              placeholder="—"
-                              value={priceInputs[v.variantId] ?? ""}
-                              onChange={(e) => setPriceInputs({ ...priceInputs, [v.variantId]: e.target.value })}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="max-w-[160px]">
+                  <label className={labelCls}>Remise (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    disabled={!canEdit}
+                    className={inputCls}
+                    value={discount}
+                    onChange={(e) => setDiscount(e.target.value)}
+                  />
                 </div>
-                {canEdit && (
-                  <button onClick={savePrices} disabled={saving} className={btnPrimary + " mt-3"}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Enregistrer les prix
-                  </button>
-                )}
               </div>
 
               {canEdit && (

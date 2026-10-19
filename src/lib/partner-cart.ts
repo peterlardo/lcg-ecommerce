@@ -1,10 +1,5 @@
-export interface PartnerLikePrice {
-  variantId: string
-  price: number
-}
-
 export interface PartnerLike {
-  prices?: PartnerLikePrice[] | null
+  discountPercent?: number | null
 }
 
 export interface CartLine {
@@ -13,8 +8,19 @@ export interface CartLine {
 }
 
 /**
- * Reprixise un panier selon le partenaire sélectionné.
- * - partenaire actif : prix négocié du partenaire, sinon prix PUBLIC (jamais le prix d'un autre partenaire)
+ * Applique la remise (%) d'un partenaire a un prix public.
+ * - remise bornee entre 0 et 100
+ * - prix arrondi au multiple de 25 FCFA le plus proche
+ */
+export function applyPartnerDiscount(publicPrice: number, discountPercent?: number | null): number {
+  const pct = Math.max(0, Math.min(100, Number(discountPercent) || 0))
+  const discounted = publicPrice * (1 - pct / 100)
+  return Math.round(discounted / 25) * 25
+}
+
+/**
+ * Reprixise un panier selon le partenaire selectionne.
+ * - partenaire : prix public moins sa remise (%)
  * - aucun partenaire (null) : prix public
  * - variant inconnu du catalogue public : conserve le prix courant
  */
@@ -24,11 +30,9 @@ export function repriceCart<T extends CartLine>(
   publicPriceOf: (variantId: string) => number | undefined
 ): T[] {
   return cart.map((line) => {
-    if (partner) {
-      const negotiated = partner.prices?.find((p) => p.variantId === line.variantId)?.price
-      if (negotiated !== undefined) return { ...line, price: negotiated }
-    }
     const publicPrice = publicPriceOf(line.variantId)
-    return publicPrice !== undefined ? { ...line, price: publicPrice } : line
+    if (publicPrice === undefined) return line
+    const next = partner ? applyPartnerDiscount(publicPrice, partner.discountPercent) : publicPrice
+    return { ...line, price: next }
   })
 }

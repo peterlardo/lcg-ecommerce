@@ -16,6 +16,7 @@ const partnerSummary = {
   companyName: true,
   phone: true,
   isActive: true,
+  discountPercent: true,
 } as const
 
 export async function GET(request: NextRequest) {
@@ -25,7 +26,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const q = (searchParams.get("q") ?? "").trim()
   const active = searchParams.get("active")
-  const withPrices = searchParams.get("withPrices") === "1"
 
   try {
   const prisma = getPrisma()
@@ -43,16 +43,7 @@ export async function GET(request: NextRequest) {
         : {}),
     },
     orderBy: { name: "asc" },
-    select: {
-      ...partnerSummary,
-      ...(withPrices
-        ? {
-            prices: {
-              select: { variantId: true, price: true },
-            },
-          }
-        : {}),
-    },
+    select: partnerSummary,
   })
 
   return NextResponse.json(partners)
@@ -90,6 +81,7 @@ export async function POST(request: NextRequest) {
       email: str(body.email),
       address: str(body.address),
       notes: str(body.notes),
+      discountPercent: Math.max(0, Math.min(100, Math.trunc(Number(body.discountPercent) || 0))),
       isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
       createdById: user?.id ?? null,
     },

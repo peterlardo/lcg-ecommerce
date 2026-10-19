@@ -5,7 +5,7 @@ import { Banknote, ChevronDown, CreditCard, Minus, Plus, Printer, ReceiptText, R
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml, printTicketWindow } from "@/lib/ticket-template"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
-import { repriceCart } from "@/lib/partner-cart"
+import { repriceCart, applyPartnerDiscount } from "@/lib/partner-cart"
 
 interface ProductVariant {
   id: string
@@ -38,18 +38,13 @@ interface B2BClient {
   status: string
 }
 
-interface PartnerPriceEntry {
-  variantId: string
-  price: number
-}
-
 interface Partner {
   id: string
   name: string
   companyName: string | null
   phone: string | null
   isActive: boolean
-  prices?: PartnerPriceEntry[]
+  discountPercent: number
 }
 
 interface PosStock { variantId: string; quantity: number; lotsAvailable: number }
@@ -222,7 +217,7 @@ export default function VentesPage() {
         fetch("/api/produits"),
         fetch("/api/points-de-vente/list"),
         fetch("/api/clients-b2b"),
-        fetch("/api/partenaires?active=1&withPrices=1"),
+        fetch("/api/partenaires?active=1"),
       ])
       if (!res.ok) throw new Error("Impossible de charger les produits")
       setProducts(await res.json())
@@ -255,7 +250,7 @@ export default function VentesPage() {
           fetch("/api/produits", { signal: controller.signal }),
           fetch("/api/points-de-vente/list", { signal: controller.signal }),
           fetch("/api/clients-b2b", { signal: controller.signal }),
-          fetch("/api/partenaires?active=1&withPrices=1", { signal: controller.signal }),
+          fetch("/api/partenaires?active=1", { signal: controller.signal }),
         ])
         if (!res.ok) throw new Error("Impossible de charger les produits")
         if (controller.signal.aborted) return
@@ -301,8 +296,12 @@ export default function VentesPage() {
     )
   }, [partners, partnerSearch])
 
-  const partnerPriceOf = (partner: Partner | null, variantId: string): number | undefined =>
-    partner?.prices?.find((p) => p.variantId === variantId)?.price
+  const partnerPriceOf = (partner: Partner | null, variantId: string): number | undefined => {
+    if (!partner) return undefined
+    const publicPrice = publicPriceOf(variantId)
+    if (publicPrice === undefined) return undefined
+    return applyPartnerDiscount(publicPrice, partner.discountPercent)
+  }
 
   const selectPartner = (partner: Partner) => {
     setSelectedPartner(partner)

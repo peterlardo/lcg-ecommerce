@@ -23,6 +23,7 @@ const PARTNER_SELECT = {
   address: true,
   notes: true,
   isActive: true,
+  discountPercent: true,
 } as const
 
 export async function GET(_request: NextRequest, { params }: Ctx) {
@@ -32,7 +33,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
   const { id } = await params
   const partner = await getPrisma().partner.findUnique({
     where: { id },
-    include: { prices: { select: { variantId: true, price: true } } },
+    select: PARTNER_SELECT,
   })
   if (!partner) return NextResponse.json({ error: "Partenaire introuvable" }, { status: 404 })
 
@@ -65,6 +66,11 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     }
   }
   if (body.isActive !== undefined) data.isActive = Boolean(body.isActive)
+  if (body.discountPercent !== undefined) {
+    const pct = Number(body.discountPercent)
+    if (!Number.isFinite(pct)) return NextResponse.json({ error: "Remise invalide." }, { status: 400 })
+    data.discountPercent = Math.max(0, Math.min(100, Math.trunc(pct)))
+  }
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Aucune modification fournie" }, { status: 400 })

@@ -10,6 +10,7 @@ import {
 } from "@/lib/stock-service"
 import { CASHIER_ROLES, isCashierRole } from "@/lib/permissions"
 import { logActivity } from "@/lib/activity"
+import { applyPartnerDiscount } from "@/lib/partner-cart"
 
 const PAYMENT_METHODS = ["CASH_ON_DELIVERY", "MOBILE_MONEY", "CARD"] as const
 
@@ -161,28 +162,26 @@ export async function POST(request: Request) {
     })
     const variantMap = new Map(variants.map((v) => [v.id, v]))
 
-    // Partenaire + grille de prix négociés (Task 7)
+    // Partenaire + remise en pourcentage (Task 7)
     const partnerId = typeof body.partnerId === "string" && body.partnerId ? body.partnerId : null
-    let partnerPrices = new Map<string, number>()
-    let partner: { id: string; name: string } | null = null
+    let partner: { id: string; name: string; discountPercent: number } | null = null
     if (partnerId) {
       const found = await getPrisma().partner.findFirst({
         where: { id: partnerId, isActive: true },
-        select: { id: true, name: true, prices: { select: { variantId: true, price: true } } },
+        select: { id: true, name: true, discountPercent: true },
       })
       if (!found) return NextResponse.json({ error: "Partenaire introuvable ou inactif." }, { status: 400 })
-      partner = { id: found.id, name: found.name }
-      partnerPrices = new Map(found.prices.map((p) => [p.variantId, p.price]))
+      partner = { id: found.id, name: found.name, discountPercent: found.discountPercent }
     }
 
-    // Prix appliqué par ligne : avec partenaire → unitPrice demandé ?? prix négocié ?? prix public ; sans partenaire → prix public
+    // Prix appliqué par ligne : avec partenaire → unitPrice demandé ?? prix remisé ?? prix public ; sans partenaire → prix public
     const pricedItems = items.map((item) => {
       const variant = variantMap.get(item.variantId)
       if (!variant) throw new Error("Produit introuvable")
       const publicPrice = variant.price
-      const negotiated = partner ? partnerPrices.get(item.variantId) : undefined
+      const discounted = partner ? applyPartnerDiscount(publicPrice, partner.discountPercent) : undefined
       const requested = item.unitPrice
-      const applied = partner ? (requested ?? negotiated ?? publicPrice) : publicPrice
+      const applied = partner ? (requested ?? discounted ?? publicPrice) : publicPrice
       return { variant, quantity: item.quantity, applied, publicPrice }
     })
 
