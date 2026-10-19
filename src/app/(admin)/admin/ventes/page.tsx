@@ -5,7 +5,7 @@ import { Banknote, ChevronDown, CreditCard, Minus, Plus, Printer, ReceiptText, R
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml, printTicketWindow } from "@/lib/ticket-template"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
-import { repriceCart, applyPartnerDiscount } from "@/lib/partner-cart"
+import { repriceCart, applyPartnerDiscount, preferredPriceOf } from "@/lib/partner-cart"
 
 interface ProductVariant {
   id: string
@@ -153,6 +153,7 @@ export default function VentesPage() {
   const [partnerSearch, setPartnerSearch] = useState("")
   const [showPartnerDropdown, setShowPartnerDropdown] = useState(false)
   const [priceDraft, setPriceDraft] = useState<Record<string, string>>({})
+  const [partnerPrices, setPartnerPrices] = useState<Record<string, number>>({})
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const lowStockThreshold = LOW_STOCK_THRESHOLD
@@ -298,26 +299,48 @@ export default function VentesPage() {
 
   const partnerPriceOf = (partner: Partner | null, variantId: string): number | undefined => {
     if (!partner) return undefined
+    const preferred = preferredPriceOf(partnerPrices, variantId)
+    if (preferred !== undefined) return preferred
     const publicPrice = publicPriceOf(variantId)
     if (publicPrice === undefined) return undefined
     return applyPartnerDiscount(publicPrice, partner.discountPercent)
   }
 
-  const selectPartner = (partner: Partner) => {
+  const loadPartnerPrices = useCallback(async (partnerId: string): Promise<Record<string, number>> => {
+    try {
+      const res = await fetch(`/api/partenaires/${partnerId}/prix`)
+      if (!res.ok) return {}
+      const data = await res.json()
+      const map: Record<string, number> = {}
+      for (const product of data.products ?? []) {
+        for (const variant of product.variants ?? []) {
+          if (typeof variant.partnerPrice === "number") map[variant.id] = variant.partnerPrice
+        }
+      }
+      return map
+    } catch {
+      return {}
+    }
+  }, [])
+
+  const selectPartner = async (partner: Partner) => {
     setSelectedPartner(partner)
     setPartnerSearch("")
     setShowPartnerDropdown(false)
     setPriceDraft({})
     setCustomerName((current) => current || partner.name)
     setCustomerPhone((current) => current || partner.phone || "")
-    // Ré-prixer : grille du partenaire, sinon prix PUBLIC (jamais le prix d'un ancien partenaire)
-    setCart((current) => repriceCart(current, partner, publicPriceOf))
+    const prices = await loadPartnerPrices(partner.id)
+    setPartnerPrices(prices)
+    // Ré-prixer : tarif préférentiel produit, sinon remise (%), sinon prix public
+    setCart((current) => repriceCart(current, partner, publicPriceOf, prices))
   }
 
   const clearPartner = () => {
     setSelectedPartner(null)
     setPartnerSearch("")
     setPriceDraft({})
+    setPartnerPrices({})
     // Repasser au prix public
     setCart((current) => repriceCart(current, null, publicPriceOf))
   }

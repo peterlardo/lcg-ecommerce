@@ -20,7 +20,7 @@ const partnerSummary = {
 } as const
 
 export async function GET(request: NextRequest) {
-  const denied = await requireManagementAccess(PARTNER_READ_ROLES)
+  const denied = await requireManagementAccess(PARTNER_READ_ROLES, [["partenaires", "view"]])
   if (denied) return denied
 
   const { searchParams } = new URL(request.url)

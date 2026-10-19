@@ -27,7 +27,7 @@ const PARTNER_SELECT = {
 } as const
 
 export async function GET(_request: NextRequest, { params }: Ctx) {
-  const forbidden = await requireManagementAccess(PARTNER_READ_ROLES)
+  const forbidden = await requireManagementAccess(PARTNER_READ_ROLES, [["partenaires", "view"]])
   if (forbidden) return forbidden
 
   const { id } = await params

@@ -162,26 +162,30 @@ export async function POST(request: Request) {
     })
     const variantMap = new Map(variants.map((v) => [v.id, v]))
 
-    // Partenaire + remise en pourcentage (Task 7)
+    // Partenaire + tarif preferentiel par produit (avec repli sur la remise %)
     const partnerId = typeof body.partnerId === "string" && body.partnerId ? body.partnerId : null
     let partner: { id: string; name: string; discountPercent: number } | null = null
+    let partnerPrices = new Map<string, number>()
     if (partnerId) {
       const found = await getPrisma().partner.findFirst({
         where: { id: partnerId, isActive: true },
-        select: { id: true, name: true, discountPercent: true },
+        select: { id: true, name: true, discountPercent: true, prices: { select: { variantId: true, price: true } } },
       })
       if (!found) return NextResponse.json({ error: "Partenaire introuvable ou inactif." }, { status: 400 })
       partner = { id: found.id, name: found.name, discountPercent: found.discountPercent }
+      partnerPrices = new Map(found.prices.map((p) => [p.variantId, p.price]))
     }
 
-    // Prix appliqué par ligne : avec partenaire → unitPrice demandé ?? prix remisé ?? prix public ; sans partenaire → prix public
+    // Prix appliqué par ligne : avec partenaire → tarif preferentiel du produit ?? prix remisé (%)
+    // ?? prix public ; sans partenaire → prix public
     const pricedItems = items.map((item) => {
       const variant = variantMap.get(item.variantId)
       if (!variant) throw new Error("Produit introuvable")
       const publicPrice = variant.price
+      const preferred = partner ? partnerPrices.get(item.variantId) : undefined
       const discounted = partner ? applyPartnerDiscount(publicPrice, partner.discountPercent) : undefined
       const requested = item.unitPrice
-      const applied = partner ? (requested ?? discounted ?? publicPrice) : publicPrice
+      const applied = partner ? (requested ?? preferred ?? discounted ?? publicPrice) : publicPrice
       return { variant, quantity: item.quantity, applied, publicPrice }
     })
 

@@ -17,6 +17,19 @@ interface Partner {
   discountPercent: number
 }
 
+interface CatalogVariant {
+  id: string
+  format: string
+  price: number
+  partnerPrice: number | null
+}
+
+interface CatalogProduct {
+  id: string
+  name: string
+  variants: CatalogVariant[]
+}
+
 
 const inputCls =
   "w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
@@ -55,6 +68,11 @@ export default function PartenairesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [toast, setToast] = useState("")
+  const [catalog, setCatalog] = useState<CatalogProduct[]>([])
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({})
+  const [savingVariantId, setSavingVariantId] = useState<string | null>(null)
+  const [productSearch, setProductSearch] = useState("")
 
   const loadPartners = useCallback(async () => {
     try {
@@ -111,6 +129,76 @@ export default function PartenairesPage() {
     }
   }, [])
 
+  const loadCatalog = useCallback(async (id: string) => {
+    setCatalogLoading(true)
+    try {
+      const res = await fetch(`/api/partenaires/${id}/prix`)
+      if (!res.ok) {
+        setCatalog([])
+        return
+      }
+      const data = await res.json()
+      setCatalog(Array.isArray(data.products) ? data.products : [])
+    } catch {
+      setCatalog([])
+    } finally {
+      setCatalogLoading(false)
+    }
+  }, [])
+
+  const applyCatalog = useCallback(
+    (id: string) => {
+      void loadDetail(id)
+      void loadCatalog(id)
+    },
+    [loadDetail, loadCatalog]
+  )
+
+  async function savePrice(productId: string, variant: CatalogVariant) {
+    if (!selected) return
+    const raw = priceDraft[variant.id]
+    setSavingVariantId(variant.id)
+    setError("")
+    try {
+      const isClear = raw === undefined ? false : raw.trim() === ""
+      const price = isClear ? null : Number(raw)
+      if (price !== null && (!Number.isFinite(price) || price < 0)) {
+        setError("Prix préférentiel invalide.")
+        return
+      }
+      const res = await fetch(`/api/partenaires/${selected.id}/prix`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: variant.id, price }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setError(data?.error ?? "Erreur lors de l'enregistrement du tarif.")
+        return
+      }
+      setCatalog((prev) =>
+        prev.map((p) =>
+          p.id !== productId
+            ? p
+            : {
+                ...p,
+                variants: p.variants.map((v) => (v.id === variant.id ? { ...v, partnerPrice: price } : v)),
+              }
+        )
+      )
+      setPriceDraft((prev) => {
+        const next = { ...prev }
+        delete next[variant.id]
+        return next
+      })
+      setToast("Tarif préférentiel enregistré.")
+    } catch {
+      setError("Erreur réseau.")
+    } finally {
+      setSavingVariantId(null)
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return partners.filter((p) => {
@@ -124,6 +212,18 @@ export default function PartenairesPage() {
       )
     })
   }, [partners, search, activeFilter])
+
+  const filteredCatalog = useMemo(() => {
+    const q = productSearch.trim().toLowerCase()
+    if (!q) return catalog
+    return catalog
+      .map((p) => {
+        const nameMatch = p.name.toLowerCase().includes(q)
+        const variants = nameMatch ? p.variants : p.variants.filter((v) => v.format.toLowerCase().includes(q))
+        return { ...p, variants }
+      })
+      .filter((p) => p.variants.length > 0)
+  }, [catalog, productSearch])
 
   async function createPartner() {
     setSaving(true)
@@ -151,7 +251,7 @@ export default function PartenairesPage() {
       setForm(emptyForm)
       setDiscount("0")
       await loadPartners()
-      await loadDetail(data.id)
+      applyCatalog(data.id)
       setToast("Partenaire créé.")
     } catch {
       setError("Erreur réseau.")
@@ -185,8 +285,7 @@ export default function PartenairesPage() {
       }
       await loadPartners()
       await loadDetail(selected.id)
-      setToast("Fiche mise à jour.")
-    } catch {
+      setToast("Fiche mise à jour.")    } catch {
       setError("Erreur réseau.")
     } finally {
       setSaving(false)
@@ -347,7 +446,7 @@ export default function PartenairesPage() {
             filtered.map((p) => (
               <button
                 key={p.id}
-                onClick={() => loadDetail(p.id)}
+                onClick={() => applyCatalog(p.id)}
                 className={
                   "w-full text-left px-4 py-3 min-h-[56px] flex items-center justify-between gap-2 " +
                   (selectedId === p.id ? "bg-primary-50" : "hover:bg-gray-50")
@@ -412,7 +511,7 @@ export default function PartenairesPage() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-2">Remise partenaires</h3>
                 <p className="text-xs text-gray-500 mb-2">
-                  Pourcentage de remise appliqué aux prix publics lors des ventes à ce partenaire. Les prix sont arrondis au multiple de 25 FCFA.
+                  Pourcentage de remise appliqué aux prix publics lors des ventes à ce partenaire. Les prix sont arrondis au multiple de 25 FCFA. Utilisé seulement pour les produits sans tarif préférentiel ci-dessous.
                 </p>
                 <div className="max-w-[160px]">
                   <label className={labelCls}>Remise (%)</label>
@@ -427,6 +526,87 @@ export default function PartenairesPage() {
                     onChange={(e) => setDiscount(e.target.value)}
                   />
                 </div>
+              </div>
+
+              <div className="border-t border-gray-100 pt-3">
+                <h3 className="text-sm font-semibold text-gray-900 mb-1">Tarifs préférentiels par produit</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Fixez un prix préférentiel pour chaque produit de ce partenaire. Le prix fixé est appliqué lors des ventes.
+                </p>
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    className={inputCls + " pl-9"}
+                    placeholder="Rechercher un produit…"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                  />
+                </div>
+                {catalogLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 py-3">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Chargement des produits…
+                  </div>
+                ) : filteredCatalog.length === 0 ? (
+                  <div className="text-sm text-gray-500 py-3">Aucun produit.</div>
+                ) : (
+                  <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                    {filteredCatalog.map((product) => (
+                      <div key={product.id} className="rounded-lg border border-gray-200 p-3">
+                        <div className="text-sm font-medium text-gray-900 mb-2">{product.name}</div>
+                        <div className="space-y-2">
+                          {product.variants.map((v) => {
+                            const draft = priceDraft[v.id]
+                            const value = draft !== undefined ? draft : v.partnerPrice !== null ? String(v.partnerPrice) : ""
+                            const dirty = draft !== undefined
+                            return (
+                              <div key={v.id} className="flex flex-wrap items-end gap-2">
+                                <div className="min-w-[110px]">
+                                  <div className="text-xs text-gray-500">Format</div>
+                                  <div className="text-sm text-gray-800">{v.format}</div>
+                                </div>
+                                <div className="min-w-[110px]">
+                                  <div className="text-xs text-gray-500">Prix public</div>
+                                  <div className="text-sm text-gray-800">{v.price} FCFA</div>
+                                </div>
+                                <div className="w-[150px]">
+                                  <label className="block text-xs text-gray-500 mb-1">Prix préférentiel</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    disabled={!canEdit || savingVariantId === v.id}
+                                    className={inputCls}
+                                    placeholder="Non défini"
+                                    value={value}
+                                    onChange={(e) => setPriceDraft((prev) => ({ ...prev, [v.id]: e.target.value }))}
+                                  />
+                                </div>
+                                {canEdit && (
+                                  <button
+                                    onClick={() => savePrice(product.id, v)}
+                                    disabled={savingVariantId === v.id || !dirty}
+                                    className={btnPrimary + " !min-h-[44px]"}
+                                  >
+                                    {savingVariantId === v.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Save className="h-4 w-4" />
+                                    )}
+                                    {v.partnerPrice !== null ? "Mettre à jour" : "Définir"}
+                                  </button>
+                                )}
+                                {v.partnerPrice !== null && canEdit && (
+                                  <span className="text-xs text-green-700 self-center">
+                                    {v.partnerPrice} FCFA
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {canEdit && (
