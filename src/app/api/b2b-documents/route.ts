@@ -52,6 +52,13 @@ export async function GET(req: Request) {
     const available = url.searchParams.get("available") === "1"
     const perPage = available ? 200 : 20
 
+    // filtres additionnels : client, période de création, état de règlement (factures), tri
+    const clientId = url.searchParams.get("clientId")?.trim() || ""
+    const from = url.searchParams.get("from")?.trim() || ""
+    const to = url.searchParams.get("to")?.trim() || ""
+    const payment = url.searchParams.get("payment")?.toUpperCase() || ""
+    const sort = url.searchParams.get("sort")?.trim() || "date_desc"
+
     if (type && !LISTED_DOC_TYPES.includes(type as (typeof LISTED_DOC_TYPES)[number])) {
       return NextResponse.json({ error: "Type de document invalide" }, { status: 400 })
     }
@@ -61,20 +68,60 @@ export async function GET(req: Request) {
     if (!Number.isFinite(page) || !Number.isInteger(page) || page < 1) {
       return NextResponse.json({ error: "Paramètre page invalide" }, { status: 400 })
     }
+    const PAYMENT_STATES = ["PAID", "PARTIAL", "UNPAID", "CANCELLED"]
+    if (payment && !PAYMENT_STATES.includes(payment)) {
+      return NextResponse.json({ error: "État de règlement invalide" }, { status: 400 })
+    }
+    if (payment && type !== "FACTURE") {
+      return NextResponse.json({ error: "Le filtre de règlement ne concerne que les factures" }, { status: 400 })
+    }
+    const SORTS: Record<string, Prisma.B2bDocumentOrderByWithRelationInput> = {
+      date_desc: { createdAt: "desc" },
+      date_asc: { createdAt: "asc" },
+      amount_desc: { total: "desc" },
+      amount_asc: { total: "asc" },
+    }
+    if (!SORTS[sort]) {
+      return NextResponse.json({ error: "Tri invalide" }, { status: 400 })
+    }
+    // période de création : jour de Brazzaville (AAAA-MM-JJ), début et fin inclus
+    let fromDate: Date | null = null
+    let toDate: Date | null = null
+    if (from) {
+      fromDate = /^\d{4}-\d{2}-\d{2}$/.test(from) ? new Date(`${from}T00:00:00+01:00`) : null
+      if (!fromDate || Number.isNaN(fromDate.getTime())) {
+        return NextResponse.json({ error: "Date de début invalide" }, { status: 400 })
+      }
+    }
+    if (to) {
+      toDate = /^\d{4}-\d{2}-\d{2}$/.test(to) ? new Date(`${to}T23:59:59.999+01:00`) : null
+      if (!toDate || Number.isNaN(toDate.getTime())) {
+        return NextResponse.json({ error: "Date de fin invalide" }, { status: 400 })
+      }
+    }
 
-    const where: Prisma.B2bDocumentWhereInput = {}
-    if (type) where.type = type as Prisma.B2bDocumentWhereInput["type"]
-    if (status) where.status = status as string as Prisma.B2bDocumentWhereInput["status"]
+    // critères communs (recherche, portée client, période) : servent aussi aux compteurs d'onglets
+    const baseWhere: Prisma.B2bDocumentWhereInput = {}
     if (q) {
-      where.OR = [
+      baseWhere.OR = [
         { reference: { contains: q, mode: "insensitive" } },
         { client: { is: { OR: [{ companyName: { contains: q, mode: "insensitive" } }, { tradeName: { contains: q, mode: "insensitive" } }] } } },
       ]
     }
     // administrateur, comptable, responsable commercial : tout ; un commercial : ses clients
-    if (!seesAll) {
-      where.client = { is: { commercialId: selfId } }
+    const clientWhere: Prisma.ClientWhereInput = {}
+    if (clientId) clientWhere.id = clientId
+    if (!seesAll) clientWhere.commercialId = selfId
+    if (clientId || !seesAll) baseWhere.client = { is: clientWhere }
+    if (fromDate || toDate) {
+      baseWhere.createdAt = { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) }
     }
+    // compteurs par type : même portée, recherche et période, mais ni type ni statut (ni règlement)
+    const countsWhere = { ...baseWhere }
+
+    const where: Prisma.B2bDocumentWhereInput = { ...baseWhere }
+    if (type) where.type = type as Prisma.B2bDocumentWhereInput["type"]
+    if (status) where.status = status as string as Prisma.B2bDocumentWhereInput["status"]
     if (available) {
       where.type = "DEVIS"
       if (!status) where.status = { in: [...OPEN_QUOTE_STATUSES] }
@@ -98,10 +145,37 @@ export async function GET(req: Request) {
       return NextResponse.json({ documents: quotes.map(({ client, ...q }) => ({ ...q, clientName: clientDisplayName(client) })), total: quotes.length })
     }
 
+    // état de règlement : on repère d'abord les factures correspondantes (mêmes règles que l'écran :
+    // seuls les règlements validés comptent, les avoirs réduisent le dû), puis on filtre dessus
+    if (payment) {
+      const candidates = await getPrisma().b2bDocument.findMany({
+        where,
+        select: {
+          id: true,
+          total: true,
+          payments: { where: { validationStatus: "VALIDATED" }, select: { amount: true } },
+          children: { where: { type: "AVOIR", status: { not: "CANCELLED" } }, select: { total: true } },
+        },
+      })
+      const matching = candidates.filter((doc) => {
+        const credited = doc.children.reduce((s, c) => s + c.total, 0)
+        const paid = doc.payments.reduce((s, p) => s + p.amount, 0)
+        const due = Math.max(0, doc.total - credited)
+        const rest = Math.max(0, due - paid)
+        const cancelled = credited > 0 && due <= 0.005
+        const isPaid = due > 0.005 && rest <= 0.005
+        if (payment === "PAID") return isPaid
+        if (payment === "CANCELLED") return cancelled
+        if (payment === "PARTIAL") return !cancelled && !isPaid && (paid > 0.005 || credited > 0.005)
+        return !cancelled && !isPaid && paid <= 0.005 && credited <= 0.005
+      })
+      where.id = { in: matching.map((d) => d.id) }
+    }
+
     const [documents, counts, total] = await Promise.all([
       getPrisma().b2bDocument.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: SORTS[sort],
         take: perPage,
         skip: (page - 1) * perPage,
         include: {
@@ -115,7 +189,8 @@ export async function GET(req: Request) {
         },
       }),
       // Même portée que la liste : un COMMERCIAL ne voit PAS l'agrégat global.
-      getPrisma().b2bDocument.groupBy({ by: ["type"], where, _count: { _all: true } }),
+      // Sans ni type ni statut : les compteurs servent aux onglets de l'écran.
+      getPrisma().b2bDocument.groupBy({ by: ["type"], where: countsWhere, _count: { _all: true } }),
       getPrisma().b2bDocument.count({ where }),
     ])
 

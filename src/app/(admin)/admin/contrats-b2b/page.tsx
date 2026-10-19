@@ -111,6 +111,9 @@ export default function ContratsB2bPage() {
   const [submitting, setSubmitting] = useState(false)
   const [clients, setClients] = useState<ClientOption[]>([])
   const [variants, setVariants] = useState<VariantOption[]>([])
+  // chargement des produits : explicite (chargement / prêt / erreur) — ne jamais le déduire de variants.length
+  const [productsState, setProductsState] = useState<"loading" | "ready" | "error">("loading")
+  const [productsReload, setProductsReload] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -135,28 +138,40 @@ export default function ContratsB2bPage() {
     return () => controller.abort()
   }, [reload])
 
-  // clients et produits du formulaire, chargés à sa première ouverture
+  // clients et produits du formulaire, chargés à chaque ouverture.
+  // Deux lectures indépendantes : l'échec de l'une ne bloque pas l'autre (contrairement à un Promise.all,
+  // où un rejet effaçait le résultat de l'autre appel). Ne jamais dépendre de variants.length ici :
+  // setVariants relancerait l'effet et annulerait (abort) le fetch clients encore en vol.
   useEffect(() => {
-    if (!showForm || variants.length > 0) return
+    if (!showForm) return
     const controller = new AbortController()
-    const init = async () => {
+    const loadClients = async () => {
       try {
         // un commercial ne propose que ses clients ; l'administrateur et le responsable commercial les voient tous
         const mine = role === "COMMERCIAL" ? `&commercialId=${session?.user?.id}` : ""
-        const [clientsRes, productsRes] = await Promise.all([
-          fetch(`/api/clients?type=B2B&active=true${mine}`, { signal: controller.signal }),
-          fetch("/api/produits?all=1", { signal: controller.signal }),
-        ])
-        if (controller.signal.aborted) return
-        if (clientsRes.ok) setClients(await clientsRes.json())
-        if (productsRes.ok) {
-          setVariants(productOptions(await productsRes.json()))
-        }
+        const res = await fetch(`/api/clients?type=B2B&active=true${mine}`, { signal: controller.signal })
+        if (controller.signal.aborted || !res.ok) return
+        setClients(await res.json())
       } catch {}
     }
-    void init()
+    const loadProducts = async () => {
+      try {
+        const res = await fetch("/api/produits?all=1", { signal: controller.signal })
+        if (controller.signal.aborted) return
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const products = await res.json()
+        if (controller.signal.aborted) return
+        setVariants(productOptions(products))
+        setProductsState("ready")
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return
+        setProductsState("error")
+      }
+    }
+    void loadClients()
+    void loadProducts()
     return () => controller.abort()
-  }, [showForm, variants.length, role, session?.user?.id])
+  }, [showForm, role, session?.user?.id, productsReload])
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -170,6 +185,7 @@ export default function ContratsB2bPage() {
     setEditing(null)
     setForm(emptyForm())
     setFormError("")
+    setProductsState("loading")
     setShowForm(true)
   }
 
@@ -188,8 +204,11 @@ export default function ContratsB2bPage() {
       lines: contract.items.map((i) => ({ variantId: i.productVariantId, unitPrice: String(i.unitPrice) })),
     })
     setFormError("")
+    setProductsState("loading")
     setShowForm(true)
   }
+
+  const retryProducts = () => { setProductsState("loading"); setProductsReload((n) => n + 1) }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -455,6 +474,12 @@ export default function ContratsB2bPage() {
                   <Plus className="h-4 w-4" /> Ajouter un article
                 </button>
               </div>
+              {productsState === "error" && (
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  <span>Les produits n&apos;ont pas pu être chargés : le sélecteur reste vide.</span>
+                  <button type="button" onClick={retryProducts} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">Réessayer</button>
+                </div>
+              )}
               {form.lines.length === 0 && <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-500">Aucun prix négocié : le client paie les prix publics{Number(form.discountPercent) > 0 ? `, moins ${form.discountPercent} %` : ""}.</p>}
               <div className="space-y-2">
                 {/* une ligne par article à partir de 768 px ; en dessous, le produit prend toute la largeur */}
@@ -476,7 +501,7 @@ export default function ContratsB2bPage() {
                         aria-label="Produit"
                         className="col-span-2 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 md:col-span-1"
                       >
-                        <option value="">{variants.length ? "Choisir un produit…" : "Chargement des produits…"}</option>
+                        <option value="">{productsState === "ready" ? (variants.length ? "Choisir un produit…" : "Aucun produit disponible") : productsState === "error" ? "Produits indisponibles…" : "Chargement des produits…"}</option>
                         {variants.map((v) => <option key={v.id} value={v.id}>{`${v.label} · ${formatPrice(v.price)}`}</option>)}
                         {/* article du contrat qui n'est plus au catalogue (produit désactivé) */}
                         {line.variantId && !variant && <option value={line.variantId}>{editing?.items.find((i) => i.productVariantId === line.variantId)?.name ?? "Produit"}</option>}

@@ -9,14 +9,19 @@ import { placeUnlocatedStockTx } from "@/lib/lot-coherence"
 import { parseVariants } from "@/lib/product-validation"
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const includeAll = searchParams.get("all") === "1"
-  if (includeAll) {
-    const session = await auth()
-    if (!session?.user) return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
+  try {
+    const { searchParams } = new URL(request.url)
+    const includeAll = searchParams.get("all") === "1"
+    if (includeAll) {
+      const session = await auth()
+      if (!session?.user) return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
+    }
+    const products = await getProducts({ includeInactive: includeAll })
+    return NextResponse.json(products)
+  } catch (error) {
+    console.error("GET /api/produits error:", error)
+    return NextResponse.json({ error: "Erreur lors du chargement des produits" }, { status: 500 })
   }
-  const products = await getProducts({ includeInactive: includeAll })
-  return NextResponse.json(products)
 }
 
 export async function POST(request: Request) {

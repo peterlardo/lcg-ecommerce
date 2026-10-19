@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
-import { AlertCircle, ArrowRight, Check, ChevronLeft, ChevronRight, FileText, HandCoins, Pencil, Plus, Printer, Search, Send, Trash2, X } from "lucide-react"
+import { AlertCircle, ArrowRight, Check, ChevronLeft, ChevronRight, FileText, HandCoins, Pencil, Plus, Printer, RotateCcw, Search, Send, Trash2, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { contractDiscount, productOptions } from "@/lib/b2b-contract"
 
@@ -92,13 +92,14 @@ export const TYPE_LABEL: Record<DocType, { one: string; many: string; next?: str
   AVOIR: { one: "Avoir", many: "Avoirs" },
 }
 
-/** États utiles au filtre de chaque liste. */
+/** États utiles au filtre de chaque liste. Factures et avoirs : état de vie du document (émis, annulé) ;
+ *  l'état de règlement des factures a son propre sélecteur (filtre serveur `payment`). */
 const STATUS_BY_TYPE: Record<DocType, string[]> = {
   DEVIS: ["DRAFT", "SENT", "CONFIRMED", "REJECTED", "CANCELLED"],
   COMMANDE: ["DRAFT", "SENT", "CONFIRMED", "INVOICED", "CANCELLED"],
-  FACTURE: [],
+  FACTURE: ["INVOICED", "CANCELLED"],
   LIVRAISON: ["DRAFT", "CONFIRMED", "DELIVERED", "CANCELLED"],
-  AVOIR: [],
+  AVOIR: ["INVOICED", "CANCELLED"],
 }
 
 /**
@@ -153,6 +154,26 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
+/** Libellé d'état adapté au type : une facture émise se dit « Émise », pas « Facturé ». */
+const statusLabel = (type: DocType, key: string) =>
+  type === "FACTURE" && key === "INVOICED" ? "Émise" : STATUS_LABEL[key]?.label ?? key
+
+/** État de règlement des factures (filtre serveur `payment`). */
+const PAYMENT_OPTIONS: { value: string; label: string }[] = [
+  { value: "PAID", label: "Payée" },
+  { value: "PARTIAL", label: "Partiellement réglée" },
+  { value: "UNPAID", label: "Non réglée" },
+  { value: "CANCELLED", label: "Annulée par avoir" },
+]
+
+/** Tri disponible sur les listes (paramètre `sort` de l'API). */
+const SORT_OPTIONS: { value: string; label: string }[] = [
+  { value: "date_desc", label: "Plus récents" },
+  { value: "date_asc", label: "Plus anciens" },
+  { value: "amount_desc", label: "Montant décroissant" },
+  { value: "amount_asc", label: "Montant croissant" },
+]
+
 const EMPTY_LINE: DraftLine = { variantId: "", quantity: "1", unitPrice: "" }
 
 export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { title: string; subtitle: string; types: DocType[]; creatable: DocType | null }) {
@@ -162,6 +183,15 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [search, setSearch] = useState("")
   const [query, setQuery] = useState("")
   const [page, setPage] = useState(1)
+  // filtres de liste : client, période de création, état de règlement (factures), tri
+  const [clientIdFilter, setClientIdFilter] = useState("")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [payment, setPayment] = useState("")
+  const [sort, setSort] = useState("date_desc")
+  const [filterClients, setFilterClients] = useState<ClientOption[]>([])
+  // compteurs par type : servent aux badges des onglets
+  const [counts, setCounts] = useState<Partial<Record<DocType, number>>>({})
   const [documents, setDocuments] = useState<B2bDocument[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -180,6 +210,10 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [validUntil, setValidUntil] = useState("")
   const [clients, setClients] = useState<ClientOption[]>([])
   const [variants, setVariants] = useState<VariantOption[]>([])
+  // chargement des produits : explicite (chargement / prêt / erreur) — ne jamais le déduire de variants.length,
+  // sinon une erreur réseau s'affiche éternellement comme « Chargement… ».
+  const [productsState, setProductsState] = useState<"loading" | "ready" | "error">("loading")
+  const [productsReload, setProductsReload] = useState(0)
   const [clientId, setClientId] = useState("")
   const [contract, setContract] = useState<ClientContract | null>(null)
   const [lines, setLines] = useState<DraftLine[]>([EMPTY_LINE])
@@ -194,9 +228,13 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   useEffect(() => {
     const controller = new AbortController()
     const init = async () => {
-      const params = new URLSearchParams({ type, page: String(page) })
+      const params = new URLSearchParams({ type, page: String(page), sort })
       if (status) params.set("status", status)
       if (query) params.set("q", query)
+      if (clientIdFilter) params.set("clientId", clientIdFilter)
+      if (fromDate) params.set("from", fromDate)
+      if (toDate) params.set("to", toDate)
+      if (payment) params.set("payment", payment)
       try {
         const res = await fetch(`/api/b2b-documents?${params.toString()}`, { signal: controller.signal })
         const data = await res.json().catch(() => null)
@@ -208,6 +246,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
         setError("")
         setDocuments(data.documents ?? [])
         setTotal(data.total ?? 0)
+        setCounts(Object.fromEntries(((data.counts ?? []) as { type: DocType; _count: { _all: number } }[]).map((c) => [c.type, c._count._all])))
         // heure de lecture : sert à repérer les devis dont la validité est dépassée
         setLoadedAt(Date.now())
       } catch (e) {
@@ -218,32 +257,57 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     }
     void init()
     return () => controller.abort()
-  }, [type, status, query, page, reload])
+  }, [type, status, query, page, reload, clientIdFilter, fromDate, toDate, payment, sort])
 
-  // clients et produits du formulaire, chargés à chaque ouverture.
-  // Ne jamais dépendre de clients.length ici : setClients relancerait l'effet,
-  // ce qui annulerait (abort) le fetch produits encore en vol — select bloqué sur « Chargement… ».
+  // clients B2B du filtre de liste : chargés une fois à l'arrivée (l'API restreint déjà le
+  // portefeuille d'un simple commercial ; le responsable, l'administrateur et le comptable voient tout)
   useEffect(() => {
-    if (!creating) return
     const controller = new AbortController()
     const init = async () => {
       try {
-        // un commercial ne propose que ses clients ; l'administrateur les voit tous
-        const mine = session?.user?.role === "COMMERCIAL" ? `&commercialId=${session.user.id}` : ""
-        const [clientsRes, productsRes] = await Promise.all([
-          fetch(`/api/clients?type=B2B&active=true${mine}`, { signal: controller.signal }),
-          fetch("/api/produits?all=1", { signal: controller.signal }),
-        ])
-        if (controller.signal.aborted) return
-        if (clientsRes.ok) setClients(await clientsRes.json())
-        if (productsRes.ok) {
-          setVariants(productOptions(await productsRes.json()))
-        }
+        const res = await fetch("/api/clients?type=B2B&active=true", { signal: controller.signal })
+        if (controller.signal.aborted || !res.ok) return
+        setFilterClients(await res.json())
       } catch {}
     }
     void init()
     return () => controller.abort()
-  }, [creating, session?.user?.id, session?.user?.role])
+  }, [])
+
+  // clients et produits du formulaire, chargés à chaque ouverture.
+  // Deux lectures indépendantes : l'échec de l'une ne bloque pas l'autre (contrairement à un Promise.all,
+  // où un rejet effaçait le résultat de l'autre appel). Ne jamais dépendre de clients.length ici :
+  // setClients relancerait l'effet et annulerait (abort) le fetch produits encore en vol.
+  useEffect(() => {
+    if (!creating) return
+    const controller = new AbortController()
+    const loadClients = async () => {
+      try {
+        // un commercial ne propose que ses clients ; l'administrateur les voit tous
+        const mine = session?.user?.role === "COMMERCIAL" ? `&commercialId=${session.user.id}` : ""
+        const res = await fetch(`/api/clients?type=B2B&active=true${mine}`, { signal: controller.signal })
+        if (controller.signal.aborted || !res.ok) return
+        setClients(await res.json())
+      } catch {}
+    }
+    const loadProducts = async () => {
+      try {
+        const res = await fetch("/api/produits?all=1", { signal: controller.signal })
+        if (controller.signal.aborted) return
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const products = await res.json()
+        if (controller.signal.aborted) return
+        setVariants(productOptions(products))
+        setProductsState("ready")
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return
+        setProductsState("error")
+      }
+    }
+    void loadClients()
+    void loadProducts()
+    return () => controller.abort()
+  }, [creating, session?.user?.id, session?.user?.role, productsReload])
 
   // contrat du client choisi dans le formulaire : seul un contrat actif et dans sa période s'applique
   useEffect(() => {
@@ -296,7 +360,21 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   )
   const discountValue = discount === "" ? autoDiscount : Number(discount) || 0
 
-  const changeType = (next: DocType) => { setType(next); setStatus(""); setPage(1); setLoading(true) }
+  const changeType = (next: DocType) => { setType(next); setStatus(""); setPayment(""); setPage(1); setLoading(true) }
+  // au moins un critère actif : affiche le bouton Réinitialiser et oriente l'état vide
+  const hasFilters = Boolean(query || status || clientIdFilter || fromDate || toDate || payment || sort !== "date_desc")
+  const resetFilters = () => {
+    setSearch("")
+    setQuery("")
+    setStatus("")
+    setClientIdFilter("")
+    setFromDate("")
+    setToDate("")
+    setPayment("")
+    setSort("date_desc")
+    setPage(1)
+  }
+  const retryProducts = () => { setProductsState("loading"); setProductsReload((n) => n + 1) }
   const updateLine = (index: number, patch: Partial<DraftLine>) => setLines((current) => current.map((l, i) => (i === index ? { ...l, ...patch } : l)))
 
   /** Liste remise à zéro sur un document : son onglet, sans filtre, en tête et mis en évidence. */
@@ -310,6 +388,10 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     setStatus("")
     setSearch("")
     setQuery("")
+    setClientIdFilter("")
+    setFromDate("")
+    setToDate("")
+    setPayment("")
     setPage(1)
     setHighlightId(id)
     setReload((n) => n + 1)
@@ -345,6 +427,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     setNotes("")
     setToday(dayInBrazzaville(new Date()))
     setFormError("")
+    setProductsState("loading")
   }
 
   /** Modification d'un brouillon de devis : même formulaire, prérempli. */
@@ -373,6 +456,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
       setValidUntil(d.validUntil ? dayInBrazzaville(new Date(d.validUntil)) : "")
       setToday(dayInBrazzaville(new Date()))
       setFormError("")
+      setProductsState("loading")
       setCreating(true)
     } catch {
       setError("Connexion au serveur impossible")
@@ -499,13 +583,16 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
               className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${type === t ? "bg-primary text-white" : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}
             >
               {TYPE_LABEL[t].many}
+              {counts[t] !== undefined && (
+                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-semibold ${type === t ? "bg-white/25 text-white" : "bg-gray-100 text-gray-600"}`}>{counts[t]}</span>
+              )}
             </button>
           ))}
         </div>
       )}
 
-      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 sm:flex-row sm:items-center sm:p-4">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 sm:flex-row sm:flex-wrap sm:items-center sm:p-4">
+        <div className="relative w-full sm:min-w-[14rem] sm:flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="search"
@@ -513,16 +600,46 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { setQuery(search.trim()); setPage(1) } }}
             placeholder="Référence ou client, puis Entrée"
-            className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+            className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-9 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
           />
+          {search && (
+            <button type="button" aria-label="Effacer la recherche" onClick={() => { setSearch(""); setQuery(""); setPage(1) }} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
+        {filterClients.length > 0 && (
+          <select value={clientIdFilter} onChange={(e) => { setClientIdFilter(e.target.value); setPage(1) }} className="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" aria-label="Client">
+            <option value="">Tous les clients</option>
+            {filterClients.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.tradeName || c.contactName || "Client"}</option>)}
+          </select>
+        )}
         {STATUS_BY_TYPE[type].length > 0 && (
           <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} className="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" aria-label="État">
             <option value="">Tous les états</option>
-            {STATUS_BY_TYPE[type].map((key) => <option key={key} value={key}>{STATUS_LABEL[key]?.label ?? key}</option>)}
+            {STATUS_BY_TYPE[type].map((key) => <option key={key} value={key}>{statusLabel(type, key)}</option>)}
           </select>
         )}
-        <p className="text-sm text-gray-500">{total} {total > 1 ? TYPE_LABEL[type].many.toLowerCase() : TYPE_LABEL[type].one.toLowerCase()}</p>
+        {type === "FACTURE" && (
+          <select value={payment} onChange={(e) => { setPayment(e.target.value); setPage(1) }} className="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" aria-label="Règlement">
+            <option value="">Tous les règlements</option>
+            {PAYMENT_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+        )}
+        <div className="flex items-center gap-1.5">
+          <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(1) }} max={toDate || undefined} aria-label="Du" className="rounded-lg border border-gray-300 px-2 py-2.5 text-sm" />
+          <span className="text-sm text-gray-400">au</span>
+          <input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); setPage(1) }} min={fromDate || undefined} aria-label="Au" className="rounded-lg border border-gray-300 px-2 py-2.5 text-sm" />
+        </div>
+        <select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1) }} className="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm" aria-label="Tri">
+          {SORT_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        {hasFilters && (
+          <button type="button" onClick={resetFilters} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <RotateCcw className="h-4 w-4" /> Réinitialiser
+          </button>
+        )}
+        <p className="text-sm text-gray-500 sm:ml-auto">{total} {total > 1 ? TYPE_LABEL[type].many.toLowerCase() : TYPE_LABEL[type].one.toLowerCase()}</p>
       </div>
 
       {message && (
@@ -539,7 +656,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         {loading && <p className="p-4 text-sm text-gray-500">Chargement...</p>}
-        {!loading && documents.length === 0 && <p className="p-8 text-center text-sm text-gray-500">Aucun document pour ces critères.</p>}
+        {!loading && documents.length === 0 && <p className="p-8 text-center text-sm text-gray-500">{hasFilters ? "Aucun document pour ces critères." : "Aucun document pour l'instant."}</p>}
         {!loading && documents.length > 0 && (
           <ul className="divide-y divide-gray-100">
             {documents.map((doc) => {
@@ -710,6 +827,13 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
               </p>
             )}
 
+            {productsState === "error" && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <span>Les produits n&apos;ont pas pu être chargés : le sélecteur reste vide.</span>
+                <button type="button" onClick={retryProducts} className="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">Réessayer</button>
+              </div>
+            )}
+
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-700">
@@ -745,7 +869,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                       aria-label="Produit"
                       className="col-span-2 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 md:col-span-1"
                     >
-                      <option value="">{variants.length ? "Choisir un produit…" : "Chargement des produits…"}</option>
+                      <option value="">{productsState === "ready" ? (variants.length ? "Choisir un produit…" : "Aucun produit disponible") : productsState === "error" ? "Produits indisponibles…" : "Chargement des produits…"}</option>
                       {/* le prix figure dans la liste : celui du contrat du client s'il en a un, sinon le prix public */}
                       {variants.map((v) => <option key={v.id} value={v.id}>{`${v.label} · ${formatPrice(activeContract?.prices.get(v.id) ?? v.price)}${activeContract?.prices.has(v.id) ? " (contrat)" : ""}`}</option>)}
                     </select>
