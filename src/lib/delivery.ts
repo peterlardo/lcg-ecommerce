@@ -23,8 +23,10 @@ export type ResolvedDeliveryChoice = {
  *
  * Règles :
  * - PICKUP  → frais 0, ni zone ni livreur
- * - DELIVERY → zone obligatoire ; frais = tarif livreur/zone s'il existe,
- *   sinon tarif de base de la zone
+ * - DELIVERY → zone facultative : le client ne la choisit plus, l'équipe
+ *   attribue zone et livreur à la confirmation. Sans zone, frais 0 et aucune
+ *   zone enregistrée ; avec zone, frais = tarif livreur/zone s'il existe,
+ *   sinon tarif de base de la zone.
  */
 export async function resolveDeliveryChoice(input: DeliveryChoiceInput): Promise<ResolvedDeliveryChoice> {
   const prisma = getPrisma()
@@ -36,7 +38,7 @@ export async function resolveDeliveryChoice(input: DeliveryChoiceInput): Promise
 
   const zoneId = input.zoneId ? String(input.zoneId) : null
   if (!zoneId) {
-    throw new DeliveryChoiceError("Zone de livraison requise")
+    return { mode, zoneId: null, agentId: null, fee: 0, zoneName: null, agentName: null }
   }
 
   const zone = await prisma.deliveryZone.findFirst({ where: { id: zoneId, isActive: true } })

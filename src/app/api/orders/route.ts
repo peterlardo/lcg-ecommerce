@@ -199,9 +199,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Adresse de livraison requise" }, { status: 400 })
     }
 
-    if (deliveryMode === "DELIVERY" && !body.deliveryZoneId) {
-      return NextResponse.json({ error: "Choisissez une zone de livraison" }, { status: 400 })
-    }
+    // La zone et le livreur ne sont plus demandés au client : l'équipe LCG les
+    // attribue à la confirmation. Une zone reste acceptée si elle est fournie
+    // (saisie opérateur), mais n'est plus obligatoire.
 
     const paymentMethod = PAYMENT_METHODS.includes(body.paymentMethod)
       ? body.paymentMethod
@@ -230,7 +230,7 @@ export async function POST(request: Request) {
       source: body.source === "OPERATOR" ? "OPERATOR" : "WEB",
       notes: body.notes ? String(body.notes) : undefined,
       deliveryMode,
-      deliveryZoneId: deliveryMode === "DELIVERY" ? String(body.deliveryZoneId) : null,
+      deliveryZoneId: deliveryMode === "DELIVERY" && body.deliveryZoneId ? String(body.deliveryZoneId) : null,
       deliveryAgentId: deliveryMode === "DELIVERY" && body.deliveryAgentId ? String(body.deliveryAgentId) : null,
       couponCode: body.couponCode ? String(body.couponCode).trim().toUpperCase() : null,
       items: items.map((item: OrderItemBody) => ({

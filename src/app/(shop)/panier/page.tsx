@@ -175,10 +175,6 @@ export default function CartPage() {
     }
 
     if (delivery.mode === "DELIVERY") {
-      if (!delivery.zoneId) {
-        setError("Choisissez une zone de livraison.")
-        return
-      }
       if (!adresse.trim()) {
         setError("Adresse de livraison requise.")
         return
@@ -525,7 +521,7 @@ export default function CartPage() {
                 </div>
               )}
 
-              <DeliveryChoiceBlock value={delivery} onChange={setDelivery} hideAgents={mode === "reservation"} />
+              <DeliveryChoiceBlock value={delivery} onChange={setDelivery} />
               {delivery.mode === "DELIVERY" && (
                 <label className="block text-sm font-semibold">
                   Adresse de livraison *
