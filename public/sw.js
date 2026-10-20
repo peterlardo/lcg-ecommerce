@@ -1,4 +1,4 @@
-const CACHE_VERSION = "lcg-pwa-v2";
+const CACHE_VERSION = "lcg-pwa-v3";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const OFFLINE_URL = "/offline";
@@ -67,15 +67,15 @@ self.addEventListener("fetch", (event) => {
 
   if (isStatic) {
     event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((res) => {
+      fetch(request)
+        .then((res) => {
+          if (res.ok) {
             const copy = res.clone();
             caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy));
-            return res;
-          })
-      )
+          }
+          return res;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }
