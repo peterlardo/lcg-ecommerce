@@ -3,7 +3,7 @@ import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
 import { LOGO_BADGE_BASE64 } from "./logo-badge-base64"
 import { drawCoverPage } from "./pdf-cover"
-import type { ReportPayload, JourneeReport } from "./report-types"
+import type { ReportPayload, JourneeReport, GlobalReport } from "./report-types"
 
 type VentesData = Pick<ReportPayload, "summary" | "topProducts" | "paymentBreakdown30" | "daily7">
 type StocksData = Pick<ReportPayload, "summary" | "stockByCategory" | "allStockVariants" | "stockAlerts">
@@ -1147,4 +1147,251 @@ export function exportJourneeExcel(data: JourneeReport) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(commandes), "Commandes")
 
   XLSX.writeFile(wb, "rapport-journee-" + data.date.replace(/-/g, "") + ".xlsx")
+}
+
+const B2B_DOC_LBL: Record<string, string> = { DEVIS: "Devis", COMMANDE: "Commande client", LIVRAISON: "Bon de livraison", FACTURE: "Facture", AVOIR: "Avoir" }
+
+export function exportGlobalPDF(data: GlobalReport) {
+  const title = "Rapport Global — Synthèse de tous les processus"
+  const doc = createDoc()
+  addCoverPage(doc, title, REPORT_VERSION, data.periodLabel + "  |  du " + new Date(data.from).toLocaleDateString("fr-FR") + " au " + new Date(data.to).toLocaleDateString("fr-FR"))
+  doc.addPage()
+  addPageHeader(doc, "Rapport Global")
+  let y = 30
+  const pageHeight = doc.internal.pageSize.height
+  const spaceFor = (needed: number) => {
+    if (y + needed > pageHeight - 18) {
+      doc.addPage()
+      addPageHeader(doc, "Rapport Global")
+      y = 30
+    }
+  }
+
+  const tableHeadStyles = { fillColor: [31, 79, 163] as [number, number, number], textColor: [255, 255, 255] as [number, number, number], fontStyle: "bold" as const }
+
+  // Synthèse
+  y = sectionTitle(doc, y, "1. Synthèse de la période")
+  y = kv(doc, y, "Période", data.periodLabel)
+  y = kv(doc, y, "Point de vente", data.selectedPos?.name ?? "Tous")
+  y = kv(doc, y, "Chiffre d'affaires", fmt(data.kpi.revenue))
+  y = kv(doc, y, "Commandes actives", String(data.kpi.orders))
+  y = kv(doc, y, "Commandes encaissées", String(data.kpi.paidOrders))
+  y = kv(doc, y, "Commandes annulées", String(data.kpi.cancelledOrders))
+  y = kv(doc, y, "Articles vendus", String(data.kpi.items))
+  y = kv(doc, y, "Panier moyen", fmt(data.kpi.avgOrder))
+  y += 6
+
+  // Encaissements
+  spaceFor(30)
+  y = sectionTitle(doc, y, "2. Encaissements par mode")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Mode", "Transactions", "Montant"]],
+    body: data.paymentBreakdown.length > 0 ? data.paymentBreakdown.map((r) => [PAYMENT[r.method] ?? r.method, String(r.count), fmt(r.total)]) : [["-", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: tableHeadStyles,
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // Commandes par statut
+  spaceFor(30)
+  y = sectionTitle(doc, y, "3. Commandes par statut")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Statut", "Commandes", "Montant"]],
+    body: data.ordersByStatus.length > 0 ? data.ordersByStatus.map((r) => [STATUS_LBL[r.status] ?? r.status, String(r.count), fmt(r.total)]) : [["-", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: tableHeadStyles,
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // Top produits
+  spaceFor(30)
+  y = sectionTitle(doc, y, "4. Top produits")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Produit", "Quantite", "Montant"]],
+    body: data.topProducts.length > 0 ? data.topProducts.map((r) => [r.name, String(r.quantity), fmt(r.revenue)]) : [["-", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: tableHeadStyles,
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // Par point de vente
+  spaceFor(30)
+  y = sectionTitle(doc, y, "5. Répartition par point de vente")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Point de vente", "Commandes", "Chiffre d'affaires", "Stock (u.)"]],
+    body: data.byPointOfSale.length > 0 ? data.byPointOfSale.map((r) => [r.name, String(r.orders), fmt(r.revenue), String(r.stockUnits)]) : [["-", "", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: tableHeadStyles,
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // Stocks
+  spaceFor(30)
+  y = sectionTitle(doc, y, "6. Stocks")
+  y = kv(doc, y, "Unités en stock", String(data.stock.units))
+  y = kv(doc, y, "Variantes", String(data.stock.variants))
+  y = kv(doc, y, "Stock faible", String(data.stock.lowStock))
+  y = kv(doc, y, "Rupture", String(data.stock.outOfStock))
+  y += 6
+  spaceFor(30)
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Categorie", "Stock (u.)", "Variantes"]],
+    body: data.stockByCategory.length > 0 ? data.stockByCategory.map((r) => [r.name, String(r.totalStock), String(r.variants)]) : [["-", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: tableHeadStyles,
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // Approvisionnements & production
+  spaceFor(30)
+  y = sectionTitle(doc, y, "7. Approvisionnements & production")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Operation", "Quantite"]],
+    body: [
+      ["Entrées (IN + Retour)", String(data.supply.inbound)],
+      ["Production", String(data.production.totalProduced)],
+      ["Pertes", String(data.supply.loss)],
+      ["Ajustements sortants", String(data.supply.adjustOut)],
+    ],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: tableHeadStyles,
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 4
+  y = kv(doc, y, "Lots", String(data.lots.totalLots) + " (" + String(data.lots.activeLots) + " actifs) — " + String(data.lots.totalRemaining) + " u. restantes")
+  y += 8
+
+  // Réservations / livraisons
+  spaceFor(30)
+  y = sectionTitle(doc, y, "8. Pré-commandes & livraisons")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Flux", "Total", "En attente", "Confirmées / En cours", "Annulées / Livrées"]],
+    body: [
+      ["Pré-commandes", String(data.reservations.total), String(data.reservations.pending), String(data.reservations.confirmed), String(data.reservations.cancelled)],
+      ["Livraisons", String(data.deliveries.total), String(data.deliveries.inProgress), String(data.deliveries.delivered), ""],
+    ],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: tableHeadStyles,
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // Caisse
+  spaceFor(30)
+  y = sectionTitle(doc, y, "9. Caisse")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Sessions", "Ouvertes", "Fermées", "Fonds", "Clôtures", "Écart"]],
+    body: [[String(data.cash.sessions), String(data.cash.open), String(data.cash.closed), fmt(data.cash.totalOpening), fmt(data.cash.totalClosing), fmt(data.cash.totalGap)]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: tableHeadStyles,
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+
+  // Commercial B2B
+  spaceFor(30)
+  y = sectionTitle(doc, y, "10. Commercial B2B")
+  autoTable(doc, {
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Document", "Nombre", "Montant"]],
+    body: data.b2b.documents.length > 0 ? data.b2b.documents.map((r) => [B2B_DOC_LBL[r.type] ?? r.type, String(r.count), fmt(r.total)]) : [["-", "", ""]],
+    styles: { fontSize: 8.5, textColor: [40, 40, 40] },
+    headStyles: tableHeadStyles,
+  })
+  y = (doc as AutoTableDoc).lastAutoTable.finalY + 4
+  y = kv(doc, y, "Créances", fmt(data.b2b.creanceTotal) + " dont " + fmt(data.b2b.creanceOverdue) + " échues")
+  y = kv(doc, y, "Factures ouvertes", String(data.b2b.openInvoices) + " — " + String(data.b2b.debtorClients) + " client(s) débiteur(s)")
+
+  finalizePDF(doc, title, "rapport-global-" + todayShort() + ".pdf")
+}
+
+export function exportGlobalExcel(data: GlobalReport) {
+  const wb = XLSX.utils.book_new()
+
+  const resume: (string | number)[][] = [
+    ["Indicateur", "Valeur"],
+    ["Periode", data.periodLabel],
+    ["Du", new Date(data.from).toLocaleDateString("fr-FR")],
+    ["Au", new Date(data.to).toLocaleDateString("fr-FR")],
+    ["Point de vente", data.selectedPos?.name ?? "Tous"],
+    ["Chiffre d'affaires", data.kpi.revenue],
+    ["Commandes actives", data.kpi.orders],
+    ["Commandes encaissees", data.kpi.paidOrders],
+    ["Commandes annulees", data.kpi.cancelledOrders],
+    ["Articles vendus", data.kpi.items],
+    ["Panier moyen", data.kpi.avgOrder],
+    ["Stock (unites)", data.stock.units],
+    ["Stock faible", data.stock.lowStock],
+    ["Rupture", data.stock.outOfStock],
+    ["Production (u.)", data.production.totalProduced],
+    ["Pertes (u.)", data.supply.loss],
+    ["Creances B2B", data.b2b.creanceTotal],
+    ["Creances echues", data.b2b.creanceOverdue],
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resume), "Synthèse")
+
+  const paiements: (string | number)[][] = [
+    ["Mode", "Transactions", "Montant"],
+    ...data.paymentBreakdown.map((r) => [PAYMENT[r.method] ?? r.method, r.count, r.total]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(paiements), "Encaissements")
+
+  const statuts: (string | number)[][] = [
+    ["Statut", "Commandes", "Montant"],
+    ...data.ordersByStatus.map((r) => [STATUS_LBL[r.status] ?? r.status, r.count, r.total]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(statuts), "Statuts")
+
+  const top: (string | number)[][] = [
+    ["Produit", "Quantite", "Montant"],
+    ...data.topProducts.map((r) => [r.name, r.quantity, r.revenue]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(top), "Top Produits")
+
+  const parPdv: (string | number)[][] = [
+    ["Point de vente", "Commandes", "Chiffre d'affaires", "Stock (u.)"],
+    ...data.byPointOfSale.map((r) => [r.name, r.orders, r.revenue, r.stockUnits]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(parPdv), "Par PDV")
+
+  const stocks: (string | number)[][] = [
+    ["Categorie", "Stock (u.)", "Variantes"],
+    ...data.stockByCategory.map((r) => [r.name, r.totalStock, r.variants]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(stocks), "Stocks")
+
+  const flux: (string | number)[][] = [
+    ["Flux", "Total", "En attente", "Confirmées / En cours", "Annulées / Livrées"],
+    ["Pre-commandes", data.reservations.total, data.reservations.pending, data.reservations.confirmed, data.reservations.cancelled],
+    ["Livraisons", data.deliveries.total, data.deliveries.inProgress, data.deliveries.delivered, ""],
+    ["Sessions de caisse", data.cash.sessions, data.cash.open, data.cash.closed, ""],
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(flux), "Flux")
+
+  const b2b: (string | number)[][] = [
+    ["Document", "Nombre", "Montant"],
+    ...data.b2b.documents.map((r) => [B2B_DOC_LBL[r.type] ?? r.type, r.count, r.total]),
+    ["", "", ""],
+    ["Creances totales", "", data.b2b.creanceTotal],
+    ["Creances echues", "", data.b2b.creanceOverdue],
+    ["Factures ouvertes", data.b2b.openInvoices, ""],
+    ["Clients debiteurs", data.b2b.debtorClients, ""],
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b2b), "Commercial B2B")
+
+  XLSX.writeFile(wb, "rapport-global-" + todayShort() + ".xlsx")
 }

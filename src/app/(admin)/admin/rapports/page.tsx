@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import {
   BarChart3, Banknote, CalendarDays, CalendarRange, Clock, Download, Factory,
-  FileSpreadsheet, Package, RefreshCw, ScanBarcode, ShoppingCart, TrendingUp, Truck, WalletCards,
+  FileSpreadsheet, LayoutDashboard, Package, RefreshCw, ScanBarcode, ShoppingCart, TrendingUp, Truck, WalletCards,
 } from "lucide-react"
 import {
   Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -20,13 +20,16 @@ import {
   exportCaissePDF, exportCaisseExcel,
   exportLotsPDF, exportLotsExcel,
   exportJourneePDF, exportJourneeExcel,
+  exportGlobalPDF, exportGlobalExcel,
 } from "@/lib/report-export"
-import type { ReportPayload, JourneeReport } from "@/lib/report-types"
+import type { ReportPayload, JourneeReport, GlobalReport } from "@/lib/report-types"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
+import { GlobalReportView } from "@/components/admin/global-report-view"
 
-type Tab = "journee" | "ventes" | "stocks" | "appro" | "commandes" | "reservations" | "production" | "lots" | "caisse"
+type Tab = "global" | "journee" | "ventes" | "stocks" | "appro" | "commandes" | "reservations" | "production" | "lots" | "caisse"
 
 const tabList: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
+  { id: "global", label: "Global", icon: LayoutDashboard },
   { id: "journee", label: "Journée", icon: CalendarDays },
   { id: "ventes", label: "Ventes", icon: BarChart3 },
   { id: "stocks", label: "Stocks", icon: Package },
@@ -65,6 +68,10 @@ export default function RapportsPage() {
   const [dayDate, setDayDate] = useState<string>(todayIso)
   const [dayData, setDayData] = useState<JourneeReport | null>(null)
   const [dayError, setDayError] = useState("")
+  // Onglet « Global » : synthèse consolidée de tous les processus.
+  const [globalData, setGlobalData] = useState<GlobalReport | null>(null)
+  const [globalLoading, setGlobalLoading] = useState(false)
+  const [globalError, setGlobalError] = useState("")
 
   const periods = [
     { id: "day", label: "Journée" },
@@ -154,14 +161,41 @@ export default function RapportsPage() {
     setDayData(null)
   }
 
+  const fetchGlobal = async (signal?: AbortSignal) => {
+    try {
+      const params = new URLSearchParams({ period, pos })
+      const res = await fetch(`/api/reports/global?${params}`, { signal })
+      if (!res.ok) throw new Error("Impossible de charger le rapport global")
+      setGlobalData(await res.json())
+      setGlobalError("")
+    } catch (err) {
+      if (!signal?.aborted) setGlobalError(err instanceof Error ? err.message : "Erreur")
+    } finally {
+      if (!signal?.aborted) setGlobalLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (tab !== "global") return
+    const controller = new AbortController()
+    const init = async () => {
+      setGlobalLoading(true)
+      await fetchGlobal(controller.signal)
+    }
+    void init()
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, period, pos])
+
   const s = data?.summary
   // Colonnes de stock par point de vente, quand le rapport couvre tous les points de vente.
   const posColumns = pos === "all" && (data?.pointsOfSale.length ?? 0) > 1 ? data!.pointsOfSale : []
 
   const exportPDF = () => {
+    if (tab === "global") { if (globalData) exportGlobalPDF(globalData); return }
+    if (tab === "journee") { if (dayData) exportJourneePDF(dayData); return }
     if (!data) return
     switch (tab) {
-      case "journee": if (dayData) exportJourneePDF(dayData); break
       case "ventes": exportVentesPDF(data); break
       case "stocks": exportStocksPDF(data); break
       case "appro": exportApproPDF(data); break
@@ -174,9 +208,10 @@ export default function RapportsPage() {
   }
 
   const exportExcel = () => {
+    if (tab === "global") { if (globalData) exportGlobalExcel(globalData); return }
+    if (tab === "journee") { if (dayData) exportJourneeExcel(dayData); return }
     if (!data) return
     switch (tab) {
-      case "journee": if (dayData) exportJourneeExcel(dayData); break
       case "ventes": exportVentesExcel(data); break
       case "stocks": exportStocksExcel(data); break
       case "appro": exportApproExcel(data); break
@@ -195,10 +230,10 @@ export default function RapportsPage() {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Rapports</h1>
           <p className="mt-1 text-sm text-gray-500">Tableaux de bord detailles par domaine.</p>
         </div>
-        <button onClick={() => (tab === "journee" ? refreshDay() : load())} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <button onClick={() => (tab === "journee" ? refreshDay() : tab === "global" ? fetchGlobal() : load())} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50">
           <RefreshCw className="h-4 w-4" /> Actualiser
         </button>
-        {!loading && data && (
+        {!loading && (data || (tab === "global" && globalData)) && (
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={exportPDF} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs sm:text-sm font-medium text-red-700 hover:bg-red-100 transition-colors">
               <Download className="h-4 w-4" /> PDF
@@ -226,11 +261,11 @@ export default function RapportsPage() {
       </div>
       )}
 
-      {(data?.pointsOfSale.length ?? 0) > 1 && (
+      {((tab === "global" ? globalData?.pointsOfSale.length : data?.pointsOfSale.length) ?? 0) > 1 && (
         <div className="flex flex-wrap items-center gap-3">
           <span className="shrink-0 text-sm font-medium text-gray-500">Point de vente :</span>
           <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
-            {[{ id: "all", name: "Tous" }, ...(data?.pointsOfSale ?? [])].map((p) => (
+            {[{ id: "all", name: "Tous" }, ...((tab === "global" ? globalData?.pointsOfSale : data?.pointsOfSale) ?? [])].map((p) => (
               <button key={p.id} onClick={() => handlePosChange(p.id)} className={`rounded-md px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-medium transition-colors ${pos === p.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
                 {p.name}
               </button>
@@ -291,6 +326,18 @@ export default function RapportsPage() {
         <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-8 text-center text-xs sm:text-sm text-gray-500">Chargement...</div>
       ) : (
         <>
+          {tab === "global" && (
+            globalError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{globalError}</div>
+            ) : !globalData ? (
+              <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-8 text-center text-xs sm:text-sm text-gray-500">
+                {globalLoading ? "Chargement du rapport global..." : "Aucune donnée."}
+              </div>
+            ) : (
+              <GlobalReportView data={globalData} />
+            )
+          )}
+
           {tab === "journee" && (
             dayError ? (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{dayError}</div>

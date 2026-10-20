@@ -55,6 +55,7 @@ const navGroups = [
     links: [
       { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard },
       { href: "/admin/rapports", label: "Rapports", icon: BarChart3 },
+      { href: "/admin/rapport-global", label: "Rapport global", icon: BarChart3 },
     ],
   },
   {

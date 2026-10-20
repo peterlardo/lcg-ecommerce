@@ -343,3 +343,108 @@ export interface ReportPayload {
   recentMovements: SupplyMovement[]
   deliveries: DeliveryPoint[]
 }
+
+/* ------------------------------------------------------------------ *
+ * Rapport GLOBAL : synthèse consolidée de TOUS les processus sur la
+ * période sélectionnée (journée / semaine / mois / trimestre).
+ * ------------------------------------------------------------------ */
+
+export interface GlobalKpi {
+  /** Ventes encaissées de la période (FCFA). */
+  revenue: number
+  /** Commandes actives (hors annulées) de la période. */
+  orders: number
+  /** Commandes encaissées (chiffre d'affaires). */
+  paidOrders: number
+  /** Commandes annulées de la période. */
+  cancelledOrders: number
+  /** Articles vendus (unités) sur la période. */
+  items: number
+  /** Panier moyen (FCFA), arrondi. */
+  avgOrder: number
+}
+
+export interface GlobalStockKpi {
+  /** Unités en stock (stock physique = somme PointOfSaleStock). */
+  units: number
+  variants: number
+  lowStock: number
+  outOfStock: number
+}
+
+export interface GlobalSupplyKpi {
+  /** Entrées (IN + RETURN). */
+  inbound: number
+  /** Production (unités). */
+  produced: number
+  /** Pertes. */
+  loss: number
+  /** Sorties d'ajustement. */
+  adjustOut: number
+}
+
+export interface GlobalReservationKpi {
+  total: number
+  pending: number
+  confirmed: number
+  cancelled: number
+}
+
+export interface GlobalDeliveryKpi {
+  total: number
+  inProgress: number
+  delivered: number
+}
+
+export interface GlobalCashKpi {
+  sessions: number
+  open: number
+  closed: number
+  totalOpening: number
+  totalClosing: number
+  totalGap: number
+}
+
+export interface GlobalB2bDocumentCount {
+  type: string
+  count: number
+  total: number
+}
+
+export interface GlobalB2bKpi {
+  devis: number
+  commandes: number
+  factures: number
+  documents: GlobalB2bDocumentCount[]
+  /** Créances (factures émises non soldées). */
+  creanceTotal: number
+  creanceOverdue: number
+  debtorClients: number
+  openInvoices: number
+}
+
+export interface GlobalReport {
+  period: string
+  periodLabel: string
+  from: string
+  to: string
+  generatedAt: string
+  pointsOfSale: { id: string; name: string }[]
+  selectedPos: { id: string; name: string } | null
+  kpi: GlobalKpi
+  paymentBreakdown: PaymentBreakdownPoint[]
+  topProducts: TopProduct[]
+  ordersByStatus: OrderStatusPoint[]
+  byPointOfSale: PointOfSaleComparison[]
+  stock: GlobalStockKpi
+  stockAlerts: StockAlert[]
+  stockByCategory: StockCategoryPoint[]
+  supply: GlobalSupplyKpi
+  supplyByType: SupplyTypePoint[]
+  production: ProductionSummary
+  lots: LotSummary
+  reservations: GlobalReservationKpi
+  deliveries: GlobalDeliveryKpi
+  cash: GlobalCashKpi
+  b2b: GlobalB2bKpi
+}
