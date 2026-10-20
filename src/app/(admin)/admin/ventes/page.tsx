@@ -47,6 +47,19 @@ interface Partner {
   discountPercent: number
 }
 
+interface CatalogVariant {
+  id: string
+  format: string
+  price: number
+  partnerPrice: number | null
+}
+
+interface CatalogProduct {
+  id: string
+  name: string
+  variants: CatalogVariant[]
+}
+
 interface PosStock { variantId: string; quantity: number; lotsAvailable: number }
 
 interface PosStockApiItem { variantId: string; quantity: number; lotsAvailable?: number }
@@ -130,7 +143,7 @@ const mobileProviders: Record<string, "MTN_MOMO" | "AIRTEL_MONEY"> = {
 }
 
 export default function VentesPage() {
-  const [tab, setTab] = useState<"nouvelle" | "historique">("nouvelle")
+  const [tab, setTab] = useState<"nouvelle" | "historique" | "partenaires">("nouvelle")
   const [products, setProducts] = useState<Product[]>([])
   const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([])
   const [loading, setLoading] = useState(true)
@@ -156,6 +169,14 @@ export default function VentesPage() {
   const [partnerPrices, setPartnerPrices] = useState<Record<string, number>>({})
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [pricePartner, setPricePartner] = useState<Partner | null>(null)
+  const [pricePartnerSearch, setPricePartnerSearch] = useState("")
+  const [showPricePartnerDropdown, setShowPricePartnerDropdown] = useState(false)
+  const [catalog, setCatalog] = useState<CatalogProduct[]>([])
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [catalogDraft, setCatalogDraft] = useState<Record<string, string>>({})
+  const [savingVariantId, setSavingVariantId] = useState<string | null>(null)
+  const [catalogSearch, setCatalogSearch] = useState("")
   const lowStockThreshold = LOW_STOCK_THRESHOLD
   const [posStocks, setPosStocks] = useState<PosStock[]>([])
 
@@ -344,6 +365,96 @@ export default function VentesPage() {
     // Repasser au prix public
     setCart((current) => repriceCart(current, null, publicPriceOf))
   }
+
+  const loadCatalog = useCallback(async (partnerId: string) => {
+    setCatalogLoading(true)
+    try {
+      const res = await fetch(`/api/partenaires/${partnerId}/prix`)
+      if (!res.ok) {
+        setCatalog([])
+        return
+      }
+      const data = await res.json()
+      const products: CatalogProduct[] = (data.products ?? []).map((product: CatalogProduct) => ({
+        id: product.id,
+        name: product.name,
+        variants: product.variants ?? [],
+      }))
+      setCatalog(products)
+    } catch {
+      setCatalog([])
+    } finally {
+      setCatalogLoading(false)
+    }
+  }, [])
+
+  const selectPricePartner = (partner: Partner) => {
+    setPricePartner(partner)
+    setPricePartnerSearch("")
+    setShowPricePartnerDropdown(false)
+    setCatalogDraft({})
+    setCatalogSearch("")
+    void loadCatalog(partner.id)
+  }
+
+  const savePartnerPrice = async (productId: string, variant: CatalogVariant) => {
+    if (!pricePartner) return
+    setSavingVariantId(variant.id)
+    setError("")
+    setSuccess("")
+    try {
+      const raw = catalogDraft[variant.id] ?? (variant.partnerPrice !== null ? String(variant.partnerPrice) : "")
+      const payload = raw.trim() === "" ? null : Number(raw)
+      const res = await fetch(`/api/partenaires/${pricePartner.id}/prix`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: variant.id, price: payload }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Impossible d'enregistrer le prix")
+      }
+      setCatalog((current) =>
+        current.map((product) =>
+          product.id === productId
+            ? {
+                ...product,
+                variants: product.variants.map((v) =>
+                  v.id === variant.id ? { ...v, partnerPrice: payload } : v
+                ),
+              }
+            : product
+        )
+      )
+      setCatalogDraft((current) => {
+        const next = { ...current }
+        delete next[variant.id]
+        return next
+      })
+      setSuccess(payload === null ? "Prix préférentiel retiré." : "Prix préférentiel enregistré.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur")
+    } finally {
+      setSavingVariantId(null)
+    }
+  }
+
+  const filteredPricePartners = useMemo(() => {
+    if (!pricePartnerSearch.trim()) return partners
+    const term = pricePartnerSearch.toLowerCase()
+    return partners.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        (p.companyName ?? "").toLowerCase().includes(term) ||
+        (p.phone ?? "").includes(term)
+    )
+  }, [partners, pricePartnerSearch])
+
+  const filteredCatalog = useMemo(() => {
+    if (!catalogSearch.trim()) return catalog
+    const term = catalogSearch.toLowerCase()
+    return catalog.filter((product) => product.name.toLowerCase().includes(term))
+  }, [catalog, catalogSearch])
 
   const loadPosStock = useCallback(async (posId: string) => {
     if (!posId) { setPosStocks([]); return }
@@ -747,7 +858,7 @@ export default function VentesPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Mes ventes</h1>
           <p className="mt-1 text-sm sm:text-base text-gray-500">Ventes effectuées depuis le comptoir et points de vente.</p>
         </div>
-        <button onClick={() => { loadProducts(); if (tab === "historique") loadSalesHistory() }} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <button onClick={() => { loadProducts(); if (tab === "historique") loadSalesHistory(); if (tab === "partenaires" && pricePartner) void loadCatalog(pricePartner.id) }} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
           <RefreshCw className="h-4 w-4" /> Actualiser
         </button>
       </div>
@@ -777,6 +888,17 @@ export default function VentesPage() {
           {salesHistory.length > 0 && (
             <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs">{salesHistory.length}</span>
           )}
+        </button>
+        <button
+          onClick={() => setTab("partenaires")}
+          className={`shrink-0 px-5 sm:px-6 py-3 text-base sm:text-lg font-semibold border-b-2 transition-colors whitespace-nowrap ${
+            tab === "partenaires"
+              ? "border-primary text-primary"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Banknote className="inline h-5 w-5 mr-1.5 -mt-0.5" />
+          Partenaires
         </button>
       </div>
 
@@ -1306,6 +1428,133 @@ export default function VentesPage() {
                 <button onClick={() => setHistoryPage(historyCurrentPage + 1)} disabled={historyCurrentPage >= historyTotalPages} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
                 <button onClick={() => setHistoryPage(historyTotalPages)} disabled={historyCurrentPage >= historyTotalPages} className="hidden shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed sm:inline-flex">&raquo;</button>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "partenaires" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 space-y-3">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Prix préférentiels par produit</h2>
+              <p className="text-sm text-gray-500">Sélectionnez un partenaire puis fixez le prix appliqué à chacun de ses produits. Laissez le champ vide pour retirer un tarif préférentiel.</p>
+            </div>
+            <div className="relative max-w-md">
+              <label className="mb-1 block text-xs font-semibold text-gray-600 uppercase tracking-wide">Partenaire</label>
+              {pricePartner ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-900">{pricePartner.name}</p>
+                    <p className="truncate text-xs text-gray-500">
+                      {pricePartner.companyName || pricePartner.phone || `Remise ${pricePartner.discountPercent}%`}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => { setPricePartner(null); setCatalog([]); setCatalogDraft({}) }} className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-white">
+                    Changer
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={pricePartnerSearch}
+                    onChange={(e) => { setPricePartnerSearch(e.target.value); setShowPricePartnerDropdown(true) }}
+                    onFocus={() => setShowPricePartnerDropdown(true)}
+                    placeholder="Rechercher un partenaire..."
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                  />
+                  {showPricePartnerDropdown && (
+                    <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                      {filteredPricePartners.length === 0 && (
+                        <p className="px-3 py-2 text-sm text-gray-500">Aucun partenaire</p>
+                      )}
+                      {filteredPricePartners.map((partner) => (
+                        <button
+                          key={partner.id}
+                          type="button"
+                          onClick={() => selectPricePartner(partner)}
+                          className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-gray-50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-gray-900">{partner.name}</span>
+                            <span className="block truncate text-xs text-gray-500">{partner.companyName || partner.phone || ""}</span>
+                          </span>
+                          <span className="shrink-0 text-xs text-gray-400">Remise {partner.discountPercent}%</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {pricePartner && (
+            <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-base font-semibold text-gray-900">Catalogue produits</h3>
+                <input
+                  type="text"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Rechercher un produit..."
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none sm:max-w-xs"
+                />
+              </div>
+
+              {catalogLoading ? (
+                <p className="py-6 text-center text-sm text-gray-500">Chargement du catalogue...</p>
+              ) : filteredCatalog.length === 0 ? (
+                <p className="py-6 text-center text-sm text-gray-500">Aucun produit</p>
+              ) : (
+                <div className="space-y-3">
+                  {filteredCatalog.map((product) => (
+                    <div key={product.id} className="rounded-lg border border-gray-200 p-3">
+                      <p className="mb-2 text-sm font-semibold text-gray-900">{product.name}</p>
+                      <div className="space-y-2">
+                        {product.variants.map((variant) => {
+                          const draft = catalogDraft[variant.id]
+                          const value = draft !== undefined ? draft : variant.partnerPrice !== null ? String(variant.partnerPrice) : ""
+                          const current = variant.partnerPrice
+                          return (
+                            <div key={variant.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0 sm:flex-1">
+                                <p className="text-sm text-gray-700">{variant.format}</p>
+                                <p className="text-xs text-gray-500">
+                                  Prix public : {formatPrice(variant.price)}
+                                  {current !== null && current !== undefined && (
+                                    <span className="ml-2 font-medium text-primary">Préférentiel : {formatPrice(current)}</span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={25}
+                                  value={value}
+                                  onChange={(e) => setCatalogDraft((prev) => ({ ...prev, [variant.id]: e.target.value }))}
+                                  placeholder="Prix préférentiel"
+                                  className="w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-primary focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => savePartnerPrice(product.id, variant)}
+                                  disabled={savingVariantId === variant.id}
+                                  className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {savingVariantId === variant.id ? "..." : current !== null && current !== undefined ? "Mettre à jour" : "Définir"}
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
