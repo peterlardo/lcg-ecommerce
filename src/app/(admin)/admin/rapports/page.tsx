@@ -25,6 +25,7 @@ import {
 import type { ReportPayload, JourneeReport, GlobalReport } from "@/lib/report-types"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
 import { GlobalReportView } from "@/components/admin/global-report-view"
+import { DateRangePicker } from "@/components/admin/date-range-picker"
 
 type Tab = "global" | "journee" | "ventes" | "stocks" | "appro" | "commandes" | "reservations" | "production" | "lots" | "caisse"
 
@@ -62,6 +63,9 @@ export default function RapportsPage() {
   const [error, setError] = useState("")
   const [tab, setTab] = useState<Tab>("ventes")
   const [period, setPeriod] = useState<string>("month")
+  // Période personnalisée (calendrier) : bornes de dates.
+  const [fromDate, setFromDate] = useState<string>("")
+  const [toDate, setToDate] = useState<string>("")
   // "all" = tous les points de vente, sinon id du point de vente.
   const [pos, setPos] = useState<string>("all")
   // Onglet « Journée » : date sélectionnée + rapport consolidé du jour.
@@ -78,10 +82,20 @@ export default function RapportsPage() {
     { id: "week", label: "Semaine" },
     { id: "month", label: "Mois" },
     { id: "quarter", label: "Trimestre" },
+    { id: "custom", label: "Personnalisée" },
   ]
 
-  const load = async (p?: string, posId?: string) => {
-    const params = new URLSearchParams({ period: p ?? period, pos: posId ?? pos })
+  const periodParams = (p: string, posId: string, from?: string, to?: string) => {
+    const params = new URLSearchParams({ period: p, pos: posId })
+    if (p === "custom") {
+      if (from) params.set("from", from)
+      if (to) params.set("to", to)
+    }
+    return params
+  }
+
+  const load = async (p?: string, posId?: string, from?: string, to?: string) => {
+    const params = periodParams(p ?? period, posId ?? pos, from ?? fromDate, to ?? toDate)
     try {
       const res = await fetch(`/api/reports?${params}`)
       if (!res.ok) throw new Error("Impossible de charger les rapports")
@@ -95,8 +109,19 @@ export default function RapportsPage() {
 
   const handlePeriodChange = (newPeriod: string) => {
     setPeriod(newPeriod)
+    if (newPeriod === "custom" && (!fromDate || !toDate)) return
     setLoading(true)
     load(newPeriod)
+  }
+
+  const handleRangeChange = (range: { from: string; to: string }) => {
+    setFromDate(range.from)
+    setToDate(range.to)
+    if (range.from && range.to) {
+      setPeriod("custom")
+      setLoading(true)
+      load("custom", undefined, range.from, range.to)
+    }
   }
 
   const handlePosChange = (posId: string) => {
@@ -163,7 +188,7 @@ export default function RapportsPage() {
 
   const fetchGlobal = async (signal?: AbortSignal) => {
     try {
-      const params = new URLSearchParams({ period, pos })
+      const params = periodParams(period, pos)
       const res = await fetch(`/api/reports/global?${params}`, { signal })
       if (!res.ok) throw new Error("Impossible de charger le rapport global")
       setGlobalData(await res.json())
@@ -185,7 +210,7 @@ export default function RapportsPage() {
     void init()
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, period, pos])
+  }, [tab, period, pos, fromDate, toDate])
 
   const s = data?.summary
   // Colonnes de stock par point de vente, quand le rapport couvre tous les points de vente.
@@ -250,13 +275,20 @@ export default function RapportsPage() {
       {tab !== "journee" && (
       <div className="flex flex-wrap items-center gap-3">
         <span className="shrink-0 text-sm font-medium text-gray-500">Période :</span>
-        <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
           {periods.map((p) => (
             <button key={p.id} onClick={() => handlePeriodChange(p.id)} className={`rounded-md px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-medium transition-colors ${period === p.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
               {p.label}
             </button>
           ))}
         </div>
+        {period === "custom" && (
+          <DateRangePicker
+            value={{ from: fromDate, to: toDate }}
+            onChange={handleRangeChange}
+            max={new Date()}
+          />
+        )}
         {data?.periodLabel && <span className="min-w-0 text-xs text-gray-400">({data.periodLabel})</span>}
       </div>
       )}

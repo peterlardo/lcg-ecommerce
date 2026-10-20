@@ -27,8 +27,19 @@ function daysArray(from: Date, count: number) {
   })
 }
 
-function getPeriodRange(period: string, now: Date) {
+function getPeriodRange(period: string, now: Date, fromParam?: string | null, toParam?: string | null) {
   const today = startOfDay(now)
+  const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
+  if (period === "custom" && fromParam && toParam && DAY_RE.test(fromParam) && DAY_RE.test(toParam)) {
+    const from = startOfDay(new Date(fromParam + "T00:00:00"))
+    const to = startOfDay(new Date(toParam + "T00:00:00"))
+    if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+      const [a, b] = from <= to ? [from, to] : [to, from]
+      const dayCount = Math.round((b.getTime() - a.getTime()) / 86400000) + 1
+      const fmt = (d: Date) => d.toLocaleDateString("fr-FR")
+      return { from: a, to: b, label: `Du ${fmt(a)} au ${fmt(b)}`, dayCount }
+    }
+  }
   switch (period) {
     case "day":
       return { from: today, to: today, label: "Journée", dayCount: 1 }
@@ -157,6 +168,8 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const period = searchParams.get("period") || "month"
+    const fromParam = searchParams.get("from")
+    const toParam = searchParams.get("to")
     const weekOffset = parseInt(searchParams.get("weekOffset") || "0", 10)
     const livraisonWeekOffset = parseInt(searchParams.get("livraisonWeekOffset") || "0", 10)
     const clientParam = (searchParams.get("client") || "").trim()
@@ -217,7 +230,7 @@ export async function GET(request: Request) {
 
     const now = new Date()
     const todayStart = startOfDay(now)
-    const { from: periodFrom, dayCount } = getPeriodRange(period, now)
+    const { from: periodFrom, dayCount, label: periodLabel } = getPeriodRange(period, now, fromParam, toParam)
 
     const sevenDaysAgo = new Date(todayStart)
     sevenDaysAgo.setDate(todayStart.getDate() - 6)
@@ -629,7 +642,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       period,
-      periodLabel: getPeriodRange(period, now).label,
+      periodLabel,
       pointsOfSale: pointsOfSale.map((p) => ({ id: p.id, name: p.name })),
       selectedPos: selectedPos ? { id: selectedPos.id, name: selectedPos.name } : null,
       byPointOfSale,

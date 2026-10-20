@@ -1,0 +1,56 @@
+/* Thème du DateRangePicker (react-day-picker v10) aligné sur la palette admin. */
+.rdp-root {
+  --rdp-accent-color: #1f4fa3;
+  --rdp-accent-background-color: #e8eefb;
+  --rdp-day_button-border-radius: 0.5rem;
+  --rdp-today-color: #1f4fa3;
+  --rdp-outside-opacity: 0.4;
+  font-size: 0.8125rem;
+}
+
+.rdp-root .rdp-month_caption {
+  font-weight: 600;
+  color: #111827;
+}
+
+.rdp-root .rdp-weekday {
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 0.72rem;
+}
+
+.rdp-root .rdp-day_button {
+  border: 1px solid transparent;
+}
+
+.rdp-root .rdp-day_button:hover:not([disabled]) {
+  background-color: #f3f4f6;
+}
+
+.rdp-root .rdp-selected .rdp-day_button {
+  background-color: #1f4fa3;
+  color: #ffffff;
+  border-color: #1f4fa3;
+}
+
+.rdp-root .rdp-range_start .rdp-day_button,
+.rdp-root .rdp-range_end .rdp-day_button {
+  background-color: #1f4fa3;
+  color: #ffffff;
+}
+
+.rdp-root .rdp-range_middle {
+  background-color: #e8eefb;
+}
+
+.rdp-root .rdp-range_middle .rdp-day_button {
+  color: #1f4fa3;
+}
+
+.rdp-root .rdp-nav button {
+  border-radius: 0.5rem;
+}
+
+.rdp-root .rdp-nav button:hover {
+  background-color: #f3f4f6;
+}

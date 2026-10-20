@@ -13,8 +13,20 @@ function startOfDay(date: Date) {
   return d
 }
 
-function getPeriodRange(period: string, now: Date) {
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function getPeriodRange(period: string, now: Date, fromParam?: string | null, toParam?: string | null) {
   const today = startOfDay(now)
+  if (period === "custom" && fromParam && toParam && DAY_RE.test(fromParam) && DAY_RE.test(toParam)) {
+    const from = startOfDay(new Date(fromParam + "T00:00:00"))
+    const to = startOfDay(new Date(toParam + "T00:00:00"))
+    if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+      const [a, b] = from <= to ? [from, to] : [to, from]
+      const dayCount = Math.round((b.getTime() - a.getTime()) / 86400000) + 1
+      const fmt = (d: Date) => d.toLocaleDateString("fr-FR")
+      return { from: a, to: b, label: `Du ${fmt(a)} au ${fmt(b)}`, dayCount }
+    }
+  }
   switch (period) {
     case "day":
       return { from: today, to: today, label: "Journée", dayCount: 1 }
@@ -93,6 +105,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const period = searchParams.get("period") || "month"
     const posParam = searchParams.get("pos") || "all"
+    const fromParam = searchParams.get("from")
+    const toParam = searchParams.get("to")
 
     const session = await auth()
     const sessionUser = session?.user as SessionUser
@@ -131,7 +145,7 @@ export async function GET(request: Request) {
     }
 
     const now = new Date()
-    const { from: periodFrom, to: periodTo } = getPeriodRange(period, now)
+    const { from: periodFrom, to: periodTo, label: periodLabel } = getPeriodRange(period, now, fromParam, toParam)
     const periodEnd = new Date(periodTo)
     periodEnd.setHours(23, 59, 59, 999)
 
@@ -302,7 +316,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       period,
-      periodLabel: getPeriodRange(period, now).label,
+      periodLabel,
       from: periodFrom.toISOString(),
       to: periodEnd.toISOString(),
       generatedAt: now.toISOString(),
