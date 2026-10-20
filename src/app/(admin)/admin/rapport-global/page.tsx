@@ -5,12 +5,14 @@ import { Download, FileSpreadsheet, LayoutDashboard, RefreshCw } from "lucide-re
 import type { GlobalReport } from "@/lib/report-types"
 import { exportGlobalPDF, exportGlobalExcel } from "@/lib/report-export"
 import { GlobalReportView } from "@/components/admin/global-report-view"
+import { DateRangePicker, type DateRangeValue } from "@/components/admin/date-range-picker"
 
 const periods = [
   { id: "day", label: "Journée" },
   { id: "week", label: "Semaine" },
   { id: "month", label: "Mois" },
   { id: "quarter", label: "Trimestre" },
+  { id: "custom", label: "Personnalisée" },
 ]
 
 export default function RapportGlobalPage() {
@@ -19,10 +21,21 @@ export default function RapportGlobalPage() {
   const [error, setError] = useState("")
   const [period, setPeriod] = useState("month")
   const [pos, setPos] = useState("all")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
 
-  const load = async (p?: string, posId?: string, signal?: AbortSignal) => {
+  const periodParams = (p: string, posId: string, from?: string, to?: string) => {
+    const params = new URLSearchParams({ period: p, pos: posId })
+    if (p === "custom" && from && to) {
+      params.set("from", from)
+      params.set("to", to)
+    }
+    return params
+  }
+
+  const load = async (p?: string, posId?: string, from?: string, to?: string, signal?: AbortSignal) => {
     try {
-      const params = new URLSearchParams({ period: p ?? period, pos: posId ?? pos })
+      const params = periodParams(p ?? period, posId ?? pos, from ?? fromDate, to ?? toDate)
       const res = await fetch(`/api/reports/global?${params}`, { signal })
       if (!res.ok) throw new Error("Impossible de charger le rapport global")
       setData(await res.json())
@@ -38,7 +51,7 @@ export default function RapportGlobalPage() {
     const controller = new AbortController()
     const init = async () => {
       setLoading(true)
-      await load(undefined, undefined, controller.signal)
+      await load(undefined, undefined, undefined, undefined, controller.signal)
     }
     void init()
     return () => controller.abort()
@@ -46,8 +59,22 @@ export default function RapportGlobalPage() {
   }, [])
 
   const handlePeriodChange = (newPeriod: string) => {
+    if (newPeriod === "custom" && (!fromDate || !toDate)) {
+      setPeriod("custom")
+      return
+    }
     setPeriod(newPeriod)
     void load(newPeriod)
+  }
+
+  const handleRangeChange = (range: DateRangeValue) => {
+    setFromDate(range.from)
+    setToDate(range.to)
+    if (range.from && range.to) {
+      setPeriod("custom")
+      setLoading(true)
+      void load("custom", undefined, range.from, range.to)
+    }
   }
 
   const allPos = data ? [{ id: "all", name: "Tous" }, ...data.pointsOfSale] : [{ id: "all", name: "Tous" }]
@@ -82,13 +109,16 @@ export default function RapportGlobalPage() {
 
       <div className="flex flex-wrap items-center gap-3">
         <span className="shrink-0 text-sm font-medium text-gray-500">Période :</span>
-        <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
           {periods.map((p) => (
             <button key={p.id} onClick={() => handlePeriodChange(p.id)} className={`rounded-md px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-medium transition-colors ${period === p.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
               {p.label}
             </button>
           ))}
         </div>
+        {period === "custom" && (
+          <DateRangePicker value={{ from: fromDate, to: toDate }} onChange={handleRangeChange} max={new Date()} />
+        )}
       </div>
 
       {allPos.length > 1 && (
