@@ -68,6 +68,9 @@ const orderSelect = {
   source: true,
   pointOfSaleId: true,
   createdAt: true,
+  user: { select: { name: true } },
+  cashier: { select: { name: true } },
+  pointOfSale: { select: { name: true } },
   items: { select: { productId: true, quantity: true, total: true, variant: { select: { product: { select: { name: true } } } } } },
 } as const
 
@@ -82,16 +85,65 @@ const movementSelect = {
   id: true,
   type: true,
   quantity: true,
+  reason: true,
   reference: true,
   createdAt: true,
-  variant: { select: { format: true, product: { select: { name: true } } } },
+  variant: { select: { id: true, format: true, product: { select: { name: true } } } },
   pointOfSale: { select: { name: true } },
+  user: { select: { name: true } },
+  lot: { select: { lotNumber: true } },
 } as const
 
-const reservationSelect = { id: true, status: true, createdAt: true } as const
-const deliverySelect = { id: true, status: true, deliveredAt: true, createdAt: true } as const
-const cashSessionSelect = { id: true, status: true, openingBalance: true, closingBalance: true } as const
-const lotSelect = { id: true, initialQuantity: true, remainingQuantity: true, status: true } as const
+const reservationSelect = {
+  id: true,
+  client: true,
+  telephone: true,
+  type: true,
+  date: true,
+  heure: true,
+  status: true,
+  createdAt: true,
+  pointOfSale: { select: { name: true } },
+} as const
+const deliverySelect = {
+  id: true,
+  mode: true,
+  status: true,
+  fee: true,
+  address: true,
+  createdAt: true,
+  deliveredAt: true,
+  zone: { select: { name: true } },
+  agent: { select: { name: true } },
+  order: { select: { orderNumber: true, customerName: true } },
+} as const
+const cashSessionSelect = {
+  id: true,
+  status: true,
+  openingBalance: true,
+  closingBalance: true,
+  openedAt: true,
+  closedAt: true,
+  reportReference: true,
+  openedBy: { select: { name: true } },
+  pointOfSale: { select: { name: true } },
+} as const
+const lotSelect = {
+  id: true,
+  lotNumber: true,
+  initialQuantity: true,
+  remainingQuantity: true,
+  status: true,
+  productionDate: true,
+  expiryDate: true,
+  createdAt: true,
+  variant: { select: { format: true, product: { select: { name: true } } } },
+  createdBy: { select: { name: true } },
+} as const
+
+/** Plafond de lignes renvoyées par liste de détail (le total réel est renvoyé à côté). */
+const DETAIL_LIMIT = 500
+
 
 /** Rapport GLOBAL : synthèse consolidée de tous les processus sur la période choisie. */
 export async function GET(request: Request) {
@@ -314,6 +366,175 @@ export async function GET(request: Request) {
       openInvoices: creanceSum.openInvoices,
     }
 
+    // --- Détails par section (listes plafonnées, totaux réels conservés) ---
+    const byDateDesc = (a: Date, b: Date) => b.getTime() - a.getTime()
+
+    const salesRows = [...ordersRaw]
+      .sort((a, b) => byDateDesc(a.createdAt, b.createdAt))
+      .map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        createdAt: o.createdAt.toISOString(),
+        customerName: o.customerName,
+        cashier: o.cashier?.name ?? (o.source === "CAISSE" ? o.user?.name ?? null : null),
+        operator: o.user?.name ?? null,
+        source: o.source,
+        status: o.status,
+        paymentStatus: o.paymentStatus,
+        paymentMethod: o.paymentMethod,
+        items: o.items.reduce((s, i) => s + i.quantity, 0),
+        total: o.total,
+        pointOfSale: o.pointOfSale?.name ?? null,
+      }))
+
+    const toMovementDetail = (m: (typeof movements)[number]) => ({
+      id: m.id,
+      type: m.type,
+      quantity: m.quantity,
+      reason: m.reason,
+      reference: m.reference,
+      createdAt: m.createdAt.toISOString(),
+      productName: m.variant?.product?.name ?? "Produit",
+      format: m.variant?.format ?? "-",
+      pointOfSale: m.pointOfSale?.name ?? null,
+      lotNumber: m.lot?.lotNumber ?? null,
+      author: m.user?.name ?? null,
+    })
+
+    const movementRows = [...movements].sort((a, b) => byDateDesc(a.createdAt, b.createdAt)).map(toMovementDetail)
+    // Règle anti-double-compte : à « Tous PDV », un lot de production n'est compté
+    // que via le mouvement global (chaque production écrit un mouvement global + un par PDV).
+    const productionMovementRows = [...countedMovements]
+      .filter((m) => m.type === "PRODUCTION")
+      .sort((a, b) => byDateDesc(a.createdAt, b.createdAt))
+      .map(toMovementDetail)
+
+    // Production agrégée par format
+    const productionMap = new Map<string, { productName: string; format: string; quantity: number; movements: number }>()
+    for (const m of productionMovementRows) {
+      const key = `${m.productName}||${m.format}`
+      const cur = productionMap.get(key) ?? { productName: m.productName, format: m.format, quantity: 0, movements: 0 }
+      cur.quantity += m.quantity
+      cur.movements += 1
+      productionMap.set(key, cur)
+    }
+    const lotMap = new Map<string, { lots: number; remaining: number }>()
+    for (const l of lots) {
+      const key = `${l.variant?.product?.name ?? "Produit"}||${l.variant?.format ?? "-"}`
+      const cur = lotMap.get(key) ?? { lots: 0, remaining: 0 }
+      cur.lots += 1
+      cur.remaining += l.remainingQuantity
+      lotMap.set(key, cur)
+    }
+    const totalProducedDetail = Array.from(productionMap.values()).reduce((s, p) => s + p.quantity, 0)
+    const productionFormats = Array.from(productionMap.values())
+      .map((p) => {
+        const key = `${p.productName}||${p.format}`
+        const lotInfo = lotMap.get(key)
+        return {
+          productName: p.productName,
+          format: p.format,
+          quantity: p.quantity,
+          movements: p.movements,
+          share: totalProducedDetail > 0 ? Math.round((p.quantity / totalProducedDetail) * 1000) / 10 : 0,
+          lots: lotInfo?.lots ?? 0,
+          remaining: lotInfo?.remaining ?? 0,
+        }
+      })
+      .sort((a, b) => b.quantity - a.quantity)
+
+    const stockRows = variants.map((v) => {
+      const byPointOfSale = pointsOfSale
+        .filter((p) => stockPosIds.includes(p.id))
+        .map((p) => ({
+          pointOfSale: p.name,
+          quantity: posStocks.filter((s) => s.variantId === v.id && s.pointOfSaleId === p.id).reduce((sum, s) => sum + s.quantity, 0),
+        }))
+        .filter((p) => p.quantity !== 0)
+      return {
+        variantId: v.id,
+        productName: v.product.name,
+        format: v.format,
+        categoryName: v.product.category?.name ?? "Sans categorie",
+        total: v.stock,
+        byPointOfSale,
+        threshold: LOW_STOCK_THRESHOLD,
+        alert: v.stock <= LOW_STOCK_THRESHOLD,
+      }
+    })
+
+    const cashRows = [...cashSessions]
+      .sort((a, b) => byDateDesc(a.openedAt, b.openedAt))
+      .map((c) => ({
+        id: c.id,
+        cashier: c.openedBy?.name ?? null,
+        pointOfSale: c.pointOfSale?.name ?? null,
+        status: c.status,
+        openedAt: c.openedAt.toISOString(),
+        closedAt: c.closedAt?.toISOString() ?? null,
+        openingBalance: c.openingBalance,
+        closingBalance: c.closingBalance,
+        gap: c.closingBalance !== null ? c.closingBalance - c.openingBalance : null,
+        reportReference: c.reportReference,
+      }))
+
+    const deliveryRows = [...deliveries]
+      .sort((a, b) => byDateDesc(a.createdAt, b.createdAt))
+      .map((d) => ({
+        id: d.id,
+        createdAt: d.createdAt.toISOString(),
+        deliveredAt: d.deliveredAt?.toISOString() ?? null,
+        customerName: d.order?.customerName ?? null,
+        orderNumber: d.order?.orderNumber ?? null,
+        mode: d.mode,
+        zone: d.zone?.name ?? null,
+        agent: d.agent?.name ?? null,
+        status: d.status,
+        fee: d.fee,
+        address: d.address,
+      }))
+
+    const reservationRows = [...reservations]
+      .sort((a, b) => byDateDesc(a.createdAt, b.createdAt))
+      .map((r) => ({
+        id: r.id,
+        createdAt: r.createdAt.toISOString(),
+        customerName: r.client,
+        telephone: r.telephone,
+        type: r.type,
+        date: r.date,
+        heure: r.heure,
+        status: r.status,
+        pointOfSale: r.pointOfSale?.name ?? null,
+      }))
+
+    const b2bDocumentRows = await prisma.b2bDocument.findMany({
+      where: { AND: [{ createdAt: { gte: periodFrom, lte: periodEnd } }, docScope] },
+      select: {
+        id: true,
+        reference: true,
+        type: true,
+        total: true,
+        status: true,
+        createdAt: true,
+        client: { select: { companyName: true, tradeName: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    })
+    const b2bDocumentDetail = b2bDocumentRows.map((d) => ({
+      id: d.id,
+      reference: d.reference,
+      type: d.type,
+      client:
+        d.client?.companyName ||
+        d.client?.tradeName ||
+        [d.client?.firstName, d.client?.lastName].filter(Boolean).join(" ") ||
+        null,
+      total: d.total,
+      status: d.status,
+      createdAt: d.createdAt.toISOString(),
+    }))
+
     return NextResponse.json({
       period,
       periodLabel,
@@ -350,6 +571,41 @@ export async function GET(request: Request) {
       deliveries: deliveries_kpi,
       cash,
       b2b,
+      details: {
+        sales: salesRows.slice(0, DETAIL_LIMIT),
+        salesTotal: salesRows.length,
+        productionFormats,
+        productionMovements: productionMovementRows.slice(0, DETAIL_LIMIT),
+        productionMovementsTotal: productionMovementRows.length,
+        movements: movementRows.slice(0, DETAIL_LIMIT),
+        movementsTotal: movementRows.length,
+        lots: lots
+          .map((l) => ({
+            id: l.id,
+            lotNumber: l.lotNumber,
+            productName: l.variant?.product?.name ?? "Produit",
+            format: l.variant?.format ?? "-",
+            initialQuantity: l.initialQuantity,
+            remainingQuantity: l.remainingQuantity,
+            productionDate: l.productionDate.toISOString(),
+            expiryDate: l.expiryDate?.toISOString() ?? null,
+            status: l.status,
+            createdBy: l.createdBy?.name ?? null,
+          }))
+          .sort((a, b) => byDateDesc(new Date(a.productionDate), new Date(b.productionDate)))
+          .slice(0, DETAIL_LIMIT),
+        lotsTotal: lots.length,
+        stock: stockRows.slice(0, DETAIL_LIMIT),
+        stockTotal: stockRows.length,
+        cashSessions: cashRows.slice(0, DETAIL_LIMIT),
+        cashSessionsTotal: cashRows.length,
+        deliveries: deliveryRows.slice(0, DETAIL_LIMIT),
+        deliveriesTotal: deliveryRows.length,
+        reservations: reservationRows.slice(0, DETAIL_LIMIT),
+        reservationsTotal: reservationRows.length,
+        b2bDocuments: b2bDocumentDetail.slice(0, DETAIL_LIMIT),
+        b2bDocumentsTotal: b2bDocumentDetail.length,
+      },
     })
   } catch (error) {
     console.error("GET reports/global error:", error)

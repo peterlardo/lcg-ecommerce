@@ -423,6 +423,174 @@ export interface GlobalB2bKpi {
   openInvoices: number
 }
 
+/* ------------------------------------------------------------------ *
+ * Rapport GLOBAL — DÉTAILS : listing exhaustif par section.
+ * Chaque liste est plafonnée côté API (DETAIL_LIMIT) ; le total réel
+ * de la période est renvoyé à côté pour ne rien masquer à l'utilisateur.
+ * ------------------------------------------------------------------ */
+
+/** Une vente (= une commande Order) de la période. */
+export interface GlobalSaleDetail {
+  id: string
+  orderNumber: string
+  /** Horodatage ISO de création (affiché en heure locale côté client). */
+  createdAt: string
+  customerName: string | null
+  /** Caissière ayant encaissé la vente (Order.cashier). */
+  cashier: string | null
+  /** Opérateur ayant saisi la commande (Order.user). */
+  operator: string | null
+  /** WEB | OPERATOR | RESERVATION | CAISSE... */
+  source: string
+  status: string
+  paymentStatus: string
+  paymentMethod: string | null
+  /** Nombre d'articles vendus (somme des quantités). */
+  items: number
+  total: number
+  pointOfSale: string | null
+}
+
+/** Un mouvement de stock (StockMovement) de la période. */
+export interface GlobalMovementDetail {
+  id: string
+  type: string
+  quantity: number
+  reason: string | null
+  reference: string | null
+  createdAt: string
+  productName: string
+  format: string
+  pointOfSale: string | null
+  lotNumber: string | null
+  /** Auteur du mouvement (utilisateur). */
+  author: string | null
+}
+
+/** Production agrégée par format (produit + variant). */
+export interface GlobalProductionFormat {
+  productName: string
+  format: string
+  /** Quantité produite sur la période (unités). */
+  quantity: number
+  /** Nombre de mouvements de production. */
+  movements: number
+  /** Part de la production totale (0-100). */
+  share: number
+  /** Lots produits sur la période. */
+  lots: number
+  /** Quantité restante dans ces lots. */
+  remaining: number
+}
+
+/** Un lot de production (ProductionLot). */
+export interface GlobalLotDetail {
+  id: string
+  lotNumber: string
+  productName: string
+  format: string
+  initialQuantity: number
+  remainingQuantity: number
+  productionDate: string
+  expiryDate: string | null
+  status: string
+  createdBy: string | null
+}
+
+/** Stock physique d'une variante, réparti par point de vente. */
+export interface GlobalStockDetail {
+  variantId: string
+  productName: string
+  format: string
+  categoryName: string
+  /** Stock total (somme des PDV). */
+  total: number
+  byPointOfSale: { pointOfSale: string; quantity: number }[]
+  /** Seuil d'alerte appliqué. */
+  threshold: number
+  /** Stock faible ou en rupture. */
+  alert: boolean
+}
+
+/** Une session de caisse de la période. */
+export interface GlobalCashSessionDetail {
+  id: string
+  cashier: string | null
+  pointOfSale: string | null
+  status: string
+  openedAt: string
+  closedAt: string | null
+  openingBalance: number
+  closingBalance: number | null
+  /** Écart de caisse (clôture - ouverture), null si session ouverte. */
+  gap: number | null
+  reportReference: string | null
+}
+
+/** Une livraison de la période. */
+export interface GlobalDeliveryDetail {
+  id: string
+  createdAt: string
+  deliveredAt: string | null
+  customerName: string | null
+  orderNumber: string | null
+  /** DELIVERY | PICKUP */
+  mode: string
+  zone: string | null
+  agent: string | null
+  status: string
+  fee: number
+  address: string | null
+}
+
+/** Une pré-commande (réservation) de la période. */
+export interface GlobalReservationDetail {
+  id: string
+  createdAt: string
+  customerName: string | null
+  telephone: string | null
+  type: string
+  date: string
+  heure: string
+  status: string
+  pointOfSale: string | null
+}
+
+/** Un document commercial B2B de la période. */
+export interface GlobalB2bDocumentDetail {
+  id: string
+  reference: string
+  type: string
+  client: string | null
+  total: number
+  status: string
+  createdAt: string
+}
+
+/** Détails par section du rapport global. */
+export interface GlobalDetails {
+  sales: GlobalSaleDetail[]
+  /** Nombre total de commandes de la période (avant plafond). */
+  salesTotal: number
+  productionFormats: GlobalProductionFormat[]
+  productionMovements: GlobalMovementDetail[]
+  productionMovementsTotal: number
+  movements: GlobalMovementDetail[]
+  movementsTotal: number
+  lots: GlobalLotDetail[]
+  lotsTotal: number
+  stock: GlobalStockDetail[]
+  stockTotal: number
+  cashSessions: GlobalCashSessionDetail[]
+  cashSessionsTotal: number
+  deliveries: GlobalDeliveryDetail[]
+  deliveriesTotal: number
+  reservations: GlobalReservationDetail[]
+  reservationsTotal: number
+  b2bDocuments: GlobalB2bDocumentDetail[]
+  b2bDocumentsTotal: number
+}
+
 export interface GlobalReport {
   period: string
   periodLabel: string
@@ -447,4 +615,5 @@ export interface GlobalReport {
   deliveries: GlobalDeliveryKpi
   cash: GlobalCashKpi
   b2b: GlobalB2bKpi
+  details: GlobalDetails
 }

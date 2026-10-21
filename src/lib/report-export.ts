@@ -3,7 +3,21 @@ import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
 import { LOGO_BADGE_BASE64 } from "./logo-badge-base64"
 import { drawCoverPage } from "./pdf-cover"
-import type { ReportPayload, JourneeReport, GlobalReport } from "./report-types"
+import type { ReportPayload, JourneeReport, GlobalReport, GlobalDetails } from "./report-types"
+import {
+  B2B_DOC_LBL,
+  B2B_STATUS_LBL,
+  CASH_STATUS_LBL,
+  DELIVERY_MODE_LBL,
+  DELIVERY_STATUS_LBL,
+  LOT_STATUS_LBL,
+  MOVEMENT_LBL,
+  PAYMENT_METHOD_LBL,
+  PAYMENT_STATUS_LBL,
+  RESERVATION_STATUS_LBL,
+  SOURCE_LBL,
+  signedMovementQuantity,
+} from "./report-labels"
 
 type VentesData = Pick<ReportPayload, "summary" | "topProducts" | "paymentBreakdown30" | "daily7">
 type StocksData = Pick<ReportPayload, "summary" | "stockByCategory" | "allStockVariants" | "stockAlerts">
@@ -14,10 +28,8 @@ type ProductionData = Pick<ReportPayload, "productionSummary" | "productionByDay
 type CaisseData = Pick<ReportPayload, "cashSessionsSummary" | "cashSessionsByDay">
 type LotsData = Pick<ReportPayload, "lotSummary" | "lots">
 
-const PAYMENT: Record<string, string> = { CASH_ON_DELIVERY: "Especes", MOBILE_MONEY: "Mobile Money", CARD: "Carte" }
 const STATUS_LBL: Record<string, string> = { PENDING: "En attente", SENT_TO_CASHIER: "Caisse", CONFIRMED: "Confirmee", PROCESSING: "En cours", READY: "Prete", OUT_FOR_DELIVERY: "En livraison", DELIVERED: "Livre", CANCELLED: "Annulee" }
 const SUPPLY_LBL: Record<string, string> = { IN: "Entree", PRODUCTION: "Production", TRANSFER_IN: "Transfert", RETURN: "Retour" }
-const LOT_STATUS_LBL: Record<string, string> = { ACTIVE: "Actif", EXHAUSTED: "Epuise", EXPIRED: "Expire" }
 
 const COMPANY = {
   name: "LCG - La Congolaise des Glacons",
@@ -44,6 +56,24 @@ function today() {
 
 function todayShort() {
   return new Date().toISOString().slice(0, 10).replace(/-/g, "")
+}
+
+/** Horodatage ISO → "jj/mm/aaaa hh:mm" (heure locale du poste). */
+function dt(iso: string | null | undefined): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** "jj/mm/aaaa" (heure locale du poste). */
+function dOnly(iso: string | null | undefined): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
 // ─── PDF UTILITIES ────────────────────────────────────────────
@@ -176,7 +206,7 @@ export function exportVentesPDF(data: VentesData) {
   autoTable(doc, {
     startY: y,
     head: [["Methode", "Transactions", "Total"]],
-    body: data.paymentBreakdown30.map((p) => [PAYMENT[p.method] ?? p.method, String(p.count), fmt(p.total)]),
+    body: data.paymentBreakdown30.map((p) => [PAYMENT_METHOD_LBL[p.method] ?? p.method, String(p.count), fmt(p.total)]),
     styles: { fontSize: 9, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
   })
@@ -190,7 +220,7 @@ export function exportVentesExcel(data: VentesData) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Resume")
   const top: (string | number)[][] = [["Produit", "Qte", "Revenu"], ...data.topProducts.map((p) => [p.name, p.quantity, p.revenue])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(top), "Top Produits")
-  const pay: (string | number)[][] = [["Methode", "Transactions", "Total"], ...data.paymentBreakdown30.map((p) => [PAYMENT[p.method] ?? p.method, p.count, p.total])]
+  const pay: (string | number)[][] = [["Methode", "Transactions", "Total"], ...data.paymentBreakdown30.map((p) => [PAYMENT_METHOD_LBL[p.method] ?? p.method, p.count, p.total])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pay), "Paiements")
   const daily: (string | number)[][] = [["Jour", "Revenu", "Commandes"], ...data.daily7.map((d) => [d.name, d.revenu, d.commandes])]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), "CA 7j")
@@ -750,7 +780,7 @@ startY: y,
       pageBreak: "avoid",
       head: [["Mode de paiement", "Montant (FCFA)", "Références / observations"]],
     body: data.paymentBreakdown.length > 0
-      ? data.paymentBreakdown.map((row) => [PAYMENT[row.method] ?? row.method, fmt(row.amount), ""])
+      ? data.paymentBreakdown.map((row) => [PAYMENT_METHOD_LBL[row.method] ?? row.method, fmt(row.amount), ""])
       : [["-", "", ""]],
     foot: [["TOTAL ENCAISSÉ", fmt(data.paymentBreakdown.reduce((sum, row) => sum + row.amount, 0)), ""]],
     styles: { fontSize: 8.5, textColor: [40, 40, 40] },
@@ -918,7 +948,7 @@ export function exportClotureCaisseExcel(data: ClotureReport) {
 
   const paiements: (string | number)[][] = [
     ["Mode", "Transactions", "Montant"],
-    ...data.paymentBreakdown.map((row) => [PAYMENT[row.method] ?? row.method, row.count, row.amount]),
+    ...data.paymentBreakdown.map((row) => [PAYMENT_METHOD_LBL[row.method] ?? row.method, row.count, row.amount]),
   ]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(paiements), "Paiements")
 
@@ -964,7 +994,7 @@ export function exportJourneePDF(data: JourneeReport) {
     pageBreak: "avoid",
     head: [["Mode de paiement", "Transactions", "Montant"]],
     body: data.paymentBreakdown.length > 0
-      ? data.paymentBreakdown.map((row) => [PAYMENT[row.method] ?? row.method, String(row.count), fmt(row.amount)])
+      ? data.paymentBreakdown.map((row) => [PAYMENT_METHOD_LBL[row.method] ?? row.method, String(row.count), fmt(row.amount)])
       : [["-", "", ""]],
     foot: [["TOTAL", String(data.summary.paidOrders), fmt(data.summary.revenue)]],
     styles: { fontSize: 8.5, textColor: [40, 40, 40] },
@@ -1071,7 +1101,7 @@ export function exportJourneePDF(data: JourneeReport) {
           o.cashier ?? "-",
           o.pointOfSale ?? "-",
           String(o.items),
-          PAYMENT[o.paymentMethod ?? ""] ?? o.paymentMethod ?? "-",
+          PAYMENT_METHOD_LBL[o.paymentMethod ?? ""] ?? o.paymentMethod ?? "-",
           STATUS_LBL[o.status] ?? o.status,
           fmt(o.total),
         ])
@@ -1101,7 +1131,7 @@ export function exportJourneeExcel(data: JourneeReport) {
 
   const paiements: (string | number)[][] = [
     ["Mode", "Transactions", "Montant"],
-    ...data.paymentBreakdown.map((row) => [PAYMENT[row.method] ?? row.method, row.count, row.amount]),
+    ...data.paymentBreakdown.map((row) => [PAYMENT_METHOD_LBL[row.method] ?? row.method, row.count, row.amount]),
   ]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(paiements), "Encaissements")
 
@@ -1141,15 +1171,13 @@ export function exportJourneeExcel(data: JourneeReport) {
     ["Heure", "Numero", "Client", "Caissier", "PDV", "Articles", "Paiement", "Statut", "Montant"],
     ...data.orders.map((o) => [
       o.createdAt, o.orderNumber, o.customerName ?? "", o.cashier ?? "", o.pointOfSale ?? "",
-      o.items, PAYMENT[o.paymentMethod ?? ""] ?? o.paymentMethod ?? "", STATUS_LBL[o.status] ?? o.status, o.total,
+      o.items, PAYMENT_METHOD_LBL[o.paymentMethod ?? ""] ?? o.paymentMethod ?? "", STATUS_LBL[o.status] ?? o.status, o.total,
     ]),
   ]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(commandes), "Commandes")
 
   XLSX.writeFile(wb, "rapport-journee-" + data.date.replace(/-/g, "") + ".xlsx")
 }
-
-const B2B_DOC_LBL: Record<string, string> = { DEVIS: "Devis", COMMANDE: "Commande client", LIVRAISON: "Bon de livraison", FACTURE: "Facture", AVOIR: "Avoir" }
 
 export function exportGlobalPDF(data: GlobalReport) {
   const title = "Rapport Global — Synthèse de tous les processus"
@@ -1188,7 +1216,7 @@ export function exportGlobalPDF(data: GlobalReport) {
     startY: y,
     pageBreak: "avoid",
     head: [["Mode", "Transactions", "Montant"]],
-    body: data.paymentBreakdown.length > 0 ? data.paymentBreakdown.map((r) => [PAYMENT[r.method] ?? r.method, String(r.count), fmt(r.total)]) : [["-", "", ""]],
+    body: data.paymentBreakdown.length > 0 ? data.paymentBreakdown.map((r) => [PAYMENT_METHOD_LBL[r.method] ?? r.method, String(r.count), fmt(r.total)]) : [["-", "", ""]],
     styles: { fontSize: 8.5, textColor: [40, 40, 40] },
     headStyles: tableHeadStyles,
   })
@@ -1316,6 +1344,201 @@ export function exportGlobalPDF(data: GlobalReport) {
   y = kv(doc, y, "Créances", fmt(data.b2b.creanceTotal) + " dont " + fmt(data.b2b.creanceOverdue) + " échues")
   y = kv(doc, y, "Factures ouvertes", String(data.b2b.openInvoices) + " — " + String(data.b2b.debtorClients) + " client(s) débiteur(s)")
 
+  // ─── DÉTAILS PAR SECTION (une section par page) ────────────────
+  const details = data.details as GlobalDetails | undefined
+  const periodNote = data.periodLabel + "  |  PDV : " + (data.selectedPos?.name ?? "Tous")
+  const countNote = (shown: number, total: number) => periodNote + "  |  " + shown + " ligne(s) affichée(s) sur " + total
+
+  const detailPage = (heading: string, note: string) => {
+    doc.addPage()
+    addPageHeader(doc, "Rapport Global — Détails")
+    const yy = sectionTitle(doc, 30, heading)
+    doc.setFontSize(7.5)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(115, 115, 115)
+    doc.text(note, 14, yy + 1.5)
+    return yy + 7
+  }
+
+  const detailTable = (startY: number, head: string[], body: (string | number)[][]) => {
+    autoTable(doc, {
+      startY,
+      head: [head],
+      body: body.length > 0 ? body : [head.map(() => "-")],
+      styles: { fontSize: 6.6, textColor: [40, 40, 40], cellPadding: 1.1, overflow: "linebreak" },
+      headStyles: { ...tableHeadStyles, fontSize: 6.6, cellPadding: 1.1 },
+      margin: { top: 30 },
+      willDrawPage: (hook) => {
+        if (hook.pageNumber > 1) addPageHeader(doc, "Rapport Global — Détails")
+      },
+    })
+    return (doc as AutoTableDoc).lastAutoTable.finalY
+  }
+
+  const sales = details?.sales ?? []
+  detailTable(
+    detailPage("11. Détail des ventes", countNote(sales.length, details?.salesTotal ?? sales.length)),
+    ["Heure", "N° commande", "Client", "Caissière", "Source", "Statut", "Paiement", "Art.", "Total", "PDV"],
+    sales.map((s) => [
+      dt(s.createdAt),
+      s.orderNumber,
+      s.customerName ?? "-",
+      s.cashier ?? "-",
+      SOURCE_LBL[s.source] ?? s.source,
+      STATUS_LBL[s.status] ?? s.status,
+      (s.paymentMethod ? (PAYMENT_METHOD_LBL[s.paymentMethod] ?? s.paymentMethod) : "-") +
+        " (" + (PAYMENT_STATUS_LBL[s.paymentStatus] ?? s.paymentStatus) + ")",
+      String(s.items),
+      fmt(s.total),
+      s.pointOfSale ?? "-",
+    ]),
+  )
+
+  const prodFormats = details?.productionFormats ?? []
+  detailTable(
+    detailPage("12. Production par format", periodNote + "  |  " + prodFormats.length + " format(s)"),
+    ["Produit", "Format", "Quantité", "Mouvements", "Part", "Lots", "Restant"],
+    prodFormats.map((p) => [
+      p.productName,
+      p.format,
+      String(p.quantity),
+      String(p.movements),
+      p.share + " %",
+      String(p.lots),
+      String(p.remaining),
+    ]),
+  )
+
+  const prodMovements = details?.productionMovements ?? []
+  detailTable(
+    detailPage("13. Mouvements de production", countNote(prodMovements.length, details?.productionMovementsTotal ?? prodMovements.length)),
+    ["Heure", "Produit", "Format", "Qté", "Motif", "PDV", "Lot", "Auteur"],
+    prodMovements.map((m) => [
+      dt(m.createdAt),
+      m.productName,
+      m.format,
+      String(m.quantity),
+      m.reason ?? "-",
+      m.pointOfSale ?? "-",
+      m.lotNumber ?? "-",
+      m.author ?? "-",
+    ]),
+  )
+
+  const movements = details?.movements ?? []
+  detailTable(
+    detailPage("14. Mouvements de stock", countNote(movements.length, details?.movementsTotal ?? movements.length)),
+    ["Heure", "Type", "Produit", "Format", "Qté", "Motif", "PDV", "Lot", "Référence", "Auteur"],
+    movements.map((m) => [
+      dt(m.createdAt),
+      MOVEMENT_LBL[m.type] ?? m.type,
+      m.productName,
+      m.format,
+      String(signedMovementQuantity(m.type, m.quantity)),
+      m.reason ?? "-",
+      m.pointOfSale ?? "-",
+      m.lotNumber ?? "-",
+      m.reference ?? "-",
+      m.author ?? "-",
+    ]),
+  )
+
+  const lots = details?.lots ?? []
+  detailTable(
+    detailPage("15. Lots de production", countNote(lots.length, details?.lotsTotal ?? lots.length)),
+    ["N° lot", "Produit", "Format", "Initiale", "Restante", "Production", "Péremption", "Statut", "Auteur"],
+    lots.map((l) => [
+      l.lotNumber,
+      l.productName,
+      l.format,
+      String(l.initialQuantity),
+      String(l.remainingQuantity),
+      dOnly(l.productionDate),
+      l.expiryDate ? dOnly(l.expiryDate) : "-",
+      LOT_STATUS_LBL[l.status] ?? l.status,
+      l.createdBy ?? "-",
+    ]),
+  )
+
+  const stock = details?.stock ?? []
+  detailTable(
+    detailPage("16. Stock par format", countNote(stock.length, details?.stockTotal ?? stock.length)),
+    ["Produit", "Format", "Catégorie", "Stock total", "Par point de vente", "Seuil", "Alerte"],
+    stock.map((s) => [
+      s.productName,
+      s.format,
+      s.categoryName,
+      String(s.total),
+      s.byPointOfSale.map((p) => p.pointOfSale + " : " + String(p.quantity)).join("\n") || "-",
+      String(s.threshold),
+      s.alert ? "OUI" : "-",
+    ]),
+  )
+
+  const cashSessions = details?.cashSessions ?? []
+  detailTable(
+    detailPage("17. Sessions de caisse", countNote(cashSessions.length, details?.cashSessionsTotal ?? cashSessions.length)),
+    ["Ouverture", "Fermeture", "Caissier", "PDV", "Fonds", "Clôture", "Écart", "Statut", "Réf. rapport"],
+    cashSessions.map((c) => [
+      dt(c.openedAt),
+      c.closedAt ? dt(c.closedAt) : "en cours",
+      c.cashier ?? "-",
+      c.pointOfSale ?? "-",
+      fmt(c.openingBalance),
+      c.closingBalance === null ? "-" : fmt(c.closingBalance),
+      c.gap === null ? "-" : fmt(c.gap),
+      CASH_STATUS_LBL[c.status] ?? c.status,
+      c.reportReference ?? "-",
+    ]),
+  )
+
+  const deliveries = details?.deliveries ?? []
+  detailTable(
+    detailPage("18. Livraisons", countNote(deliveries.length, details?.deliveriesTotal ?? deliveries.length)),
+    ["Heure", "Client", "Commande", "Mode", "Zone", "Livreur", "Statut", "Frais", "Adresse"],
+    deliveries.map((d) => [
+      dt(d.createdAt),
+      d.customerName ?? "-",
+      d.orderNumber ?? "-",
+      DELIVERY_MODE_LBL[d.mode] ?? d.mode,
+      d.zone ?? "-",
+      d.agent ?? "-",
+      DELIVERY_STATUS_LBL[d.status] ?? d.status,
+      fmt(d.fee),
+      d.address ?? "-",
+    ]),
+  )
+
+  const reservations = details?.reservations ?? []
+  detailTable(
+    detailPage("19. Pré-commandes", countNote(reservations.length, details?.reservationsTotal ?? reservations.length)),
+    ["Créée le", "Client", "Téléphone", "Type", "Date", "Heure", "Statut", "PDV"],
+    reservations.map((r) => [
+      dt(r.createdAt),
+      r.customerName ?? "-",
+      r.telephone ?? "-",
+      r.type,
+      r.date,
+      r.heure,
+      RESERVATION_STATUS_LBL[r.status] ?? r.status,
+      r.pointOfSale ?? "-",
+    ]),
+  )
+
+  const b2bDocs = details?.b2bDocuments ?? []
+  detailTable(
+    detailPage("20. Documents commerciaux B2B", countNote(b2bDocs.length, details?.b2bDocumentsTotal ?? b2bDocs.length)),
+    ["Heure", "Référence", "Client", "Type", "Montant", "Statut"],
+    b2bDocs.map((b) => [
+      dt(b.createdAt),
+      b.reference,
+      b.client ?? "-",
+      B2B_DOC_LBL[b.type] ?? b.type,
+      fmt(b.total),
+      B2B_STATUS_LBL[b.status] ?? b.status,
+    ]),
+  )
+
   finalizePDF(doc, title, "rapport-global-" + todayShort() + ".pdf")
 }
 
@@ -1346,7 +1569,7 @@ export function exportGlobalExcel(data: GlobalReport) {
 
   const paiements: (string | number)[][] = [
     ["Mode", "Transactions", "Montant"],
-    ...data.paymentBreakdown.map((r) => [PAYMENT[r.method] ?? r.method, r.count, r.total]),
+    ...data.paymentBreakdown.map((r) => [PAYMENT_METHOD_LBL[r.method] ?? r.method, r.count, r.total]),
   ]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(paiements), "Encaissements")
 
@@ -1392,6 +1615,102 @@ export function exportGlobalExcel(data: GlobalReport) {
     ["Clients debiteurs", data.b2b.debtorClients, ""],
   ]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b2b), "Commercial B2B")
+
+  // ─── DÉTAILS PAR SECTION (un onglet par section) ───────────────
+  const details = data.details as GlobalDetails | undefined
+
+  const ventes: (string | number)[][] = [
+    ["Heure", "N° commande", "Client", "Caissière", "Opérateur", "Source", "Statut", "Statut paiement", "Mode paiement", "Articles", "Total", "PDV"],
+    ...(details?.sales ?? []).map((s) => [
+      dt(s.createdAt), s.orderNumber, s.customerName ?? "", s.cashier ?? "", s.operator ?? "",
+      SOURCE_LBL[s.source] ?? s.source, STATUS_LBL[s.status] ?? s.status,
+      PAYMENT_STATUS_LBL[s.paymentStatus] ?? s.paymentStatus,
+      s.paymentMethod ? (PAYMENT_METHOD_LBL[s.paymentMethod] ?? s.paymentMethod) : "",
+      s.items, s.total, s.pointOfSale ?? "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ventes), "Ventes")
+
+  const prodFormats: (string | number)[][] = [
+    ["Produit", "Format", "Quantité", "Mouvements", "Part (%)", "Lots", "Restant"],
+    ...(details?.productionFormats ?? []).map((p) => [
+      p.productName, p.format, p.quantity, p.movements, p.share, p.lots, p.remaining,
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(prodFormats), "Production formats")
+
+  const prodMov: (string | number)[][] = [
+    ["Heure", "Produit", "Format", "Quantité", "Motif", "PDV", "Lot", "Auteur"],
+    ...(details?.productionMovements ?? []).map((m) => [
+      dt(m.createdAt), m.productName, m.format, m.quantity, m.reason ?? "", m.pointOfSale ?? "", m.lotNumber ?? "", m.author ?? "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(prodMov), "Mouvements prod")
+
+  const mvtStock: (string | number)[][] = [
+    ["Heure", "Type", "Produit", "Format", "Quantité signée", "Motif", "PDV", "Lot", "Référence", "Auteur"],
+    ...(details?.movements ?? []).map((m) => [
+      dt(m.createdAt), MOVEMENT_LBL[m.type] ?? m.type, m.productName, m.format,
+      signedMovementQuantity(m.type, m.quantity), m.reason ?? "", m.pointOfSale ?? "", m.lotNumber ?? "", m.reference ?? "", m.author ?? "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mvtStock), "Mouvements stock")
+
+  const lotsDet: (string | number)[][] = [
+    ["N° lot", "Produit", "Format", "Quantité initiale", "Restante", "Production", "Péremption", "Statut", "Auteur"],
+    ...(details?.lots ?? []).map((l) => [
+      l.lotNumber, l.productName, l.format, l.initialQuantity, l.remainingQuantity,
+      dOnly(l.productionDate), l.expiryDate ? dOnly(l.expiryDate) : "", LOT_STATUS_LBL[l.status] ?? l.status, l.createdBy ?? "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(lotsDet), "Lots")
+
+  const stockDet: (string | number)[][] = [
+    ["Produit", "Format", "Catégorie", "Stock total", "Par point de vente", "Seuil", "Alerte"],
+    ...(details?.stock ?? []).map((s) => [
+      s.productName, s.format, s.categoryName, s.total,
+      s.byPointOfSale.map((p) => p.pointOfSale + " : " + String(p.quantity)).join(" | "),
+      s.threshold, s.alert ? "OUI" : "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(stockDet), "Stock formats")
+
+  const caisseDet: (string | number)[][] = [
+    ["Ouverture", "Fermeture", "Caissier", "PDV", "Fonds", "Clôture", "Écart", "Statut", "Réf. rapport"],
+    ...(details?.cashSessions ?? []).map((c) => [
+      dt(c.openedAt), c.closedAt ? dt(c.closedAt) : "en cours", c.cashier ?? "", c.pointOfSale ?? "",
+      c.openingBalance, c.closingBalance === null ? "" : c.closingBalance, c.gap === null ? "" : c.gap,
+      CASH_STATUS_LBL[c.status] ?? c.status, c.reportReference ?? "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(caisseDet), "Caisse")
+
+  const livDet: (string | number)[][] = [
+    ["Heure", "Client", "Commande", "Mode", "Zone", "Livreur", "Statut", "Frais", "Adresse", "Livrée le"],
+    ...(details?.deliveries ?? []).map((d) => [
+      dt(d.createdAt), d.customerName ?? "", d.orderNumber ?? "", DELIVERY_MODE_LBL[d.mode] ?? d.mode,
+      d.zone ?? "", d.agent ?? "", DELIVERY_STATUS_LBL[d.status] ?? d.status, d.fee, d.address ?? "",
+      d.deliveredAt ? dt(d.deliveredAt) : "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(livDet), "Livraisons")
+
+  const resDet: (string | number)[][] = [
+    ["Créée le", "Client", "Téléphone", "Type", "Date", "Heure", "Statut", "PDV"],
+    ...(details?.reservations ?? []).map((r) => [
+      dt(r.createdAt), r.customerName ?? "", r.telephone ?? "", r.type, r.date, r.heure,
+      RESERVATION_STATUS_LBL[r.status] ?? r.status, r.pointOfSale ?? "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resDet), "Pre-commandes")
+
+  const b2bDet: (string | number)[][] = [
+    ["Heure", "Référence", "Client", "Type", "Montant", "Statut"],
+    ...(details?.b2bDocuments ?? []).map((b) => [
+      dt(b.createdAt), b.reference, b.client ?? "", B2B_DOC_LBL[b.type] ?? b.type, b.total, B2B_STATUS_LBL[b.status] ?? b.status,
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b2bDet), "B2B documents")
 
   XLSX.writeFile(wb, "rapport-global-" + todayShort() + ".xlsx")
 }

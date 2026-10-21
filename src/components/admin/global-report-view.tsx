@@ -1,23 +1,41 @@
 "use client"
 
 import { formatPrice } from "@/lib/utils"
-import type { GlobalReport } from "@/lib/report-types"
-
-const PAYMENT: Record<string, string> = {
-  CASH_ON_DELIVERY: "Especes",
-  MOBILE_MONEY: "Mobile Money",
-  CARD: "Carte",
-}
-
-const B2B_DOC_LBL: Record<string, string> = {
-  DEVIS: "Devis",
-  COMMANDE: "Commande client",
-  LIVRAISON: "Bon de livraison",
-  FACTURE: "Facture",
-  AVOIR: "Avoir",
-}
+import { B2B_DOC_LBL, PAYMENT_METHOD_LBL } from "@/lib/report-labels"
+import type { GlobalDetails, GlobalReport } from "@/lib/report-types"
+import { SalesDetails } from "./global/sales-details"
+import { ProductionFormatsDetails, ProductionMovementsDetails } from "./global/production-details"
+import { StockMovementsDetails } from "./global/movements-details"
+import { LotsDetails } from "./global/lots-details"
+import { StockDetails } from "./global/stock-details"
+import { CashDetails } from "./global/cash-details"
+import { DeliveriesDetails } from "./global/deliveries-details"
+import { ReservationsDetails } from "./global/reservations-details"
+import { B2bDetails } from "./global/b2b-details"
 
 export function GlobalReportView({ data }: { data: GlobalReport }) {
+  // `details` peut être absent si la réponse provient d'un cache antérieur.
+  const details = (data as { details?: GlobalDetails }).details
+  const sales = details?.sales ?? []
+  const salesTotal = details?.salesTotal ?? sales.length
+  const productionFormats = details?.productionFormats ?? []
+  const productionMovements = details?.productionMovements ?? []
+  const productionMovementsTotal = details?.productionMovementsTotal ?? productionMovements.length
+  const movements = details?.movements ?? []
+  const movementsTotal = details?.movementsTotal ?? movements.length
+  const lots = details?.lots ?? []
+  const lotsTotal = details?.lotsTotal ?? lots.length
+  const stock = details?.stock ?? []
+  const stockTotal = details?.stockTotal ?? stock.length
+  const cashSessions = details?.cashSessions ?? []
+  const cashSessionsTotal = details?.cashSessionsTotal ?? cashSessions.length
+  const deliveries = details?.deliveries ?? []
+  const deliveriesTotal = details?.deliveriesTotal ?? deliveries.length
+  const reservations = details?.reservations ?? []
+  const reservationsTotal = details?.reservationsTotal ?? reservations.length
+  const b2bDocuments = details?.b2bDocuments ?? []
+  const b2bDocumentsTotal = details?.b2bDocumentsTotal ?? b2bDocuments.length
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 text-xs sm:text-sm text-gray-500">
@@ -73,7 +91,7 @@ export function GlobalReportView({ data }: { data: GlobalReport }) {
             <thead><tr className="text-left text-xs text-gray-500"><th className="py-1">Mode</th><th className="py-1 text-right">Transactions</th><th className="py-1 text-right">Montant</th></tr></thead>
             <tbody>
               {data.paymentBreakdown.length === 0 ? <tr><td colSpan={3} className="py-3 text-center text-xs text-gray-400">Aucune vente</td></tr> : data.paymentBreakdown.map((r) => (
-                <tr key={r.method} className="border-t border-gray-100"><td className="py-1.5">{PAYMENT[r.method] ?? r.method}</td><td className="py-1.5 text-right">{r.count}</td><td className="py-1.5 text-right font-medium">{formatPrice(r.total)}</td></tr>
+                <tr key={r.method} className="border-t border-gray-100"><td className="py-1.5">{PAYMENT_METHOD_LBL[r.method] ?? r.method}</td><td className="py-1.5 text-right">{r.count}</td><td className="py-1.5 text-right font-medium">{formatPrice(r.total)}</td></tr>
               ))}
             </tbody>
           </table>
@@ -110,6 +128,27 @@ export function GlobalReportView({ data }: { data: GlobalReport }) {
           </div>
         </div>
       </section>
+
+      <div className="pt-2">
+        <h2 className="mb-1 text-sm font-semibold text-gray-900">Détails par section</h2>
+        <p className="mb-3 text-xs text-gray-500">
+          Listings exhaustifs de la période : chaque ligne est un élément réel (vente, mouvement, lot, session…
+          ). Les totaux affichés à droite de chaque tableau indiquent le nombre total d&apos;éléments de la période.
+        </p>
+
+        <div className="space-y-3">
+          <SalesDetails rows={sales} total={salesTotal} />
+          <ProductionFormatsDetails rows={productionFormats} />
+          <ProductionMovementsDetails rows={productionMovements} total={productionMovementsTotal} />
+          <StockMovementsDetails rows={movements} total={movementsTotal} />
+          <LotsDetails rows={lots} total={lotsTotal} />
+          <StockDetails rows={stock} total={stockTotal} />
+          <CashDetails rows={cashSessions} total={cashSessionsTotal} />
+          <DeliveriesDetails rows={deliveries} total={deliveriesTotal} />
+          <ReservationsDetails rows={reservations} total={reservationsTotal} />
+          <B2bDetails rows={b2bDocuments} total={b2bDocumentsTotal} />
+        </div>
+      </div>
     </div>
   )
 }
