@@ -39,8 +39,14 @@ interface GoogleInfoWindowLike {
   setContent: (content: HTMLElement) => void
 }
 
+interface GoogleBoundsLike {
+  extend: (point: ZoneCenter) => void
+}
+
 interface GoogleMapLike {
   setCenter: (c: ZoneCenter) => void
+  setZoom: (zoom: number) => void
+  fitBounds: (bounds: GoogleBoundsLike, padding?: number) => void
   addListener: (event: string, handler: (e: MapMouseEventLike) => void) => ListenerHandle
   unbindAll: () => void
 }
@@ -50,6 +56,7 @@ interface MapsLib {
   Circle: new (options: Record<string, unknown>) => GoogleCircle
   Marker: new (options: Record<string, unknown>) => GoogleMarkerLike
   InfoWindow: new (options: Record<string, unknown>) => GoogleInfoWindowLike
+  LatLngBounds: new () => GoogleBoundsLike
 }
 
 const SCRIPT_ID = "lcg-gmaps-script"
@@ -127,6 +134,7 @@ export function ClientZoneMap({
   markers,
   zoom = 12,
   onCenterPick,
+  fitToMarkers = false,
 }: {
   apiKey?: string
   center: ZoneCenter | null
@@ -135,6 +143,8 @@ export function ClientZoneMap({
   markers: ZoneMarker[]
   zoom?: number
   onCenterPick?: (center: ZoneCenter) => void
+  /** Cadre la carte sur l'ensemble des marqueurs (carte de tous les clients). */
+  fitToMarkers?: boolean
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<GoogleMapLike | null>(null)
@@ -273,10 +283,22 @@ export function ClientZoneMap({
         position: { lat: m.lat, lng: m.lng },
         title: m.title,
       })
-      info.setContent(buildInfoContent(m.title, m.subtitle))
-      marker.addListener("click", () => info.open(map, marker))
+      // le contenu est posé au clic : posé ici, toutes les infobulles montraient le dernier client
+      marker.addListener("click", () => {
+        info.setContent(buildInfoContent(m.title, m.subtitle))
+        info.open(map, marker)
+      })
       markerRefs.current.push(marker)
     })
+
+    if (fitToMarkers && markers.length === 1) {
+      map.setCenter({ lat: markers[0].lat, lng: markers[0].lng })
+      map.setZoom(15)
+    } else if (fitToMarkers && markers.length > 1) {
+      const bounds = new lib.LatLngBounds()
+      markers.forEach((m) => bounds.extend({ lat: m.lat, lng: m.lng }))
+      map.fitBounds(bounds, 40)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapVersion, signature])
 

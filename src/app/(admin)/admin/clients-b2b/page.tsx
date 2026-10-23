@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
+import Link from "next/link"
 import {
   Building2,
   Search,
@@ -58,6 +59,16 @@ interface ZoneData {
   clients: B2BClient[]
 }
 
+/** Réponse de /api/clients/zone?scope=all : tous les clients B2B géolocalisés de la portée. */
+interface AllClientsMap {
+  clients: { id: string; name: string; phone: string | null; city: string | null; address: string | null; commercialName: string | null; latitude: number; longitude: number }[]
+  withoutGeo: number
+  notice: string | null
+}
+
+/** Centre de Brazzaville : vue de départ avant le cadrage sur les clients. */
+const BRAZZAVILLE = { lat: -4.2634, lng: 15.2429 }
+
 function displayName(c: B2BClient): string {
   return c.companyName || c.tradeName || c.contactName || "(sans nom)"
 }
@@ -95,6 +106,17 @@ export default function ClientsB2BPage() {
 
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailClient, setDetailClient] = useState<B2BClient | null>(null)
+
+  // Carte de tous les clients B2B (demande du 2026-10-23), indépendante du commercial sélectionné
+  const [allMap, setAllMap] = useState<AllClientsMap | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch("/api/clients/zone?scope=all", { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: AllClientsMap | null) => { if (data) setAllMap(data) })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -365,6 +387,41 @@ export default function ClientsB2BPage() {
           <p className="text-xl sm:text-2xl font-bold text-primary mt-1">{zoneData?.zone.radiusKm ?? "—"}<span className="text-sm font-normal"> km</span></p>
         </div>
       </div>
+
+      {/* Carte de tous les clients B2B */}
+      {allMap && (() => {
+        const q = search.trim().toLowerCase()
+        const shown = allMap.clients.filter((c) => !q || [c.name, c.phone, c.city, c.address, c.commercialName].some((v) => v?.toLowerCase().includes(q)))
+        return (
+          <section className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                Tous les clients B2B sur la carte
+              </h2>
+              <p className="text-sm text-gray-600">
+                <strong>{shown.length}</strong> client(s) placé(s){q ? " pour cette recherche" : ""}
+                {allMap.withoutGeo > 0 && <> · {allMap.withoutGeo} sans position (à placer dans <Link href="/admin/zone-commerciale" className="font-medium text-primary underline-offset-2 hover:underline">Zone commerciale</Link>)</>}
+              </p>
+            </div>
+            {allMap.notice && <p className="text-sm text-amber-700">{allMap.notice}</p>}
+            <ClientZoneMap
+              apiKey={apiKey}
+              center={null}
+              fallbackCenter={BRAZZAVILLE}
+              radiusKm={0}
+              fitToMarkers
+              markers={shown.map((c) => ({
+                id: c.id,
+                lat: c.latitude,
+                lng: c.longitude,
+                title: c.name,
+                subtitle: [c.commercialName ? `Commercial : ${c.commercialName}` : "Sans commercial attitré", c.phone, c.city].filter(Boolean).join(" · "),
+              }))}
+            />
+          </section>
+        )
+      })()}
 
       {/* Zone info */}
       {zoneData && (

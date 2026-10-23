@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { getPrisma } from "@/lib/prisma"
+import { seesAllB2b, type SessionUser } from "@/lib/commercial"
 
 const EARTH_RADIUS_KM = 6371
 
@@ -110,6 +111,82 @@ async function loadB2BClients(): Promise<{ clients: ZoneClient[]; notice: string
       clients: [],
     }
   }
+}
+
+/** Client B2B de la carte d'ensemble de l'écran Clients B2B. */
+interface MapClient {
+  id: string
+  name: string
+  phone: string | null
+  city: string | null
+  address: string | null
+  commercialName: string | null
+  latitude: number
+  longitude: number
+}
+
+/**
+ * Carte de tous les clients B2B (demande du 2026-10-23), sans rayon ni commercial : le fichier Client (type B2B)
+ * et l'ancien fichier B2BClient, sans doublon (la fiche reprise « rep-<id> » remplace la fiche d'origine).
+ * Un commercial ne voit que ses clients ; l'ancien fichier, sans commercial attitré, est réservé à la vue d'ensemble.
+ */
+async function loadAllB2BClients(user: SessionUser): Promise<{ clients: MapClient[]; withoutGeo: number; notice: string | null }> {
+  const all = seesAllB2b(user)
+  const rows = await getPrisma().client.findMany({
+    where: { type: "B2B", isActive: true, ...(all ? {} : { commercialId: user?.id ?? "__aucun__" }) },
+    select: {
+      id: true,
+      companyName: true,
+      tradeName: true,
+      contactName: true,
+      phone: true,
+      address: true,
+      city: true,
+      latitude: true,
+      longitude: true,
+      commercial: { select: { name: true, email: true } },
+    },
+  })
+  const clients: MapClient[] = []
+  let withoutGeo = 0
+  for (const c of rows) {
+    if (c.latitude == null || c.longitude == null) {
+      withoutGeo++
+      continue
+    }
+    clients.push({
+      id: c.id,
+      name: c.companyName || c.tradeName || c.contactName || "(sans nom)",
+      phone: c.phone,
+      city: c.city,
+      address: c.address,
+      commercialName: c.commercial ? c.commercial.name || c.commercial.email : null,
+      latitude: c.latitude,
+      longitude: c.longitude,
+    })
+  }
+  if (!all) return { clients, withoutGeo, notice: null }
+
+  const taken = new Set(rows.map((c) => c.id))
+  let notice: string | null = null
+  try {
+    const legacy = await getPrisma().b2BClient.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, phone: true, address: true, city: true, latitude: true, longitude: true },
+    })
+    for (const c of legacy) {
+      if (taken.has(`rep-${c.id}`)) continue
+      if (c.latitude == null || c.longitude == null) {
+        withoutGeo++
+        continue
+      }
+      clients.push({ id: c.id, name: c.name, phone: c.phone, city: c.city, address: c.address, commercialName: null, latitude: c.latitude, longitude: c.longitude })
+    }
+  } catch (error) {
+    if (!isGeoUnavailableError(error)) throw error
+    notice = "Ancien fichier des clients B2B sans coordonnées : seuls les clients du nouveau fichier sont affichés."
+  }
+  return { clients, withoutGeo, notice }
 }
 
 /**
@@ -285,6 +362,11 @@ export async function GET(request: Request) {
       }
       const { missing, notice } = await loadMissingClients()
       return NextResponse.json({ missing, notice })
+    }
+
+    // Carte de tous les clients B2B de la portée, sans rayon ni commercial sélectionné.
+    if (searchParams.get("scope") === "all") {
+      return NextResponse.json(await loadAllB2BClients(session?.user as SessionUser))
     }
 
     const commercialId =
