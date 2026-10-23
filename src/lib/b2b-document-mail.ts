@@ -43,9 +43,7 @@ export interface DocumentMailData {
   message?: string | null
 }
 
-export function documentMailSubject(data: Pick<DocumentMailData, "type" | "reference" | "company">): string {
-  return `${DOC_TITLE[data.type] ?? "Document"} ${data.reference} — ${data.company.name}`
-}
+// L'objet et le mot d'accompagnement propres à chaque type sont dans b2b-document-mail-text.ts.
 
 export function buildDocumentMail(data: DocumentMailData): string {
   const title = DOC_TITLE[data.type] ?? "Document"

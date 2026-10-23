@@ -5,7 +5,8 @@ import { auth } from "@/lib/auth"
 import { logActivity } from "@/lib/activity"
 import { clientDisplayName, DEFAULT_PAYMENT_TERMS_DAYS, INVOICE_CREDITS, invoiceSituation } from "@/lib/commercial"
 import { documentCompany, getSettings } from "@/lib/settings"
-import { buildDocumentMail, documentMailSubject } from "@/lib/b2b-document-mail"
+import { buildDocumentMail } from "@/lib/b2b-document-mail"
+import { documentMailMessage, documentMailSubjectFor } from "@/lib/b2b-document-mail-text"
 import { sendPreparedEmail } from "@/lib/mailer"
 
 export const dynamic = "force-dynamic"
@@ -60,6 +61,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const company = documentCompany(settings.general)
+    // texte propre au type de document : celui saisi à l'écran, à défaut le texte type
+    const textInput = {
+      type: doc.type,
+      reference: doc.reference,
+      total: doc.total,
+      companyName: company.name,
+      validUntil: doc.type === "DEVIS" ? doc.validUntil : null,
+      requestedDeliveryDate: doc.requestedDeliveryDate,
+      dueDate: invoice?.dueDate ?? null,
+      balance: invoice?.balance ?? null,
+      parentReference: doc.parent?.reference ?? null,
+    }
     const mail = {
       type: doc.type,
       reference: doc.reference,
@@ -81,11 +94,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       invoice,
       parentReference: doc.parent?.reference ?? null,
       bank: settings.bank,
-      message,
+      message: message ?? documentMailMessage(textInput),
     }
 
     try {
-      await sendPreparedEmail({ to, subject: documentMailSubject(mail), html: buildDocumentMail(mail), fromName: company.name })
+      await sendPreparedEmail({ to, subject: documentMailSubjectFor(textInput), html: buildDocumentMail(mail), fromName: company.name })
     } catch (error) {
       console.error("envoi document B2B par e-mail :", error)
       return NextResponse.json({ error: "L'e-mail n'a pas pu partir (messagerie indisponible). Rien n'a été modifié." }, { status: 502 })

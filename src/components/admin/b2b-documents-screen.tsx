@@ -664,7 +664,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
         {!loading && documents.length === 0 && <p className="p-8 text-center text-sm text-gray-500">{hasFilters ? "Aucun document pour ces critères." : "Aucun document pour l'instant."}</p>}
         {!loading && documents.length > 0 && (
           <ul className="divide-y divide-gray-100">
-            {documents.map((doc) => {
+            {documents.map((doc, index) => {
               const next = nextInChain(doc)
               const credits = doc.children.filter((c) => c.type === "AVOIR")
               const canTransform = canWrite && canCreateNext(doc)
@@ -676,7 +676,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                 <li
                   key={doc.id}
                   id={`doc-${doc.id}`}
-                  className={`flex flex-col gap-3 p-3 sm:p-4 lg:flex-row lg:items-center lg:justify-between ${doc.id === highlightId ? "bg-primary/5 ring-2 ring-inset ring-primary" : ""}`}
+                  className={`flex flex-col gap-3 p-3 sm:p-4 lg:flex-row lg:items-center lg:justify-between ${doc.id === highlightId ? "bg-primary/5 ring-2 ring-inset ring-primary" : index % 2 === 1 ? "bg-blue-100" : "bg-white"}`}
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

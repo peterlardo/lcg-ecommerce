@@ -9,6 +9,7 @@ import { AlertCircle, ArrowLeft, ArrowRight, CalendarClock, Check, HandCoins, Li
 import { formatPrice } from "@/lib/utils"
 import { canCreateNext, STATUS_LABEL, TYPE_LABEL, type DocType } from "@/components/admin/b2b-documents-screen"
 import { montantEnLettres } from "@/lib/montant-en-lettres"
+import { documentMailMessage } from "@/lib/b2b-document-mail-text"
 import { RECEIPT_METHOD_LABEL } from "@/lib/payment-methods"
 import { InvoicePaymentDialog } from "@/components/admin/invoice-payment-dialog"
 
@@ -226,7 +227,20 @@ export default function B2bDocumentPage() {
 
   const openMail = () => {
     setMailTo(doc?.client?.email ?? "")
-    setMailMessage(`Bonjour,\n\nVeuillez trouver ci-dessous ${doc?.type === "FACTURE" ? "notre facture" : doc?.type === "DEVIS" ? "notre devis" : `le document`} ${doc?.reference}.\n\nCordialement,\n${company.name}`)
+    if (doc) {
+      // message propre au type de document (devis, bon de commande, facture…), modifiable avant l'envoi
+      setMailMessage(documentMailMessage({
+        type: doc.type,
+        reference: doc.reference,
+        total: doc.total,
+        companyName: company.name,
+        validUntil: doc.validUntil,
+        requestedDeliveryDate: doc.requestedDeliveryDate,
+        dueDate: invoice?.dueDate ?? null,
+        balance: invoice?.balance ?? null,
+        parentReference: doc.parent?.reference ?? null,
+      }))
+    }
     setFormError("")
     setMailOpen(true)
   }
