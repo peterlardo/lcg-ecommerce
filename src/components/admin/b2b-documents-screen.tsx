@@ -136,7 +136,7 @@ export function canCreateNext(doc: { type: DocType; status: string; total: numbe
 const NEXT_CONFIRM: Partial<Record<DocType, string>> = {
   DEVIS: "Le client a validé ce devis. La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
   COMMANDE: "La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
-  FACTURE: "Les quantités sortiront du stock du comptoir.",
+  FACTURE: "Le bon de livraison sera créé et la facture marquée comme livrée. Le stock du comptoir n'est pas modifié.",
   LIVRAISON: "La facture sera émise et ne pourra plus être modifiée (un avoir permet de la corriger).",
 }
 

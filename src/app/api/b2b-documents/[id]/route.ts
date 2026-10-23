@@ -4,7 +4,6 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
 import { nextDocumentReference } from "@/lib/b2b"
 import { auth } from "@/lib/auth"
-import { COMPTOIR_CODE, consumePointOfSaleStockTx, ensureOperationalStockLocations } from "@/lib/stock-service"
 import { DEFAULT_PAYMENT_TERMS_DAYS, invoiceSituation, seesAllB2b, type SessionUser } from "@/lib/commercial"
 import { isCashierRole } from "@/lib/permissions"
 import { formatPrice } from "@/lib/utils"
@@ -293,7 +292,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: `${doc.reference} est déjà facturé (par l'ancien bon de commande ${legacyOrder.reference})` }, { status: 400 })
     }
     // Un document déjà transformé (document suivant non annulé) ne peut pas l'être une seconde fois :
-    // pas de double sortie de stock ni de double facture. Les avoirs d'une facture ne comptent pas.
+    // pas de double facture ni de double livraison. Les avoirs d'une facture ne comptent pas.
     const alreadyTransformed = await prisma.b2bDocument.count({
       where: { parentId: doc.id, type: toType as "COMMANDE" | "FACTURE" | "LIVRAISON", status: { not: "CANCELLED" } },
     })
@@ -314,14 +313,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       // un devis envoyé au client se transforme aussi
       return NextResponse.json({ error: "Le document doit être en brouillon, envoyé ou confirmé pour être transformé" }, { status: 400 })
     }
-    if (doc.items.some((i) => !i.productVariantId)) {
-      return NextResponse.json({ error: "Un article est sans produit" }, { status: 400 })
-    }
 
     try {
-      const stockLocations = await ensureOperationalStockLocations()
-      const pointOfSaleId = stockLocations.find((l) => l.code === COMPTOIR_CODE)?.id
-
       const created = await prisma.$transaction(async (tx) => {
         if (legacyOrder) {
           await tx.b2bDocument.update({
@@ -330,22 +323,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           })
         }
         const reference = await nextDocumentReference(tx, REF_PREFIX[toType] as "BC" | "BL" | "FAC")
-        // Le bon de LIVRAISON débite le stock physique du Comptoir (même helper que la
-        // vente) : la marchandise part. Stock insuffisant → exception → rollback → 400.
-        if (toType === "LIVRAISON") {
-          if (!pointOfSaleId) throw new Error("Moyen de stockage requis")
-          for (const item of doc.items) {
-            await consumePointOfSaleStockTx(tx, {
-              variantId: item.productVariantId!,
-              pointOfSaleId,
-              quantity: item.quantity,
-              type: "SALE",
-              reason: `Livraison B2B ${doc.reference}`,
-              reference,
-              userId: selfId,
-            })
-          }
-        }
 
         const created = await tx.b2bDocument.create({
           data: {
@@ -400,14 +377,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json({ error: "Référence en collision, réessayez" }, { status: 409 })
       }
       const message = error instanceof Error ? error.message : ""
-      if (message.includes("Stock insuffisant")) {
-        // le message du stock nomme le produit et les quantités : on le transmet tel quel
-        return NextResponse.json({ error: `${message.slice(0, 300)}. Le bon de livraison n'a pas été créé.` }, { status: 400 })
-      }
-      if (message === "Moyen de stockage requis") {
-        return NextResponse.json({ error: "Stock du comptoir introuvable : le bon de livraison n'a pas été créé" }, { status: 400 })
-      }
-      console.error("transform b2b-document error:", error)
+      console.error("transform b2b-document error:", message, error)
       return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
     }
   }
