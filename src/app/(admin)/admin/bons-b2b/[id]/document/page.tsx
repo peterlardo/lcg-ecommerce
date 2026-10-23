@@ -222,7 +222,7 @@ export default function B2bDocumentPage() {
   }
   const clientName = doc?.client ? doc.client.companyName || doc.client.tradeName || doc.client.contactName || `${doc.client.firstName ?? ""} ${doc.client.lastName ?? ""}`.trim() || "Client" : "Client"
   const canEmail = doc !== null && doc.status !== "CANCELLED" && doc.status !== "REJECTED" && session?.user?.role !== "COMPTABLE"
-  const showBank = doc?.type === "FACTURE" && bank && (bank.accountNumber || bank.mtnMoney || bank.airtelMoney)
+  const showBank = (doc?.type === "FACTURE" || doc?.type === "DEVIS") && bank && (bank.accountNumber || bank.mtnMoney || bank.airtelMoney)
 
   const openMail = () => {
     setMailTo(doc?.client?.email ?? "")
@@ -355,215 +355,255 @@ export default function B2bDocumentPage() {
       )}
 
       {doc && (
-        <article className="mx-auto max-w-4xl rounded-xl border border-gray-200 bg-white p-5 text-gray-900 sm:p-8 print:max-w-none print:rounded-none print:border-0 print:p-0">
-          <header className="flex flex-col gap-4 border-b-2 border-primary pb-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-start gap-3">
-              <Image src="/logo-lcg-transparent.png" alt="" width={64} height={62} className="h-14 w-auto" />
-              <div>
-                <p className="text-lg font-bold text-primary">{company.name}</p>
-                <p className="text-sm text-gray-600">{company.address}</p>
-                <p className="text-sm text-gray-600">{company.phones}</p>
-                <p className="text-sm text-gray-600">{company.contact}</p>
+        // Modèle de document (facture, devis, livraison, avoir) d'après la maquette fournie le 2026-10-23 :
+        // bandeau bleu (société, contact, client, dates), tableau en carte, paiement + conditions, totaux, signature.
+        <article className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-sm [print-color-adjust:exact] print:max-w-none print:rounded-none print:border-0 print:shadow-none">
+          <header className="relative rounded-b-[2.5rem] bg-primary px-5 pb-16 pt-6 text-white sm:px-10 sm:pt-8">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white p-1.5">
+                  <Image src="/logo-lcg-transparent.png" alt="" width={64} height={62} className="h-full w-auto" />
+                </span>
+                <div>
+                  <p className="text-xl font-extrabold uppercase leading-tight tracking-wide">{company.name}</p>
+                  <p className="text-xs uppercase tracking-widest text-white/75">Glaçons en eau minérale</p>
+                </div>
+              </div>
+              <div className="text-sm text-white/90 sm:text-right">
+                <p className="text-xs font-bold uppercase tracking-widest text-white">Contact</p>
+                <p className="mt-1">{company.address}</p>
+                <p>{company.phones}</p>
+                <p>{company.contact}</p>
               </div>
             </div>
-            <div className="sm:text-right">
-              <p className="text-2xl font-bold uppercase tracking-wide text-gray-900">{TYPE_LABEL[doc.type].one}</p>
-              <table className="mt-1 text-sm sm:ml-auto">
-                <tbody>
-                  <tr><td className="pr-3 text-gray-600">{DOC_TEXT[doc.type].number} :</td><td className="font-mono font-semibold">{doc.reference}</td></tr>
-                  <tr><td className="pr-3 text-gray-600">Date :</td><td className="font-semibold">{formatDate(doc.invoicedAt ?? doc.createdAt)}</td></tr>
-                  {invoice && <tr><td className="pr-3 text-gray-600">Échéance :</td><td className={`font-semibold ${invoice.overdue ? "text-red-700" : ""}`}>{formatDate(invoice.dueDate)}</td></tr>}
-                  {doc.type === "DEVIS" && doc.validUntil && <tr><td className="pr-3 text-gray-600">Valable jusqu&apos;au :</td><td className="font-semibold">{formatDate(doc.validUntil)}</td></tr>}
-                  {doc.type === "COMMANDE" && doc.requestedDeliveryDate && <tr><td className="pr-3 text-gray-600">Livraison souhaitée :</td><td className="font-semibold">{formatDate(doc.requestedDeliveryDate)}</td></tr>}
-                  {doc.type === "LIVRAISON" && doc.deliveredAt && <tr><td className="pr-3 text-gray-600">Livré le :</td><td className="font-semibold">{formatDate(doc.deliveredAt)}</td></tr>}
-                  {doc.parent && <tr><td className="pr-3 text-gray-600">{doc.type === "AVOIR" ? "Facture :" : "Réf. d'origine :"}</td><td className="font-mono font-semibold">{doc.parent.reference}</td></tr>}
-                </tbody>
-              </table>
-              <p className="mt-2">
-                {invoice ? (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS[invoice.paymentStatus].className}`}>
-                    {invoice.paymentStatus === "CANCELLED" && invoice.credited > 0 ? "Annulée par avoir" : PAYMENT_STATUS[invoice.paymentStatus].label}{invoice.overdue ? " — en retard" : ""}
-                  </span>
-                ) : (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold print:hidden ${STATUS_LABEL[doc.status]?.className ?? "bg-gray-100 text-gray-700"}`}>{doc.type === "AVOIR" && doc.status === "INVOICED" ? "Émis" : STATUS_LABEL[doc.status]?.label ?? doc.status}</span>
+
+            <div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-2xl font-extrabold uppercase tracking-wide sm:text-3xl">{TYPE_LABEL[doc.type].one}</p>
+                <p className="font-mono text-sm text-white/85">{DOC_TEXT[doc.type].number} {doc.reference}</p>
+                <p className="mt-4 text-xs uppercase tracking-widest text-white/75">{DOC_TEXT[doc.type].client}</p>
+                <p className="text-lg font-bold">{clientName}</p>
+                {doc.client?.contactName && doc.client.contactName !== clientName && <p className="text-sm text-white/90">À l&apos;attention de {doc.client.contactName}</p>}
+                {(doc.client?.address || doc.client?.city) && <p className="text-sm text-white/90">{[doc.client.address, doc.client.city].filter(Boolean).join(", ")}</p>}
+                {(doc.client?.phone || doc.client?.email) && <p className="text-sm text-white/90">{[doc.client.phone, doc.client.email].filter(Boolean).join(" · ")}</p>}
+                {doc.client?.taxId && <p className="text-sm text-white/90">NIU : {doc.client.taxId}</p>}
+              </div>
+              <div className="flex gap-6 text-sm sm:gap-8 sm:text-right">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-white/75">Date</p>
+                  <p className="text-base font-bold">{formatDate(doc.invoicedAt ?? doc.createdAt)}</p>
+                </div>
+                {invoice && (
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-white/75">Échéance</p>
+                    <p className="text-base font-bold">{formatDate(invoice.dueDate)}</p>
+                  </div>
                 )}
-              </p>
+                {doc.type === "DEVIS" && doc.validUntil && (
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-white/75">Valable jusqu&apos;au</p>
+                    <p className="text-base font-bold">{formatDate(doc.validUntil)}</p>
+                  </div>
+                )}
+                {doc.type === "LIVRAISON" && doc.deliveredAt && (
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-white/75">Livré le</p>
+                    <p className="text-base font-bold">{formatDate(doc.deliveredAt)}</p>
+                  </div>
+                )}
+              </div>
             </div>
           </header>
 
-          <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="rounded-lg border border-gray-200 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{DOC_TEXT[doc.type].client}</p>
-              <p className="mt-1 text-base font-bold">{clientName}</p>
-              {doc.client?.contactName && doc.client.contactName !== clientName && <p className="text-sm text-gray-700">À l&apos;attention de {doc.client.contactName}</p>}
-              {(doc.client?.address || doc.client?.city) && <p className="text-sm text-gray-700">{[doc.client.address, doc.client.city].filter(Boolean).join(", ")}</p>}
-              {doc.client?.phone && <p className="text-sm text-gray-700">{doc.client.phone}</p>}
-              {doc.client?.email && <p className="text-sm text-gray-700">{doc.client.email}</p>}
-              {doc.client?.taxId && <p className="text-sm text-gray-700">NIU : {doc.client.taxId}</p>}
-            </div>
-            <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Informations</p>
-              {doc.parent && doc.type === "AVOIR" && <p className="mt-1">Avoir sur la facture <span className="font-mono">{doc.parent.reference}</span></p>}
-              {doc.parent && doc.type !== "AVOIR" && <p className="mt-1">Établi à partir de : {TYPE_LABEL[doc.parent.type].one.toLowerCase()} <span className="font-mono">{doc.parent.reference}</span></p>}
-              {doc.type === "FACTURE" && doc.parent?.type === "LIVRAISON" && <p className="mt-1">Marchandises livrées le {formatDate(doc.parent.deliveredAt ?? doc.parent.createdAt)}</p>}
-              {doc.type === "FACTURE" && doc.deliveredAt && <p className="mt-1">Marchandises livrées le {formatDate(doc.deliveredAt)}</p>}
-              {invoice && <p className="mt-1">Paiement à {invoice.termsDays} jour{invoice.termsDays > 1 ? "s" : ""}{invoice.fromContract ? " (contrat)" : ""}, au plus tard le {formatDate(invoice.dueDate)}</p>}
-              {people.createdBy && <p className="mt-1">Établi par : {people.createdBy}</p>}
-              {people.commercial && <p className="mt-1">Commercial : {people.commercial}</p>}
-              {doc.children.map((child) => (
-                <p key={child.id} className="mt-1">{child.type === "AVOIR" ? "Avoir" : `Suivi par : ${TYPE_LABEL[child.type].one.toLowerCase()}`} <span className="font-mono">{child.reference}</span></p>
-              ))}
-              {doc.type === "DEVIS" && doc.validUntil && <p className="mt-1">Valable jusqu&apos;au {formatDate(doc.validUntil)}</p>}
-              {doc.requestedDeliveryDate && doc.type === "LIVRAISON" && <p className="mt-1">Livraison souhaitée le {formatDate(doc.requestedDeliveryDate)}</p>}
-              {!doc.parent && doc.children.length === 0 && !(doc.type === "DEVIS" && doc.validUntil) && !doc.requestedDeliveryDate && !invoice && !people.createdBy && !people.commercial && <p className="mt-1 text-gray-500">—</p>}
-            </div>
-          </section>
-
-          {doc.status === "CANCELLED" && (
-            <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-              Document annulé{doc.cancelReason ? ` : ${doc.cancelReason}` : ""}
-            </p>
-          )}
-
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead>
-                <tr className="bg-primary text-white">
-                  <th className="px-3 py-2 font-semibold">Désignation</th>
-                  <th className="px-3 py-2 text-right font-semibold">Quantité</th>
-                  {doc.type !== "LIVRAISON" && <th className="px-3 py-2 text-right font-semibold">Prix unitaire</th>}
-                  {doc.type !== "LIVRAISON" && <th className="px-3 py-2 text-right font-semibold">Montant</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {doc.items.map((item) => (
-                  <tr key={item.id} className="border-b border-gray-200">
-                    <td className="px-3 py-2">{item.productVariant ? `${item.productVariant.product.name} — ${item.productVariant.format}` : "Article retiré du catalogue"}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right">{item.quantity}{item.productVariant?.unit ? ` ${item.productVariant.unit}` : ""}</td>
-                    {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-3 py-2 text-right">{formatPrice(item.unitPrice)}</td>}
-                    {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-3 py-2 text-right font-medium">{formatPrice(item.lineTotal)}</td>}
+          <div className="px-4 pb-6 sm:px-10">
+            {/* tableau des articles, en carte qui chevauche le bandeau */}
+            <div className="relative -mt-10 overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-lg print:shadow-none">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50 text-xs font-bold uppercase tracking-wider text-gray-600">
+                    <th className="w-14 px-3 py-4 text-center">N°</th>
+                    <th className="px-3 py-4 text-left">Désignation</th>
+                    {doc.type !== "LIVRAISON" && <th className="px-3 py-4 text-right">Prix</th>}
+                    <th className="px-3 py-4 text-center">Qté</th>
+                    {doc.type !== "LIVRAISON" && <th className="px-4 py-4 text-right">Total</th>}
                   </tr>
-                ))}
-                {/* avoir partiel : une seule ligne, le motif */}
-                {doc.items.length === 0 && doc.type === "AVOIR" && (
-                  <tr className="border-b border-gray-200">
-                    <td className="px-3 py-2">Avoir sur la facture {doc.parent?.reference}{doc.notes ? ` : ${doc.notes}` : ""}</td>
-                    <td className="px-3 py-2 text-right">1</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right">{formatPrice(doc.total)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-medium">{formatPrice(doc.total)}</td>
-                  </tr>
+                </thead>
+                <tbody>
+                  {doc.items.map((item, index) => (
+                    <tr key={item.id} className="border-b border-gray-100 last:border-0">
+                      <td className="px-3 py-3 text-center text-gray-500">{index + 1}.</td>
+                      <td className="px-3 py-3">{item.productVariant ? `${item.productVariant.product.name} — ${item.productVariant.format}` : "Article retiré du catalogue"}</td>
+                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-3 py-3 text-right">{formatPrice(item.unitPrice)}</td>}
+                      <td className="whitespace-nowrap px-3 py-3 text-center">{item.quantity}{item.productVariant?.unit ? ` ${item.productVariant.unit}` : ""}</td>
+                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">{formatPrice(item.lineTotal)}</td>}
+                    </tr>
+                  ))}
+                  {/* avoir partiel : une seule ligne, le motif */}
+                  {doc.items.length === 0 && doc.type === "AVOIR" && (
+                    <tr>
+                      <td className="px-3 py-3 text-center text-gray-500">1.</td>
+                      <td className="px-3 py-3">Avoir sur la facture {doc.parent?.reference}{doc.notes ? ` : ${doc.notes}` : ""}</td>
+                      <td className="whitespace-nowrap px-3 py-3 text-right">{formatPrice(doc.total)}</td>
+                      <td className="px-3 py-3 text-center">1</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">{formatPrice(doc.total)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {doc.status === "CANCELLED" && (
+              <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                Document annulé{doc.cancelReason ? ` : ${doc.cancelReason}` : ""}
+              </p>
+            )}
+
+            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-[1fr_minmax(0,18rem)]">
+              {/* à gauche : mode de paiement, informations et conditions */}
+              <div className="order-2 space-y-4 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700 sm:order-1">
+                {showBank && bank && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Mode de paiement</p>
+                    <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                      {bank.accountNumber && <><dt className="text-gray-500">N° de compte</dt><dd className="font-mono font-semibold">{bank.accountNumber}</dd></>}
+                      {bank.accountHolder && <><dt className="text-gray-500">Titulaire</dt><dd>{bank.accountHolder}</dd></>}
+                      {bank.bankName && <><dt className="text-gray-500">Banque</dt><dd>{bank.bankName}</dd></>}
+                      {bank.mtnMoney && <><dt className="text-gray-500">MTN Mobile Money</dt><dd className="font-semibold">{bank.mtnMoney}</dd></>}
+                      {bank.airtelMoney && <><dt className="text-gray-500">Airtel Money</dt><dd className="font-semibold">{bank.airtelMoney}</dd></>}
+                    </dl>
+                    {bank.instructions && <p className="mt-1 text-gray-600">{bank.instructions}</p>}
+                    <p className="mt-1 text-gray-600">Merci d&apos;indiquer la référence {doc.reference} avec votre paiement.</p>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
+                {(doc.parent || doc.children.length > 0 || invoice || people.createdBy || people.commercial) && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Informations</p>
+                    {doc.parent && doc.type === "AVOIR" && <p className="mt-1">Avoir sur la facture <span className="font-mono">{doc.parent.reference}</span></p>}
+                    {doc.parent && doc.type !== "AVOIR" && <p className="mt-1">Établi à partir de : {TYPE_LABEL[doc.parent.type].one.toLowerCase()} <span className="font-mono">{doc.parent.reference}</span></p>}
+                    {doc.type === "FACTURE" && doc.deliveredAt && <p className="mt-1">Marchandises livrées le {formatDate(doc.deliveredAt)}</p>}
+                    {invoice && <p className="mt-1">Paiement à {invoice.termsDays} jour{invoice.termsDays > 1 ? "s" : ""}{invoice.fromContract ? " (contrat)" : ""}, au plus tard le {formatDate(invoice.dueDate)}</p>}
+                    {people.createdBy && <p className="mt-1">Établi par : {people.createdBy}</p>}
+                    {people.commercial && <p className="mt-1">Commercial : {people.commercial}</p>}
+                    {doc.children.map((child) => (
+                      <p key={child.id} className="mt-1">{child.type === "AVOIR" ? "Avoir" : `Suivi par : ${TYPE_LABEL[child.type].one.toLowerCase()}`} <span className="font-mono">{child.reference}</span></p>
+                    ))}
+                  </div>
+                )}
+                {doc.deliveryTerms && doc.type !== "FACTURE" && doc.type !== "AVOIR" && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Livraison</p>
+                    <p className="mt-1 whitespace-pre-line">{doc.deliveryTerms}</p>
+                  </div>
+                )}
+                {doc.notes && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-900">{doc.type === "AVOIR" ? "Motif" : "Remarques"}</p>
+                    <p className="mt-1 whitespace-pre-line">{doc.notes}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Conditions</p>
+                  <p className="mt-1 text-gray-600">{DOC_TEXT[doc.type].conditions}</p>
+                </div>
+              </div>
 
-          {doc.type !== "LIVRAISON" && (
-            <div className="mt-4 ml-auto w-full max-w-xs text-sm">
-              <p className="flex justify-between py-1 text-gray-700"><span>Sous-total</span><span>{formatPrice(doc.subtotal)}</span></p>
-              {doc.discount > 0 && <p className="flex justify-between py-1 text-gray-700"><span>Remise</span><span>− {formatPrice(doc.discount)}</span></p>}
-              <p className="flex justify-between border-t-2 border-gray-900 py-2 text-lg font-bold"><span>{doc.type === "FACTURE" ? "Total à payer" : doc.type === "AVOIR" ? "Montant de l'avoir" : "Total"}</span><span>{formatPrice(doc.total)}</span></p>
-              {invoice && invoice.credited > 0 && <p className="flex justify-between py-1 text-gray-700"><span>Avoirs</span><span>− {formatPrice(invoice.credited)}</span></p>}
-              {invoice && invoice.paid > 0 && <p className="flex justify-between py-1 text-gray-700"><span>Déjà payé</span><span>− {formatPrice(invoice.paid)}</span></p>}
-              {invoice && (invoice.paid > 0 || invoice.credited > 0) && <p className="flex justify-between py-1 font-bold"><span>Reste à payer</span><span>{formatPrice(invoice.balance)}</span></p>}
-              {invoice && invoice.pending > 0 && <p className="py-1 text-xs text-gray-500">Règlement de {formatPrice(invoice.pending)} reçu, en attente de validation.</p>}
-            </div>
-          )}
-
-          {doc.type !== "LIVRAISON" && (
-            <p className="mt-4 text-sm italic text-gray-700">
-              {DOC_TEXT[doc.type].arrete} à la somme de : <span className="font-semibold not-italic text-gray-900">{montantEnLettres(doc.total)}</span>.
-            </p>
-          )}
-
-          {invoice && invoice.payments.length > 0 && (
-            <div className="mt-4 rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Règlements reçus</p>
-              <table className="mt-1 w-full text-left">
-                <tbody>
-                  {invoice.payments.map((p) => (
-                    <tr key={p.id} className={`border-b border-gray-100 last:border-0 ${p.validationStatus === "REJECTED" ? "text-gray-400 print:hidden" : ""}`}>
-                      <td className="py-1 pr-2">{formatDate(p.createdAt)}</td>
-                      <td className="py-1 pr-2">
-                        {RECEIPT_METHOD_LABEL[p.method] ?? p.method}
-                        {p.reference && <span className="ml-1 font-mono text-xs text-gray-500">réf. {p.reference}</span>}
-                      </td>
-                      <td className="py-1 pr-2 text-gray-500">
-                        {p.validationStatus === "VALIDATED" ? "validé" : p.validationStatus === "PENDING" ? "en attente de validation" : `refusé${p.rejectReason ? ` : ${p.rejectReason}` : ""}`}
-                      </td>
-                      <td className="whitespace-nowrap py-1 text-right font-medium">{formatPrice(p.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {invoice && invoice.credits.length > 0 && (
-            <div className="mt-4 rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Avoirs</p>
-              <table className="mt-1 w-full text-left">
-                <tbody>
-                  {invoice.credits.map((c) => (
-                    <tr key={c.id} className="border-b border-gray-100 last:border-0">
-                      <td className="py-1 pr-2">{formatDate(c.createdAt)}</td>
-                      <td className="py-1 pr-2">
-                        <Link href={`/admin/bons-b2b/${c.id}/document`} className="font-mono text-primary underline-offset-2 hover:underline print:text-gray-900 print:no-underline">{c.reference}</Link>
-                      </td>
-                      <td className="py-1 pr-2 text-gray-500">{c.reason}</td>
-                      <td className="whitespace-nowrap py-1 text-right font-medium">− {formatPrice(c.total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {showBank && bank && (
-            <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-gray-800">
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary">Modalités de règlement</p>
-              {bank.accountNumber && (
-                <p className="mt-1">
-                  Virement{bank.bankName ? ` — ${bank.bankName}` : ""}{bank.accountHolder ? `, titulaire ${bank.accountHolder}` : ""} : <span className="font-mono font-semibold">{bank.accountNumber}</span>
-                </p>
+              {/* à droite : totaux */}
+              {doc.type !== "LIVRAISON" ? (
+                <div className="order-1 text-sm sm:order-2">
+                  <p className="flex justify-between px-4 py-2 text-gray-700"><span>Sous-total</span><span>{formatPrice(doc.subtotal)}</span></p>
+                  <p className="flex justify-between px-4 py-2 text-gray-700"><span>Remise</span><span>{doc.discount > 0 ? `− ${formatPrice(doc.discount)}` : formatPrice(0)}</span></p>
+                  <p className="mt-1 flex justify-between rounded-xl bg-primary px-4 py-3 text-base font-bold text-white">
+                    <span>{doc.type === "FACTURE" ? "Total à payer" : doc.type === "AVOIR" ? "Montant de l'avoir" : "Total"}</span><span>{formatPrice(doc.total)}</span>
+                  </p>
+                  {invoice && invoice.credited > 0 && <p className="flex justify-between px-4 pt-2 text-gray-700"><span>Avoirs</span><span>− {formatPrice(invoice.credited)}</span></p>}
+                  {invoice && invoice.paid > 0 && <p className="flex justify-between px-4 pt-2 text-gray-700"><span>Déjà payé</span><span>− {formatPrice(invoice.paid)}</span></p>}
+                  {invoice && (invoice.paid > 0 || invoice.credited > 0) && <p className="flex justify-between px-4 pt-2 font-bold"><span>Reste à payer</span><span>{formatPrice(invoice.balance)}</span></p>}
+                  {invoice && invoice.pending > 0 && <p className="px-4 pt-1 text-xs text-gray-500">Règlement de {formatPrice(invoice.pending)} reçu, en attente de validation.</p>}
+                  <p className="mt-2 px-4 text-xs">
+                    {invoice ? (
+                      <span className={`rounded-full px-2 py-0.5 font-semibold ${PAYMENT_STATUS[invoice.paymentStatus].className}`}>
+                        {invoice.paymentStatus === "CANCELLED" && invoice.credited > 0 ? "Annulée par avoir" : PAYMENT_STATUS[invoice.paymentStatus].label}{invoice.overdue ? " — en retard" : ""}
+                      </span>
+                    ) : (
+                      <span className={`rounded-full px-2 py-0.5 font-semibold print:hidden ${STATUS_LABEL[doc.status]?.className ?? "bg-gray-100 text-gray-700"}`}>{doc.type === "AVOIR" && doc.status === "INVOICED" ? "Émis" : STATUS_LABEL[doc.status]?.label ?? doc.status}</span>
+                    )}
+                  </p>
+                </div>
+              ) : (
+                <div className="order-1 text-xs sm:order-2">
+                  <span className={`rounded-full px-2 py-0.5 font-semibold print:hidden ${STATUS_LABEL[doc.status]?.className ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LABEL[doc.status]?.label ?? doc.status}</span>
+                </div>
               )}
-              {bank.mtnMoney && <p className="mt-1">MTN Mobile Money : <span className="font-semibold">{bank.mtnMoney}</span></p>}
-              {bank.airtelMoney && <p className="mt-1">Airtel Money : <span className="font-semibold">{bank.airtelMoney}</span></p>}
-              {bank.instructions && <p className="mt-1 text-gray-600">{bank.instructions}</p>}
-              <p className="mt-1 text-gray-600">Merci d&apos;indiquer la référence {doc.reference} avec votre paiement.</p>
             </div>
-          )}
 
-          {doc.deliveryTerms && doc.type !== "FACTURE" && doc.type !== "AVOIR" && (
-            <div className="mt-4 rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Livraison</p>
-              <p className="mt-1 whitespace-pre-line">{doc.deliveryTerms}</p>
-            </div>
-          )}
+            {doc.type !== "LIVRAISON" && (
+              <p className="mt-5 text-sm italic text-gray-700">
+                {DOC_TEXT[doc.type].arrete} à la somme de : <span className="font-semibold not-italic text-gray-900">{montantEnLettres(doc.total)}</span>.
+              </p>
+            )}
 
-          {doc.notes && (
-            <div className="mt-4 rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{doc.type === "AVOIR" ? "Motif" : "Remarques"}</p>
-              <p className="mt-1 whitespace-pre-line">{doc.notes}</p>
-            </div>
-          )}
-
-          <p className="mt-4 text-xs text-gray-500">{DOC_TEXT[doc.type].conditions}</p>
-
-          {/* la facture et l'avoir ne sont signés que par LCG ; les autres documents le sont aussi par le client */}
-          <div className={`mt-10 grid gap-8 text-sm text-gray-700 ${doc.type === "FACTURE" || doc.type === "AVOIR" ? "grid-cols-1 sm:ml-auto sm:w-1/2" : "grid-cols-2"}`}>
-            <div>
-              <p className="font-semibold">Pour LCG — La Direction</p>
-              <div className="mt-12 border-t border-gray-400 pt-1 text-xs text-gray-500">Nom, signature et cachet</div>
-            </div>
-            {doc.type !== "FACTURE" && doc.type !== "AVOIR" && (
-              <div>
-                <p className="font-semibold">{doc.type === "LIVRAISON" ? "Reçu par le client" : "Pour le client"}</p>
-                <div className="mt-12 border-t border-gray-400 pt-1 text-xs text-gray-500">Nom, signature et cachet</div>
+            {invoice && invoice.payments.length > 0 && (
+              <div className="mt-4 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Règlements reçus</p>
+                <table className="mt-1 w-full text-left">
+                  <tbody>
+                    {invoice.payments.map((p) => (
+                      <tr key={p.id} className={`border-b border-gray-100 last:border-0 ${p.validationStatus === "REJECTED" ? "text-gray-400 print:hidden" : ""}`}>
+                        <td className="py-1 pr-2">{formatDate(p.createdAt)}</td>
+                        <td className="py-1 pr-2">
+                          {RECEIPT_METHOD_LABEL[p.method] ?? p.method}
+                          {p.reference && <span className="ml-1 font-mono text-xs text-gray-500">réf. {p.reference}</span>}
+                        </td>
+                        <td className="py-1 pr-2 text-gray-500">
+                          {p.validationStatus === "VALIDATED" ? "validé" : p.validationStatus === "PENDING" ? "en attente de validation" : `refusé${p.rejectReason ? ` : ${p.rejectReason}` : ""}`}
+                        </td>
+                        <td className="whitespace-nowrap py-1 text-right font-medium">{formatPrice(p.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
+
+            {invoice && invoice.credits.length > 0 && (
+              <div className="mt-4 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Avoirs</p>
+                <table className="mt-1 w-full text-left">
+                  <tbody>
+                    {invoice.credits.map((c) => (
+                      <tr key={c.id} className="border-b border-gray-100 last:border-0">
+                        <td className="py-1 pr-2">{formatDate(c.createdAt)}</td>
+                        <td className="py-1 pr-2">
+                          <Link href={`/admin/bons-b2b/${c.id}/document`} className="font-mono text-primary underline-offset-2 hover:underline print:text-gray-900 print:no-underline">{c.reference}</Link>
+                        </td>
+                        <td className="py-1 pr-2 text-gray-500">{c.reason}</td>
+                        <td className="whitespace-nowrap py-1 text-right font-medium">− {formatPrice(c.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* signature : la facture et l'avoir ne sont signés que par LCG ; les autres documents aussi par le client */}
+            <div className={`mt-10 grid gap-8 text-sm text-gray-700 ${doc.type === "FACTURE" || doc.type === "AVOIR" ? "grid-cols-1 sm:ml-auto sm:w-72" : "grid-cols-2"}`}>
+              {doc.type !== "FACTURE" && doc.type !== "AVOIR" && (
+                <div className="text-center">
+                  <div className="mt-12 border-t border-gray-400 pt-1.5">{doc.type === "LIVRAISON" ? "Reçu par le client" : "Bon pour accord du client"}</div>
+                  <p className="text-xs text-gray-500">Nom, signature et cachet</p>
+                </div>
+              )}
+              <div className="text-center">
+                <div className="mt-12 border-t border-gray-400 pt-1.5">Signature autorisée — LCG</div>
+                <p className="text-xs text-gray-500">Nom, signature et cachet</p>
+              </div>
+            </div>
           </div>
 
-          {company.legal && <footer className="mt-8 border-t border-gray-200 pt-3 text-center text-xs text-gray-500">{company.legal}</footer>}
+          <footer className="rounded-t-[2rem] bg-primary px-5 py-4 text-center text-white sm:px-10">
+            <p className="text-sm font-semibold">Merci de votre confiance</p>
+            {company.legal && <p className="mt-1 text-xs text-white/75">{company.legal}</p>}
+          </footer>
         </article>
       )}
 

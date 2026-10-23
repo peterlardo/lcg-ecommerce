@@ -111,7 +111,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     commercialName: nameOf(doc.client?.commercialId),
     // en-tête, pied et coordonnées de règlement : ceux de l'écran Paramètres
     company: documentCompany(settings.general),
-    bank: doc.type === "FACTURE" ? settings.bank : null,
+    bank: doc.type === "FACTURE" || doc.type === "DEVIS" ? settings.bank : null,
     // un avoir est une écriture comptable : administrateur et comptable
     canCredit: (role === "ADMIN" || role === "COMPTABLE") && doc.type === "FACTURE" && doc.status === "INVOICED",
     // l'envoi par e-mail reste au commercial et à l'administrateur
