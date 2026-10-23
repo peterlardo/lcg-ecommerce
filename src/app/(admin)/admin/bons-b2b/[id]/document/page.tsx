@@ -397,9 +397,10 @@ export default function B2bDocumentPage() {
         // client et encadré gris (numéro, dates), tableau à bandeau de couleur et lignes grises alternées,
         // paiement + conditions à gauche, totaux et total en bandeau à droite, signature, « Merci ».
         // Couleur : le bleu du logo LCG à la place du rouge du modèle.
-        <article style={DOC_FONT_SCALE} className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-sm [print-color-adjust:exact] print:max-w-none print:rounded-none print:border-0 print:shadow-none">
-          {/* impression : A4, marges réduites, pour que le document tienne sur une page */}
-          <style>{"@page { size: A4; margin: 10mm; }"}</style>
+        <article style={DOC_FONT_SCALE} className="doc-print-page mx-auto max-w-4xl overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-sm [print-color-adjust:exact] print:max-w-none print:rounded-none print:border-0 print:shadow-none">
+          {/* impression : A4 sans marge de page, ce qui retire l'en-tête et le pied du navigateur (adresse de la
+              page, date, titre — demande du 2026-10-23) ; la marge de 10 mm est reportée dans le document */}
+          <style>{"@page { size: A4; margin: 0; } @media print { .doc-print-page { padding: 10mm; } }"}</style>
           <header className="px-5 pt-5 sm:px-8 sm:pt-6">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
               <div>
