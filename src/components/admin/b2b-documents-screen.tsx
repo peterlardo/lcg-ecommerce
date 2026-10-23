@@ -186,6 +186,8 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [search, setSearch] = useState("")
   const [query, setQuery] = useState("")
   const [page, setPage] = useState(1)
+  // documents par page : 5 par défaut (demande du 2026-10-23), au choix 5, 10 ou 20 (mêmes valeurs côté serveur)
+  const [perPage, setPerPage] = useState(5)
   // filtres de liste : client, période de création, état de règlement (factures), tri
   const [clientIdFilter, setClientIdFilter] = useState("")
   const [fromDate, setFromDate] = useState("")
@@ -233,7 +235,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   useEffect(() => {
     const controller = new AbortController()
     const init = async () => {
-      const params = new URLSearchParams({ type, page: String(page), sort })
+      const params = new URLSearchParams({ type, page: String(page), perPage: String(perPage), sort })
       if (status) params.set("status", status)
       if (query) params.set("q", query)
       if (clientIdFilter) params.set("clientId", clientIdFilter)
@@ -262,7 +264,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     }
     void init()
     return () => controller.abort()
-  }, [type, status, query, page, reload, clientIdFilter, fromDate, toDate, payment, sort])
+  }, [type, status, query, page, perPage, reload, clientIdFilter, fromDate, toDate, payment, sort])
 
   // clients B2B du filtre de liste : chargés une fois à l'arrivée (l'API restreint déjà le
   // portefeuille d'un simple commercial ; le responsable, l'administrateur et le comptable voient tout)
@@ -350,7 +352,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seul le changement de client relance la lecture du contrat
   }, [creating, clientId])
 
-  const totalPages = Math.max(1, Math.ceil(total / 20))
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
   const subtotal = useMemo(() => lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0), [lines])
   // contrat du client actuellement choisi (celui d'un client précédent ne compte plus)
   const activeContract = contract && contract.clientId === clientId ? contract : null
@@ -780,17 +782,29 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
         )}
       </div>
 
-      {!loading && total > 20 && (
-        <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2 sm:px-4">
-          <p className="text-sm text-gray-500">Page {page}/{totalPages}</p>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-40">
-              <ChevronLeft className="h-4 w-4" /> Précédent
-            </button>
-            <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-40">
-              Suivant <ChevronRight className="h-4 w-4" />
-            </button>
+      {!loading && total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 sm:px-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-gray-600">
+              {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} sur {total} · Page <strong>{page}</strong>/{totalPages}
+            </p>
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              Par page
+              <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1) }} className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 text-sm" aria-label="Documents par page">
+                {[5, 10, 20].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 disabled:opacity-40">
+                <ChevronLeft className="h-4 w-4" /> Précédent
+              </button>
+              <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 disabled:opacity-40">
+                Suivant <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
