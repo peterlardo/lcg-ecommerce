@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type CSSProperties } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useParams, useRouter } from "next/navigation"
@@ -126,6 +126,29 @@ const DEFAULT_COMPANY: Company = {
   contact: "lcg.cg · contact@lcg.cg",
   legal: "SARL au capital de 1 000 000 FCFA — RCCM : CG-BZV-01-2025-B12-00-146 — NIU : M250000007225623",
 }
+
+/**
+ * Échelle de texte du document (demande du 2026-10-23 : « taille de la police 12 », toute la facture sur une
+ * page) : remplace, pour le document seul, l'agrandissement de l'écran tactile (.pos-touch dans globals.css).
+ * Texte courant 12 px ; les titres suivent dans la même proportion.
+ */
+const DOC_FONT_SCALE = {
+  "--text-xs": "10px",
+  "--text-xs--line-height": "1.35",
+  "--text-sm": "12px",
+  "--text-sm--line-height": "1.4",
+  "--text-base": "13px",
+  "--text-base--line-height": "1.4",
+  "--text-lg": "14px",
+  "--text-lg--line-height": "1.35",
+  "--text-xl": "16px",
+  "--text-xl--line-height": "1.3",
+  "--text-3xl": "22px",
+  "--text-3xl--line-height": "1.15",
+  "--text-4xl": "26px",
+  "--text-4xl--line-height": "1.1",
+  fontSize: "12px",
+} as CSSProperties
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
@@ -374,8 +397,10 @@ export default function B2bDocumentPage() {
         // client et encadré gris (numéro, dates), tableau à bandeau de couleur et lignes grises alternées,
         // paiement + conditions à gauche, totaux et total en bandeau à droite, signature, « Merci ».
         // Couleur : le bleu du logo LCG à la place du rouge du modèle.
-        <article className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-sm [print-color-adjust:exact] print:max-w-none print:rounded-none print:border-0 print:shadow-none">
-          <header className="px-5 pt-6 sm:px-10 sm:pt-8">
+        <article style={DOC_FONT_SCALE} className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-sm [print-color-adjust:exact] print:max-w-none print:rounded-none print:border-0 print:shadow-none">
+          {/* impression : A4, marges réduites, pour que le document tienne sur une page */}
+          <style>{"@page { size: A4; margin: 10mm; }"}</style>
+          <header className="px-5 pt-5 sm:px-8 sm:pt-6">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex items-center gap-3">
@@ -395,7 +420,7 @@ export default function B2bDocumentPage() {
               </div>
             </div>
 
-            <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="text-sm text-gray-700">
                 <p className="text-sm font-extrabold uppercase tracking-wide text-gray-900">{DOC_TEXT[doc.type].client} :</p>
                 <p className="mt-1 text-base font-semibold text-gray-900">{clientName}</p>
@@ -407,7 +432,7 @@ export default function B2bDocumentPage() {
               {/* encadré gris à barre de couleur : numéro et dates */}
               <div className="flex overflow-hidden bg-gray-200 sm:min-w-[22rem]">
                 <span className="w-2 shrink-0 bg-primary" aria-hidden />
-                <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-3 px-5 py-4 text-sm">
+                <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-3 px-5 py-2 text-sm">
                   <div>
                     <p className="font-semibold text-gray-800">{DOC_TEXT[doc.type].number}</p>
                     <p className="font-mono text-gray-600">{doc.reference}</p>
@@ -461,40 +486,41 @@ export default function B2bDocumentPage() {
             </div>
           </header>
 
-          <div className="px-4 pb-6 sm:px-10">
+          <div className="px-4 pb-4 sm:px-8">
             {/* tableau des articles : bandeau de couleur, lignes grises alternées, numéros 01., 02.… */}
-            <div className="mt-8 overflow-x-auto">
+            <div className="mt-5 overflow-x-auto">
               <table className="w-full min-w-[520px] text-sm">
                 <thead>
                   <tr className="bg-primary text-sm font-bold uppercase tracking-wide text-white">
-                    <th className="w-16 px-4 py-3 text-left">N°</th>
-                    <th className="px-3 py-3 text-left">Désignation</th>
-                    {doc.type !== "LIVRAISON" && <th className="px-3 py-3 text-right">Prix</th>}
-                    <th className="px-3 py-3 text-center">Qté</th>
-                    {doc.type !== "LIVRAISON" && <th className="px-4 py-3 text-right">Total</th>}
+                    <th className="w-16 px-4 py-2 text-left">N°</th>
+                    <th className="px-3 py-2 text-left">Désignation</th>
+                    {doc.type !== "LIVRAISON" && <th className="px-3 py-2 text-right">Prix</th>}
+                    <th className="px-3 py-2 text-center">Qté</th>
+                    {doc.type !== "LIVRAISON" && <th className="px-4 py-2 text-right">Total</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {doc.items.map((item, index) => (
                     <tr key={item.id} className={index % 2 === 0 ? "bg-gray-100" : "bg-gray-200"}>
-                      <td className="px-4 py-4 text-gray-600">{String(index + 1).padStart(2, "0")}.</td>
-                      <td className="px-3 py-4">
-                        <p className="font-semibold text-gray-900">{item.productVariant ? item.productVariant.product.name : "Article retiré du catalogue"}</p>
-                        {item.productVariant && <p className="text-gray-600">{item.productVariant.format}</p>}
+                      <td className="px-4 py-2 text-gray-600">{String(index + 1).padStart(2, "0")}.</td>
+                      <td className="px-3 py-2">
+                        {/* nom et format sur une ligne : une facture d'une dizaine d'articles tient sur une page */}
+                        <span className="font-semibold text-gray-900">{item.productVariant ? item.productVariant.product.name : "Article retiré du catalogue"}</span>
+                        {item.productVariant && <span className="text-gray-600"> · {item.productVariant.format}</span>}
                       </td>
-                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-3 py-4 text-right">{formatPrice(item.unitPrice)}</td>}
-                      <td className="whitespace-nowrap px-3 py-4 text-center">{item.quantity}{item.productVariant?.unit ? ` ${item.productVariant.unit}` : ""}</td>
-                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-4 py-4 text-right font-semibold">{formatPrice(item.lineTotal)}</td>}
+                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-3 py-2 text-right">{formatPrice(item.unitPrice)}</td>}
+                      <td className="whitespace-nowrap px-3 py-2 text-center">{item.quantity}{item.productVariant?.unit ? ` ${item.productVariant.unit}` : ""}</td>
+                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-4 py-2 text-right font-semibold">{formatPrice(item.lineTotal)}</td>}
                     </tr>
                   ))}
                   {/* avoir partiel : une seule ligne, le motif */}
                   {doc.items.length === 0 && doc.type === "AVOIR" && (
                     <tr className="bg-gray-100">
-                      <td className="px-4 py-4 text-gray-600">01.</td>
-                      <td className="px-3 py-4 font-semibold">Avoir sur la facture {doc.parent?.reference}{doc.notes ? ` : ${doc.notes}` : ""}</td>
-                      <td className="whitespace-nowrap px-3 py-4 text-right">{formatPrice(doc.total)}</td>
-                      <td className="px-3 py-4 text-center">1</td>
-                      <td className="whitespace-nowrap px-4 py-4 text-right font-semibold">{formatPrice(doc.total)}</td>
+                      <td className="px-4 py-2 text-gray-600">01.</td>
+                      <td className="px-3 py-2 font-semibold">Avoir sur la facture {doc.parent?.reference}{doc.notes ? ` : ${doc.notes}` : ""}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right">{formatPrice(doc.total)}</td>
+                      <td className="px-3 py-2 text-center">1</td>
+                      <td className="whitespace-nowrap px-4 py-2 text-right font-semibold">{formatPrice(doc.total)}</td>
                     </tr>
                   )}
                 </tbody>
@@ -507,7 +533,7 @@ export default function B2bDocumentPage() {
               </p>
             )}
 
-            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-[1fr_minmax(0,18rem)]">
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_minmax(0,16rem)]">
               {/* à gauche : mode de paiement et conditions côte à côte, puis informations */}
               <div className="order-2 space-y-4 text-sm text-gray-700 sm:order-1">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -551,7 +577,7 @@ export default function B2bDocumentPage() {
                 <div className="order-1 text-sm sm:order-2">
                   <p className="flex justify-between px-4 py-1.5 text-gray-700"><span className="font-semibold">Sous-total :</span><span>{formatPrice(doc.subtotal)}</span></p>
                   <p className="flex justify-between px-4 py-1.5 text-gray-700"><span className="font-semibold">Remise :</span><span>{doc.discount > 0 ? `− ${formatPrice(doc.discount)}` : formatPrice(0)}</span></p>
-                  <p className="mt-3 flex justify-between bg-primary px-4 py-3 text-base font-bold text-white">
+                  <p className="mt-2 flex justify-between bg-primary px-4 py-2 text-base font-bold text-white">
                     <span>{doc.type === "FACTURE" ? "Total à payer" : doc.type === "AVOIR" ? "Montant de l'avoir" : "Total"}</span><span>{formatPrice(doc.total)}</span>
                   </p>
                   {invoice && invoice.credited > 0 && <p className="flex justify-between px-4 pt-2 text-gray-700"><span>Avoirs</span><span>− {formatPrice(invoice.credited)}</span></p>}
@@ -625,7 +651,7 @@ export default function B2bDocumentPage() {
             )}
 
             {/* signature : la facture et l'avoir ne sont signés que par LCG ; les autres documents aussi par le client */}
-            <div className="mt-10 flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
+            <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
               <div className={`grid shrink-0 gap-8 text-sm text-gray-700 ${doc.type === "FACTURE" || doc.type === "AVOIR" ? "grid-cols-1 sm:w-60" : "grid-cols-2 sm:w-[26rem]"}`}>
                 <div className="relative text-center">
                   {/* cachet « PAYÉ — MERCI » sur une facture réglée en entier (demande du 2026-10-23) */}
@@ -635,12 +661,12 @@ export default function B2bDocumentPage() {
                       <p className="mt-0.5 text-sm font-extrabold uppercase tracking-[0.4em]">Merci</p>
                     </div>
                   )}
-                  <div className="mt-12 border-t border-gray-400 pt-1.5 font-semibold text-gray-900">Signature autorisée — LCG</div>
+                  <div className="mt-10 border-t border-gray-400 pt-1.5 font-semibold text-gray-900">Signature autorisée — LCG</div>
                   <p className="text-xs text-gray-500">Nom, signature et cachet</p>
                 </div>
                 {doc.type !== "FACTURE" && doc.type !== "AVOIR" && (
                   <div className="text-center">
-                    <div className="mt-12 border-t border-gray-400 pt-1.5 font-semibold text-gray-900">{doc.type === "LIVRAISON" ? "Reçu par le client" : "Bon pour accord du client"}</div>
+                    <div className="mt-10 border-t border-gray-400 pt-1.5 font-semibold text-gray-900">{doc.type === "LIVRAISON" ? "Reçu par le client" : "Bon pour accord du client"}</div>
                     <p className="text-xs text-gray-500">Nom, signature et cachet</p>
                   </div>
                 )}
@@ -656,7 +682,7 @@ export default function B2bDocumentPage() {
           </div>
 
           {company.legal && (
-            <footer className="border-t border-gray-200 px-5 py-3 text-center text-xs text-gray-500 sm:px-10">{company.legal}</footer>
+            <footer className="border-t border-gray-200 px-5 py-2 text-center text-xs text-gray-500 sm:px-8">{company.legal}</footer>
           )}
         </article>
       )}
