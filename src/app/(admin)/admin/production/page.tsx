@@ -806,12 +806,13 @@ export default function ProductionPage() {
               <button
                 onClick={async () => {
                   if (!coherence) return
-                  const rows = coherence.rows.filter((r) => r.activeLots === 0 && r.expiredLots > 0 && r.uncovered > 0)
+                  const rows = coherence.rows.filter((r) => r.activeLots === 0 && r.uncovered > 0)
                   if (rows.length === 0) {
-                    fail("Aucun lot périmé à supprimer pour les lignes avec 'Sans lot' et 'Lots actifs' nul")
+                    fail("Aucun stock sans lot à supprimer pour les lignes dont 'Lots actifs' est nul")
                     return
                   }
-                  if (!confirm(`Supprimer tous les lots périmés pour ${rows.length} format(s) ayant du stock sans lot et aucun lot actif ?\n\nLes ventes et mouvements de stock seront conservés.`)) return
+                  const units = rows.reduce((s, r) => s + r.uncovered, 0)
+                  if (!confirm(`Supprimer ${units} unité(s) de stock sans lot pour ${rows.length} format(s) dont 'Lots actifs' est nul ?\n\nLes unités sont retirées des points de vente (mouvement de stock conservé). Les ventes et les lots valides ne changent pas.`)) return
                   setError("")
                   setSuccess("")
                   setRegularising(true)
@@ -827,14 +828,14 @@ export default function ProductionPage() {
                       return
                     }
                     await load()
-                    succeed(`${body.deleted || 0} lot(s) périmé(s) supprimé(s)`)
+                    succeed(`${body.removedUnits || 0} unité(s) de stock sans lot supprimée(s)${body.deleted ? ` et ${body.deleted} lot(s) périmé(s)` : ""}`)
                   } catch (e) {
                     fail(e instanceof Error ? e.message : "Erreur")
                   } finally {
                     setRegularising(false)
                   }
                 }}
-                disabled={regularising || !coherence || coherence.rows.filter((r) => r.activeLots === 0 && r.expiredLots > 0 && r.uncovered > 0).length === 0}
+                disabled={regularising || !coherence || coherence.rows.filter((r) => r.activeLots === 0 && r.uncovered > 0).length === 0}
                 className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50 sm:text-sm"
               >
                 <Trash2 className="h-4 w-4" /> Supprimer lots périmés (SANS LOT)
@@ -892,11 +893,11 @@ export default function ProductionPage() {
                         ) : <span className="text-gray-400">0</span>}
                       </td>
                       <td className="px-2 py-2 text-center sm:px-4 sm:py-2.5">
-                        {r.activeLots === 0 && r.expiredLots > 0 ? (
+                        {r.activeLots === 0 && r.uncovered > 0 ? (
                           <button
                             onClick={async () => {
                               if (!coherence) return
-                              if (!confirm(`Supprimer tous les lots périmés de « ${r.productName} · ${r.format} » ?\n\nLes ventes et mouvements de stock seront conservés.`)) return
+                              if (!confirm(`Supprimer ${r.uncovered} unité(s) de stock sans lot de « ${r.productName} · ${r.format} » ?\n\nLes unités sont retirées des points de vente (mouvement de stock conservé). Les ventes et les lots valides ne changent pas.`)) return
                               setError("")
                               setSuccess("")
                               setRegularising(true)
@@ -912,7 +913,7 @@ export default function ProductionPage() {
                                   return
                                 }
                                 await load()
-                                succeed(`${body.deleted || 0} lot(s) périmé(s) supprimé(s)`)
+                                succeed(`${body.removedUnits || 0} unité(s) de stock sans lot supprimée(s)`)
                               } catch (e) {
                                 fail(e instanceof Error ? e.message : "Erreur")
                               } finally {
@@ -920,8 +921,8 @@ export default function ProductionPage() {
                               }
                             }}
                             disabled={regularising}
-                            className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
-                            title="Supprimer les lots périmés de ce format"
+                            className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                            title="Supprimer le stock sans lot de ce format"
                           >
                             <Trash2 className="h-3.5 w-3.5" /> Supprimer
                           </button>

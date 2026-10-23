@@ -3,9 +3,18 @@ import { getPrisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
 
+export const maxDuration = 60
+
+/**
+ * Nettoie les formats dont tous les lots sont inutilisables (aucun lot actif) :
+ * - supprime les lots expirés restants et leurs allocations ;
+ * - retire du stock des points de vente les unités que plus aucun lot ne couvre
+ *   (colonne « Sans lot »), avec un mouvement ADJUSTMENT_OUT pour la traçabilité.
+ * Le stock global est ramené au stock restant couvert par des lots.
+ */
 export async function POST(req: Request) {
-  const forbidden = await requireManagementAccess(undefined, [["production", "lots"], "delete"])
-  if (forbidden) return forbidden
+  const guard = await requireManagementAccess(undefined, [["production", "lots"], "delete"])
+  if (guard) return guard
 
   try {
     const body = await req.json().catch(() => ({}))
@@ -17,41 +26,78 @@ export async function POST(req: Request) {
 
     const prisma = getPrisma()
 
-    const result = await prisma.$transaction(async (tx) => {
-      const lots = await tx.productionLot.findMany({
-        where: {
-          variantId: { in: variantIds },
-          status: "EXPIRED",
-          remainingQuantity: { gt: 0 },
-        },
-        select: {
-          id: true,
-          lotNumber: true,
-          variantId: true,
-          remainingQuantity: true,
-          initialQuantity: true,
-        },
-      })
-
-      if (lots.length === 0) return { deleted: 0, lots: [] }
-
-      await tx.lotAllocation.deleteMany({ where: { lotId: { in: lots.map((l) => l.id) } } })
-      await tx.productionLot.deleteMany({ where: { id: { in: lots.map((l) => l.id) } } })
-
-      for (const lot of lots) {
-        await logActivity({
-          module: "production",
-          action: "suppression",
-          entity: "ProductionLot",
-          entityId: lot.id,
-          summary: `Suppression du lot périmé ${lot.lotNumber} (${lot.initialQuantity} unités produites, reste ${lot.remainingQuantity}) - nettoyé depuis onglet Cohérence (SANS LOT)`,
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const lots = await tx.productionLot.findMany({
+          where: { variantId: { in: variantIds }, status: "EXPIRED", remainingQuantity: { gt: 0 } },
+          select: { id: true, lotNumber: true, variantId: true, remainingQuantity: true, initialQuantity: true },
         })
-      }
 
-      return { deleted: lots.length, lots }
-    })
+        if (lots.length > 0) {
+          await tx.lotAllocation.deleteMany({ where: { lotId: { in: lots.map((l) => l.id) } } })
+          await tx.productionLot.deleteMany({ where: { id: { in: lots.map((l) => l.id) } } })
+        }
 
-    return NextResponse.json({ ok: true, deleted: result.deleted })
+        const removed: { variantId: string; units: number }[] = []
+
+        for (const variantId of variantIds) {
+          const [activeLots, locations, variant] = await Promise.all([
+            tx.productionLot.aggregate({
+              where: { variantId, status: "ACTIVE", remainingQuantity: { gt: 0 } },
+              _sum: { remainingQuantity: true },
+            }),
+            tx.pointOfSaleStock.aggregate({ where: { variantId }, _sum: { quantity: true } }),
+            tx.productVariant.findUnique({ where: { id: variantId }, select: { stock: true } }),
+          ])
+          if (!variant) continue
+
+          const covered = activeLots._sum.remainingQuantity ?? 0
+          const locationStock = locations._sum.quantity ?? 0
+          // règle métier : on ne touche qu'aux formats sans AUCUN lot actif
+          if (covered > 0) continue
+          const units = Math.max(0, locationStock)
+          if (units === 0) continue
+
+          await tx.pointOfSaleStock.deleteMany({ where: { variantId } })
+          await tx.productVariant.update({ where: { id: variantId }, data: { stock: Math.max(0, variant.stock - units) } })
+
+          await tx.stockMovement.create({
+            data: {
+              variantId,
+              type: "ADJUSTMENT_OUT",
+              quantity: units,
+              reason: "Suppression du stock sans lot (cohérence)",
+              reference: `SANSSLOT-${Date.now()}-${variantId.slice(-6)}`,
+            },
+          })
+          removed.push({ variantId, units })
+        }
+
+        return { deleted: lots.length, removed, lots }
+      },
+      { timeout: 30000, maxWait: 10000 },
+    )
+
+    for (const lot of result.lots) {
+      await logActivity({
+        module: "production",
+        action: "suppression",
+        entity: "ProductionLot",
+        entityId: lot.id,
+        summary: `Suppression du lot périmé ${lot.lotNumber} (${lot.initialQuantity} unités produites, reste ${lot.remainingQuantity}) - nettoyé depuis onglet Cohérence (SANS LOT)`,
+      })
+    }
+    const removedUnits = result.removed.reduce((s, r) => s + r.units, 0)
+    if (removedUnits > 0) {
+      await logActivity({
+        module: "production",
+        action: "suppression",
+        entity: "StockMovement",
+        summary: `Suppression de ${removedUnits} unité(s) de stock sans lot sur ${result.removed.length} format(s) - onglet Cohérence`,
+      })
+    }
+
+    return NextResponse.json({ ok: true, deleted: result.deleted, removedUnits, removed: result.removed })
   } catch (error) {
     console.error("POST lots/expired-cleanup error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })
