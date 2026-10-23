@@ -440,6 +440,22 @@ export default function B2bDocumentPage() {
                       <p className="text-gray-600">{formatDate(doc.deliveredAt)}</p>
                     </div>
                   )}
+                  {/* en face de l'échéance (ou de la validité) : l'auteur du document, demande du 2026-10-23 */}
+                  {people.createdBy && (
+                    <div>
+                      <p className="font-semibold text-gray-800">Établi par</p>
+                      <p className="text-gray-600">{people.createdBy}</p>
+                    </div>
+                  )}
+                  {/* document suivant de la chaîne (bon de commande, facture, bon de livraison) ; les avoirs sont listés en bas */}
+                  {doc.children.some((child) => child.type !== "AVOIR") && (
+                    <div>
+                      <p className="font-semibold text-gray-800">Suivi par</p>
+                      {doc.children.filter((child) => child.type !== "AVOIR").map((child) => (
+                        <p key={child.id} className="text-gray-600">{TYPE_LABEL[child.type].one} <span className="font-mono">{child.reference}</span></p>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -511,23 +527,11 @@ export default function B2bDocumentPage() {
                 )}
                 <div>
                   <p className="text-sm font-extrabold text-gray-900">Conditions</p>
+                  {/* conditions de paiement de la facture, en bas du document */}
+                  {invoice && <p className="mt-1.5 font-medium text-gray-800">Paiement à {invoice.termsDays} jour{invoice.termsDays > 1 ? "s" : ""}{invoice.fromContract ? " (contrat)" : ""}, au plus tard le {formatDate(invoice.dueDate)}.</p>}
                   <p className="mt-1.5 text-gray-600">{DOC_TEXT[doc.type].conditions}</p>
                 </div>
                 </div>
-                {(doc.parent || doc.children.length > 0 || invoice || people.createdBy || people.commercial) && (
-                  <div>
-                    <p className="text-sm font-extrabold text-gray-900">Informations</p>
-                    {doc.parent && doc.type === "AVOIR" && <p className="mt-1">Avoir sur la facture <span className="font-mono">{doc.parent.reference}</span></p>}
-                    {doc.parent && doc.type !== "AVOIR" && <p className="mt-1">Établi à partir de : {TYPE_LABEL[doc.parent.type].one.toLowerCase()} <span className="font-mono">{doc.parent.reference}</span></p>}
-                    {doc.type === "FACTURE" && doc.deliveredAt && <p className="mt-1">Marchandises livrées le {formatDate(doc.deliveredAt)}</p>}
-                    {invoice && <p className="mt-1">Paiement à {invoice.termsDays} jour{invoice.termsDays > 1 ? "s" : ""}{invoice.fromContract ? " (contrat)" : ""}, au plus tard le {formatDate(invoice.dueDate)}</p>}
-                    {people.createdBy && <p className="mt-1">Établi par : {people.createdBy}</p>}
-                    {people.commercial && <p className="mt-1">Commercial : {people.commercial}</p>}
-                    {doc.children.map((child) => (
-                      <p key={child.id} className="mt-1">{child.type === "AVOIR" ? "Avoir" : `Suivi par : ${TYPE_LABEL[child.type].one.toLowerCase()}`} <span className="font-mono">{child.reference}</span></p>
-                    ))}
-                  </div>
-                )}
                 {doc.deliveryTerms && doc.type !== "FACTURE" && doc.type !== "AVOIR" && (
                   <div>
                     <p className="text-sm font-extrabold text-gray-900">Livraison</p>
@@ -623,7 +627,14 @@ export default function B2bDocumentPage() {
             {/* signature : la facture et l'avoir ne sont signés que par LCG ; les autres documents aussi par le client */}
             <div className="mt-10 flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
               <div className={`grid shrink-0 gap-8 text-sm text-gray-700 ${doc.type === "FACTURE" || doc.type === "AVOIR" ? "grid-cols-1 sm:w-60" : "grid-cols-2 sm:w-[26rem]"}`}>
-                <div className="text-center">
+                <div className="relative text-center">
+                  {/* cachet « PAYÉ — MERCI » sur une facture réglée en entier (demande du 2026-10-23) */}
+                  {invoice?.paymentStatus === "PAID" && (
+                    <div aria-label="Facture payée" className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 -rotate-12 rounded-lg border-4 border-double border-green-700 bg-white/60 px-5 py-1.5 text-green-700">
+                      <p className="text-3xl font-black uppercase leading-none tracking-[0.25em]">Payé</p>
+                      <p className="mt-0.5 text-sm font-extrabold uppercase tracking-[0.4em]">Merci</p>
+                    </div>
+                  )}
                   <div className="mt-12 border-t border-gray-400 pt-1.5 font-semibold text-gray-900">Signature autorisée — LCG</div>
                   <p className="text-xs text-gray-500">Nom, signature et cachet</p>
                 </div>
