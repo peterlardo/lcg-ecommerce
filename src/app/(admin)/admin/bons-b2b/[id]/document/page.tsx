@@ -10,6 +10,7 @@ import { formatPrice } from "@/lib/utils"
 import { canCreateNext, STATUS_LABEL, TYPE_LABEL, type DocType } from "@/components/admin/b2b-documents-screen"
 import { montantEnLettres } from "@/lib/montant-en-lettres"
 import { RECEIPT_METHOD_LABEL } from "@/lib/payment-methods"
+import { InvoicePaymentDialog } from "@/components/admin/invoice-payment-dialog"
 
 // Document B2B imprimable (devis, bon de commande, bon de livraison, facture, avoir) — portage de b2b-document.php (lcgapp3).
 
@@ -160,6 +161,8 @@ export default function B2bDocumentPage() {
   const [mailTo, setMailTo] = useState("")
   const [mailMessage, setMailMessage] = useState("")
   const [creditOpen, setCreditOpen] = useState(false)
+  // formulaire « Encaisser » ouvert sur la page
+  const [payOpen, setPayOpen] = useState(false)
   const [creditAmount, setCreditAmount] = useState("")
   const [creditReason, setCreditReason] = useState("")
   const [promiseOpen, setPromiseOpen] = useState(false)
@@ -303,9 +306,9 @@ export default function B2bDocumentPage() {
             )}
             {/* facture émise, pas encore payée : le bon de livraison attend l'encaissement */}
             {invoice && doc.status === "INVOICED" && invoice.balance > 0.005 && !doc.children.some((c) => c.type === "LIVRAISON") && (
-              <Link href={`/admin/creances?q=${encodeURIComponent(doc.reference)}`} title="Le bon de livraison s'établit une fois la facture entièrement payée" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50">
-                <HandCoins className="h-4 w-4" /> Encaisser ({formatPrice(invoice.balance)})
-              </Link>
+              <button type="button" onClick={() => setPayOpen(true)} disabled={invoice.balance - invoice.pending <= 0.005} title={invoice.balance - invoice.pending <= 0.005 ? "Règlement déjà saisi, en attente de validation" : "Le bon de livraison s'établit une fois la facture entièrement payée"} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50">
+                <HandCoins className="h-4 w-4" /> Encaisser ({formatPrice(Math.max(0, invoice.balance - invoice.pending))})
+              </button>
             )}
             {canCredit && invoice && invoice.creditable > 0 && (
               <button type="button" onClick={openCredit} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
@@ -606,6 +609,13 @@ export default function B2bDocumentPage() {
         </div>
       )}
 
+      {payOpen && doc && invoice && (
+        <InvoicePaymentDialog
+          invoice={{ id: doc.id, reference: doc.reference, clientName, balance: Math.max(0, invoice.balance - invoice.pending) }}
+          onClose={() => setPayOpen(false)}
+          onDone={(text) => { setMessage(text); setPayOpen(false); setReload((n) => n + 1) }}
+        />
+      )}
       {creditOpen && doc && invoice && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4 print:hidden" onClick={(e) => { if (e.target === e.currentTarget && !submitting) setCreditOpen(false) }}>
           <form

@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react"
 import { AlertCircle, ArrowRight, Check, ChevronLeft, ChevronRight, FileText, HandCoins, Pencil, Plus, Printer, RotateCcw, Search, Send, Trash2, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { contractDiscount, productOptions } from "@/lib/b2b-contract"
+import { InvoicePaymentDialog, type PayableInvoice } from "@/components/admin/invoice-payment-dialog"
 
 // Écran commun aux devis et aux bons B2B (commande, livraison, facture) : liste, création, suite de la chaîne
 // devis -> bon de commande -> bon de livraison -> facture. Portage de devis-b2b.php et bons-b2b.php (lcgapp3).
@@ -35,6 +36,8 @@ interface B2bDocument {
   createdAt: string
   /** règlements validés (factures) */
   paid?: number
+  /** règlements saisis, en attente de validation (factures) */
+  pending?: number
   /** avoirs émis (factures) */
   credited?: number
   parent: LinkedDoc | null
@@ -201,6 +204,8 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [busy, setBusy] = useState<string | null>(null)
   // document qui vient d'être créé : mis en évidence dans la liste
   const [highlightId, setHighlightId] = useState("")
+  // facture en cours d'encaissement (formulaire ouvert depuis la liste)
+  const [paying, setPaying] = useState<PayableInvoice | null>(null)
   const [loadedAt, setLoadedAt] = useState(0)
   const canWrite = session?.user?.role !== "COMPTABLE"
 
@@ -746,11 +751,17 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                       </button>
                     )}
                     {/* facture pas encore payée : le bon de livraison attend l'encaissement */}
-                    {isInvoice && !next && !inv.paid && !inv.cancelled && (
-                      <Link href={`/admin/creances?q=${encodeURIComponent(doc.reference)}`} className={`${actionButton} border-amber-300 bg-white text-amber-800 hover:bg-amber-50`} title="Le bon de livraison s'établit une fois la facture entièrement payée">
-                        <HandCoins className="h-4 w-4" /> Encaisser ({formatPrice(inv.rest)})
-                      </Link>
-                    )}
+                    {isInvoice && !next && !inv.paid && !inv.cancelled && (() => {
+                      // reste à encaisser : les règlements déjà saisis, en attente de validation, ne se ressaisissent pas
+                      const toCollect = Math.max(0, inv.rest - (doc.pending ?? 0))
+                      return toCollect > 0.005 ? (
+                        <button type="button" onClick={() => setPaying({ id: doc.id, reference: doc.reference, clientName: doc.clientName, balance: toCollect })} className={`${actionButton} border-amber-300 bg-white text-amber-800 hover:bg-amber-50`} title="Le bon de livraison s'établit une fois la facture entièrement payée">
+                          <HandCoins className="h-4 w-4" /> Encaisser ({formatPrice(toCollect)})
+                        </button>
+                      ) : (
+                        <span className="rounded-full bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-800">Règlement à valider ({formatPrice(doc.pending ?? 0)})</span>
+                      )
+                    })()}
                     {canWrite && open && doc.type === "DEVIS" && (
                       <button type="button" onClick={() => act(doc, "reject")} disabled={busy !== null} className={`${actionButton} border-gray-300 bg-white text-gray-700 hover:bg-gray-50`}>
                         Refusé par le client
@@ -781,6 +792,14 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
             </button>
           </div>
         </div>
+      )}
+
+      {paying && (
+        <InvoicePaymentDialog
+          invoice={paying}
+          onClose={() => setPaying(null)}
+          onDone={(text) => { setMessage(text); setPaying(null); setReload((n) => n + 1) }}
+        />
       )}
 
       {creating && creatable && (
