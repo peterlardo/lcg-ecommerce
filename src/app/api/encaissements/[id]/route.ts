@@ -86,9 +86,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const situation = invoiceSituation(doc.total, doc.payments, doc.children)
     if (amount > situation.open + 0.01) return NextResponse.json({ error: "Montant supérieur au solde" }, { status: 400 })
 
-    // L'administrateur et la caisse encaissent directement ; le règlement saisi par un commercial attend leur validation.
-    // Virement et chèque attendent toujours : l'argent n'est acquis qu'une fois le virement reçu ou le chèque encaissé.
-    const direct = (user?.role === "ADMIN" || isCashierRole(user?.role)) && !PROOF_REQUIRED.includes(method)
+    // Tout règlement encaissé (espèces, Mobile Money, carte) crédite immédiatement la facture, quel que soit le compte.
+    // Virement et chèque attendent la validation : l'argent n'est acquis qu'une fois le virement reçu ou le chèque encaissé.
+    const direct = !PROOF_REQUIRED.includes(method)
     const clean = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null)
     const notes = clean(body.notes, 500)
     const reference = clean(body.reference, 120)

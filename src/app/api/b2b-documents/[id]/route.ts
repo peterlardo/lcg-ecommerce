@@ -6,6 +6,7 @@ import { nextDocumentReference } from "@/lib/b2b"
 import { auth } from "@/lib/auth"
 import { COMPTOIR_CODE, consumePointOfSaleStockTx, ensureOperationalStockLocations } from "@/lib/stock-service"
 import { DEFAULT_PAYMENT_TERMS_DAYS, invoiceSituation, seesAllB2b, type SessionUser } from "@/lib/commercial"
+import { isCashierRole } from "@/lib/permissions"
 import { formatPrice } from "@/lib/utils"
 import { documentCompany, getSettings } from "@/lib/settings"
 
@@ -116,6 +117,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     canCredit: (role === "ADMIN" || role === "COMPTABLE") && doc.type === "FACTURE" && doc.status === "INVOICED",
     // l'envoi par e-mail reste au commercial et à l'administrateur
     canEmail: role !== "COMPTABLE",
+    // la validation d'un règlement (virement reçu, chèque encaissé) est réservée à l'administrateur et à la caisse
+    canValidate: role === "ADMIN" || isCashierRole(role),
   })
 }
 

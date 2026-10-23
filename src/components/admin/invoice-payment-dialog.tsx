@@ -1,10 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { useSession } from "next-auth/react"
 import { Camera, Paperclip, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
-import { isCashierRole } from "@/lib/permissions"
 import { PROOF_LABEL, PROOF_MAX_BYTES, PROOF_REQUIRED, RECEIPT_METHODS, RECEIPT_METHOD_LABEL, REFERENCE_EXPECTED, REFERENCE_LABEL, REFERENCE_REQUIRED } from "@/lib/payment-methods"
 import { prepareProof } from "@/lib/proof-file"
 
@@ -24,10 +22,8 @@ export interface PayableInvoice {
  * des factures et sur la page d'une facture.
  */
 export function InvoicePaymentDialog({ invoice, onClose, onDone }: { invoice: PayableInvoice; onClose: () => void; onDone: (message: string) => void }) {
-  const { data: session } = useSession()
-  const role = session?.user?.role
-  // l'administrateur et la caisse encaissent directement (sauf virement et chèque, toujours à valider)
-  const counter = role === "ADMIN" || isCashierRole(role)
+  // espèces, Mobile Money et carte créditent la facture immédiatement, quel que soit le compte
+  // (seuls le virement et le chèque restent à valider, le temps que l'argent soit réellement reçu)
   const [amount, setAmount] = useState(String(Math.max(0, Math.round(invoice.balance))))
   const [method, setMethod] = useState("CASH_ON_DELIVERY")
   const [reference, setReference] = useState("")
@@ -170,7 +166,7 @@ export function InvoicePaymentDialog({ invoice, onClose, onDone }: { invoice: Pa
             Remarque (facultatif)
             <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} placeholder="Ex. : remis par le gérant" className={field} />
           </label>
-          {(!counter || proofRequired) && <p className="text-sm text-gray-500">Ce règlement sera compté après validation par la caisse ou l&apos;administrateur (écran Encaissements).</p>}
+          {proofRequired && <p className="text-sm text-gray-500">Ce règlement sera compté après validation par la caisse ou l&apos;administrateur (écran Encaissements).</p>}
           {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         </div>
         <div className="mt-5 flex justify-end gap-2">
