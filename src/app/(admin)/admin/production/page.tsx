@@ -802,9 +802,47 @@ export default function ProductionPage() {
               <h2 className="text-xs font-semibold text-gray-900 sm:text-sm">Cohérence du stock</h2>
               <p className="mt-1 max-w-2xl text-xs text-gray-500">Le stock des points de vente fait foi. Chaque unité doit être couverte par un lot : sans lot, la vente est refusée. Un lot expiré n&apos;est plus vendable ; son reste se sort du stock par une perte.</p>
             </div>
-            <button onClick={regularise} disabled={regularising || !coherence || coherence.summary.fixable === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:text-sm">
-              <CheckCircle2 className="h-4 w-4" /> {regularising ? "Régularisation..." : "Régulariser"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={async () => {
+                  if (!coherence) return
+                  const rows = coherence.rows.filter((r) => r.activeLots === 0 && r.expiredLots > 0 && r.uncovered > 0)
+                  if (rows.length === 0) {
+                    fail("Aucun lot périmé à supprimer pour les lignes avec 'Sans lot' et 'Lots actifs' nul")
+                    return
+                  }
+                  if (!confirm(`Supprimer tous les lots périmés pour ${rows.length} format(s) ayant du stock sans lot et aucun lot actif ?\n\nLes ventes et mouvements de stock seront conservés.`)) return
+                  setError("")
+                  setSuccess("")
+                  setRegularising(true)
+                  try {
+                    const res = await fetch("/api/lots/expired-cleanup", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ variantIds: rows.map((r) => r.variantId) }),
+                    })
+                    const body = await res.json().catch(() => null)
+                    if (!res.ok) {
+                      fail(body?.error ?? "Suppression impossible")
+                      return
+                    }
+                    await load()
+                    succeed(`${body.deleted || 0} lot(s) périmé(s) supprimé(s)`)
+                  } catch (e) {
+                    fail(e instanceof Error ? e.message : "Erreur")
+                  } finally {
+                    setRegularising(false)
+                  }
+                }}
+                disabled={regularising || !coherence || coherence.rows.filter((r) => r.activeLots === 0 && r.expiredLots > 0 && r.uncovered > 0).length === 0}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50 sm:text-sm"
+              >
+                <Trash2 className="h-4 w-4" /> Supprimer lots périmés (SANS LOT)
+              </button>
+              <button onClick={regularise} disabled={regularising || !coherence || coherence.summary.fixable === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:text-sm">
+                <CheckCircle2 className="h-4 w-4" /> {regularising ? "Régularisation..." : "Régulariser"}
+              </button>
+            </div>
           </div>
 
           {!coherence && <p className="text-xs text-gray-500 sm:text-sm">L&apos;état de cohérence n&apos;a pas pu être chargé.</p>}
