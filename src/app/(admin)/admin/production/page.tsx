@@ -869,6 +869,7 @@ export default function ProductionPage() {
                     <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Sans lot</th>
                     <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Ancien stock global</th>
                     <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Hors point de vente</th>
+                    <th className="px-2 py-1.5 text-center  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -890,10 +891,48 @@ export default function ProductionPage() {
                           </div>
                         ) : <span className="text-gray-400">0</span>}
                       </td>
+                      <td className="px-2 py-2 text-center sm:px-4 sm:py-2.5">
+                        {r.activeLots === 0 && r.expiredLots > 0 ? (
+                          <button
+                            onClick={async () => {
+                              if (!coherence) return
+                              if (!confirm(`Supprimer tous les lots périmés de « ${r.productName} · ${r.format} » ?\n\nLes ventes et mouvements de stock seront conservés.`)) return
+                              setError("")
+                              setSuccess("")
+                              setRegularising(true)
+                              try {
+                                const res = await fetch("/api/lots/expired-cleanup", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ variantIds: [r.variantId] }),
+                                })
+                                const body = await res.json().catch(() => null)
+                                if (!res.ok) {
+                                  fail(body?.error ?? "Suppression impossible")
+                                  return
+                                }
+                                await load()
+                                succeed(`${body.deleted || 0} lot(s) périmé(s) supprimé(s)`)
+                              } catch (e) {
+                                fail(e instanceof Error ? e.message : "Erreur")
+                              } finally {
+                                setRegularising(false)
+                              }
+                            }}
+                            disabled={regularising}
+                            className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            title="Supprimer les lots périmés de ce format"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                          </button>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {coherence.rows.length === 0 && (
-                    <tr><td colSpan={8} className="px-2 py-6 text-center text-xs text-gray-500 sm:px-4 sm:py-8 sm:text-sm">Aucun produit.</td></tr>
+                    <tr><td colSpan={9} className="px-2 py-6 text-center text-xs text-gray-500 sm:px-4 sm:py-8 sm:text-sm">Aucun produit.</td></tr>
                   )}
                 </tbody>
               </table>
