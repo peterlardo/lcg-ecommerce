@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { expireOverdueLotsTx, generateLotNumberTx, isLotNumberConflict } from "@/lib/lot-utils"
 import { ensureOperationalStockLocations } from "@/lib/stock-service"
 import { LOT_LIST_LIMIT, checkedLotDates, checkedLotQuantity, LotInputError } from "@/lib/lot-input"
+import { ARCHIVED_LOT_STATUS } from "@/lib/lot-expired"
 
 export async function GET(req: Request) {
   const forbidden = await requireManagementAccess(undefined, [["production", "lots", "tracabilite"], "view"])
@@ -25,7 +26,8 @@ export async function GET(req: Request) {
 
   const where: Prisma.ProductionLotWhereInput = {}
   if (variantId) where.variantId = variantId
-  if (status) where.status = status
+  // Les lots périmés archivés ne s'affichent qu'à la demande (filtre « Archivé ») ; la traçabilité les retrouve toujours.
+  where.status = status || { not: ARCHIVED_LOT_STATUS }
 
   const lots = await getPrisma().productionLot.findMany({
     where,

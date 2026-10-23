@@ -51,6 +51,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
   ACTIVE: { label: "Actif", color: "text-green-700 bg-green-100", icon: CheckCircle2 },
   EXHAUSTED: { label: "Epuise", color: "text-gray-600 bg-gray-100", icon: XCircle },
   EXPIRED: { label: "Expire", color: "text-red-700 bg-red-100", icon: AlertCircle },
+  ARCHIVED: { label: "Archivé", color: "text-gray-600 bg-gray-100", icon: XCircle },
 }
 
 const ALLOC_LABEL: Record<string, string> = { SALE: "Vente", TRANSFER: "Transfert", LOSS: "Perte", ADJUSTMENT: "Ajustement", PRODUCTION: "Production" }
@@ -196,7 +197,7 @@ export default function LotsPage() {
 
   const deleteLot = async (lotId: string, expired = false) => {
     const message = expired
-      ? "Supprimer ce lot expiré ?\n\nLe stock des points de vente ne change pas : si des produits de ce lot ont été jetés, sortez-les aussi du stock par une perte. Les ventes et les mouvements de stock sont conservés."
+      ? "Supprimer ce lot expiré ?\n\nLe stock des points de vente ne change pas : si des produits de ce lot ont été jetés, sortez-les aussi du stock par une perte. S'il a servi à des ventes ou des mouvements de stock, il est archivé pour garder la traçabilité."
       : "Supprimer ce lot epuise ?\n\nSon historique d'allocations sera efface. Les ventes et les mouvements de stock sont conserves."
     if (!confirm(message)) return
     setError("")
@@ -206,7 +207,8 @@ export default function LotsPage() {
       setError(body?.error ?? "Suppression impossible")
       return
     }
-    setSuccess("Lot supprime")
+    const body = await res.json().catch(() => null)
+    setSuccess(body?.archived ? "Lot archivé (gardé pour la traçabilité)" : "Lot supprime")
     setSelectedLot(null)
     await load()
   }
@@ -308,6 +310,7 @@ export default function LotsPage() {
                 <option value="ACTIVE">Actif</option>
                 <option value="EXHAUSTED">Epuise</option>
                 <option value="EXPIRED">Expire</option>
+                <option value="ARCHIVED">Archivé</option>
               </select>
             </div>
           </div>

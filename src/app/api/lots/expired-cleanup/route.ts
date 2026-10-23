@@ -2,12 +2,13 @@ import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { logActivity } from "@/lib/activity"
+import { removeExpiredLotsTx } from "@/lib/lot-expired"
 
 export const maxDuration = 60
 
 /**
  * Nettoie les formats dont tous les lots sont inutilisables (aucun lot actif) :
- * - supprime les lots expirés restants et leurs allocations ;
+ * - retire les lots expirés restants : archivés s'ils ont servi à des ventes ou des mouvements, effacés sinon ;
  * - retire du stock des points de vente les unités que plus aucun lot ne couvre
  *   (colonne « Sans lot »), avec un mouvement ADJUSTMENT_OUT pour la traçabilité.
  * Le stock global est ramené au stock restant couvert par des lots.
@@ -28,15 +29,17 @@ export async function POST(req: Request) {
 
     const result = await prisma.$transaction(
       async (tx) => {
-        const lots = await tx.productionLot.findMany({
+        const expired = await tx.productionLot.findMany({
           where: { variantId: { in: variantIds }, status: "EXPIRED", remainingQuantity: { gt: 0 } },
-          select: { id: true, lotNumber: true, variantId: true, remainingQuantity: true, initialQuantity: true },
+          select: { id: true },
         })
-
-        if (lots.length > 0) {
-          await tx.lotAllocation.deleteMany({ where: { lotId: { in: lots.map((l) => l.id) } } })
-          await tx.productionLot.deleteMany({ where: { id: { in: lots.map((l) => l.id) } } })
-        }
+        // Un lot cité par des ventes, des mouvements ou des allocations est archivé (choix de l'utilisateur,
+        // 2026-10-23 : garder l'historique des ventes) ; seuls les lots sans historique sont effacés.
+        const retired = await removeExpiredLotsTx(tx, expired.map((l) => l.id))
+        const lots = [
+          ...retired.deleted.map((l) => ({ ...l, archived: false })),
+          ...retired.archived.map((l) => ({ ...l, archived: true })),
+        ]
 
         const removed: { variantId: string; units: number }[] = []
 
@@ -81,10 +84,10 @@ export async function POST(req: Request) {
     for (const lot of result.lots) {
       await logActivity({
         module: "production",
-        action: "suppression",
+        action: lot.archived ? "archivage" : "suppression",
         entity: "ProductionLot",
         entityId: lot.id,
-        summary: `Suppression du lot périmé ${lot.lotNumber} (${lot.initialQuantity} unités produites, reste ${lot.remainingQuantity}) - nettoyé depuis onglet Cohérence (SANS LOT)`,
+        summary: `${lot.archived ? "Archivage (lié à des ventes ou mouvements)" : "Suppression"} du lot périmé ${lot.lotNumber} (${lot.initialQuantity} unités produites, reste ${lot.remainingQuantity}) - nettoyé depuis onglet Cohérence (SANS LOT)`,
       })
     }
     const removedUnits = result.removed.reduce((s, r) => s + r.units, 0)
@@ -97,7 +100,8 @@ export async function POST(req: Request) {
       })
     }
 
-    return NextResponse.json({ ok: true, deleted: result.deleted, removedUnits, removed: result.removed })
+    // « deleted » : lots retirés de la liste (effacés ou archivés), comme l'attend l'écran
+    return NextResponse.json({ ok: true, deleted: result.deleted, archived: result.lots.filter((l) => l.archived).length, removedUnits, removed: result.removed })
   } catch (error) {
     console.error("POST lots/expired-cleanup error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })

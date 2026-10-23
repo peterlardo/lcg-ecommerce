@@ -75,6 +75,7 @@ export const LOT_STATUS_LBL: Record<string, string> = {
   ACTIVE: "Actif",
   EXHAUSTED: "Épuisé",
   EXPIRED: "Expiré",
+  ARCHIVED: "Archivé",
 }
 
 export const B2B_DOC_LBL: Record<string, string> = {

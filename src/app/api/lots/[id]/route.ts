@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { LOT_STATUSES } from "@/lib/lot-input"
 import { logActivity } from "@/lib/activity"
 import { startOfToday } from "@/lib/lot-utils"
+import { removeExpiredLotsTx } from "@/lib/lot-expired"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const forbidden = await requireManagementAccess(undefined, [["production", "lots", "tracabilite"], "view"])
@@ -143,9 +144,16 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Seul un lot épuisé ou expiré peut être supprimé" }, { status: 400 })
     }
 
-    // Les allocations du lot partent avec lui. Les mouvements de stock et les lignes de vente sont
+    // Lot épuisé : ses allocations partent avec lui. Les mouvements de stock et les lignes de vente sont
     // conservés, simplement détachés du lot : l'historique des ventes et de la production reste complet.
-    await getPrisma().productionLot.delete({ where: { id } })
+    // Lot expiré : même règle que « Supprimer les lots périmés » (archivé s'il a un historique).
+    let archived = false
+    if (exhausted) {
+      await getPrisma().productionLot.delete({ where: { id } })
+    } else {
+      const result = await getPrisma().$transaction((tx) => removeExpiredLotsTx(tx, [id]))
+      archived = result.archived.length > 0
+    }
 
     await logActivity({
       module: "production",
@@ -154,10 +162,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       entityId: id,
       summary: exhausted
         ? `Suppression du lot épuisé ${lot.lotNumber} (${lot.initialQuantity} unités produites)`
-        : `Suppression du lot expiré ${lot.lotNumber} (${lot.initialQuantity} unités produites, reste ${lot.remainingQuantity})`,
+        : `${archived ? "Archivage" : "Suppression"} du lot expiré ${lot.lotNumber} (${lot.initialQuantity} unités produites, reste ${lot.remainingQuantity})`,
     })
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, archived })
   } catch (error) {
     console.error("DELETE lots error:", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })
