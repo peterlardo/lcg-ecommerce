@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useParams, useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { AlertCircle, ArrowLeft, ArrowRight, CalendarClock, Check, HandCoins, Link2, Mail, Printer, ReceiptText, X } from "lucide-react"
+import { AlertCircle, ArrowLeft, ArrowRight, CalendarClock, Check, HandCoins, Link2, Mail, Phone, Printer, ReceiptText, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { canCreateNext, STATUS_LABEL, TYPE_LABEL, type DocType } from "@/components/admin/b2b-documents-screen"
 import { montantEnLettres } from "@/lib/montant-en-lettres"
@@ -369,97 +369,116 @@ export default function B2bDocumentPage() {
       )}
 
       {doc && (
-        // Modèle de document (facture, devis, livraison, avoir) d'après la maquette fournie le 2026-10-23 :
-        // bandeau bleu (société, contact, client, dates), tableau en carte, paiement + conditions, totaux, signature.
+        // Modèle de document (facture, devis, bon de commande, livraison, avoir) d'après le modèle fourni par
+        // l'utilisateur le 2026-10-23 (2e modèle du jour) : en-tête blanc (société à gauche, grand titre à droite),
+        // client et encadré gris (numéro, dates), tableau à bandeau de couleur et lignes grises alternées,
+        // paiement + conditions à gauche, totaux et total en bandeau à droite, signature, « Merci ».
+        // Couleur : le bleu du logo LCG à la place du rouge du modèle.
         <article className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-sm [print-color-adjust:exact] print:max-w-none print:rounded-none print:border-0 print:shadow-none">
-          <header className="relative rounded-b-[2.5rem] bg-primary px-5 pb-16 pt-6 text-white sm:px-10 sm:pt-8">
+          <header className="px-5 pt-6 sm:px-10 sm:pt-8">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-center gap-3">
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white p-1.5">
-                  <Image src="/logo-lcg-transparent.png" alt="" width={64} height={62} className="h-full w-auto" />
-                </span>
-                <div>
-                  <p className="text-xl font-extrabold uppercase leading-tight tracking-wide">{company.name}</p>
-                  <p className="text-xs uppercase tracking-widest text-white/75">Glaçons en eau minérale</p>
+              <div>
+                <div className="flex items-center gap-3">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary p-1.5">
+                    <Image src="/logo-lcg-transparent.png" alt="" width={56} height={54} className="h-full w-auto rounded-full bg-white p-0.5" />
+                  </span>
+                  <div>
+                    <p className="text-lg font-extrabold uppercase leading-tight tracking-wide">{company.name}</p>
+                    <p className="text-xs uppercase tracking-widest text-gray-500">Glaçons en eau minérale</p>
+                  </div>
                 </div>
+                <p className="mt-2 text-sm text-gray-500">{company.address}</p>
               </div>
-              <div className="text-sm text-white/90 sm:text-right">
-                <p className="text-xs font-bold uppercase tracking-widest text-white">Contact</p>
-                <p className="mt-1">{company.address}</p>
-                <p>{company.phones}</p>
-                <p>{company.contact}</p>
+              <div className="sm:text-right">
+                <p className="text-3xl font-extrabold uppercase tracking-wide text-gray-700 sm:text-4xl">{TYPE_LABEL[doc.type].one}</p>
+                <p className="font-mono text-sm text-gray-500">#{doc.reference}</p>
               </div>
             </div>
 
-            <div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-2xl font-extrabold uppercase tracking-wide sm:text-3xl">{TYPE_LABEL[doc.type].one}</p>
-                <p className="font-mono text-sm text-white/85">{DOC_TEXT[doc.type].number} {doc.reference}</p>
-                <p className="mt-4 text-xs uppercase tracking-widest text-white/75">{DOC_TEXT[doc.type].client}</p>
-                <p className="text-lg font-bold">{clientName}</p>
-                {doc.client?.contactName && doc.client.contactName !== clientName && <p className="text-sm text-white/90">À l&apos;attention de {doc.client.contactName}</p>}
-                {(doc.client?.address || doc.client?.city) && <p className="text-sm text-white/90">{[doc.client.address, doc.client.city].filter(Boolean).join(", ")}</p>}
-                {(doc.client?.phone || doc.client?.email) && <p className="text-sm text-white/90">{[doc.client.phone, doc.client.email].filter(Boolean).join(" · ")}</p>}
-                {doc.client?.taxId && <p className="text-sm text-white/90">NIU : {doc.client.taxId}</p>}
+            <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="text-sm text-gray-700">
+                <p className="text-sm font-extrabold uppercase tracking-wide text-gray-900">{DOC_TEXT[doc.type].client} :</p>
+                <p className="mt-1 text-base font-semibold text-gray-900">{clientName}</p>
+                {doc.client?.contactName && doc.client.contactName !== clientName && <p>À l&apos;attention de {doc.client.contactName}</p>}
+                {(doc.client?.address || doc.client?.city) && <p>{[doc.client.address, doc.client.city].filter(Boolean).join(", ")}</p>}
+                {(doc.client?.phone || doc.client?.email) && <p>{[doc.client.phone, doc.client.email].filter(Boolean).join(" · ")}</p>}
+                {doc.client?.taxId && <p>NIU : {doc.client.taxId}</p>}
               </div>
-              <div className="flex gap-6 text-sm sm:gap-8 sm:text-right">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-white/75">Date</p>
-                  <p className="text-base font-bold">{formatDate(doc.invoicedAt ?? doc.createdAt)}</p>
+              {/* encadré gris à barre de couleur : numéro et dates */}
+              <div className="flex overflow-hidden bg-gray-200 sm:min-w-[22rem]">
+                <span className="w-2 shrink-0 bg-primary" aria-hidden />
+                <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-3 px-5 py-4 text-sm">
+                  <div>
+                    <p className="font-semibold text-gray-800">{DOC_TEXT[doc.type].number}</p>
+                    <p className="font-mono text-gray-600">{doc.reference}</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800">Date</p>
+                    <p className="text-gray-600">{formatDate(doc.invoicedAt ?? doc.createdAt)}</p>
+                  </div>
+                  {invoice && (
+                    <div>
+                      <p className="font-semibold text-gray-800">Échéance</p>
+                      <p className="text-gray-600">{formatDate(invoice.dueDate)}</p>
+                    </div>
+                  )}
+                  {doc.type === "DEVIS" && doc.validUntil && (
+                    <div>
+                      <p className="font-semibold text-gray-800">Valable jusqu&apos;au</p>
+                      <p className="text-gray-600">{formatDate(doc.validUntil)}</p>
+                    </div>
+                  )}
+                  {doc.type === "COMMANDE" && doc.requestedDeliveryDate && (
+                    <div>
+                      <p className="font-semibold text-gray-800">Livraison souhaitée</p>
+                      <p className="text-gray-600">{formatDate(doc.requestedDeliveryDate)}</p>
+                    </div>
+                  )}
+                  {doc.type === "LIVRAISON" && doc.deliveredAt && (
+                    <div>
+                      <p className="font-semibold text-gray-800">Livré le</p>
+                      <p className="text-gray-600">{formatDate(doc.deliveredAt)}</p>
+                    </div>
+                  )}
                 </div>
-                {invoice && (
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-white/75">Échéance</p>
-                    <p className="text-base font-bold">{formatDate(invoice.dueDate)}</p>
-                  </div>
-                )}
-                {doc.type === "DEVIS" && doc.validUntil && (
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-white/75">Valable jusqu&apos;au</p>
-                    <p className="text-base font-bold">{formatDate(doc.validUntil)}</p>
-                  </div>
-                )}
-                {doc.type === "LIVRAISON" && doc.deliveredAt && (
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-white/75">Livré le</p>
-                    <p className="text-base font-bold">{formatDate(doc.deliveredAt)}</p>
-                  </div>
-                )}
               </div>
             </div>
           </header>
 
           <div className="px-4 pb-6 sm:px-10">
-            {/* tableau des articles, en carte qui chevauche le bandeau */}
-            <div className="relative -mt-10 overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-lg print:shadow-none">
+            {/* tableau des articles : bandeau de couleur, lignes grises alternées, numéros 01., 02.… */}
+            <div className="mt-8 overflow-x-auto">
               <table className="w-full min-w-[520px] text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50 text-xs font-bold uppercase tracking-wider text-gray-600">
-                    <th className="w-14 px-3 py-4 text-center">N°</th>
-                    <th className="px-3 py-4 text-left">Désignation</th>
-                    {doc.type !== "LIVRAISON" && <th className="px-3 py-4 text-right">Prix</th>}
-                    <th className="px-3 py-4 text-center">Qté</th>
-                    {doc.type !== "LIVRAISON" && <th className="px-4 py-4 text-right">Total</th>}
+                  <tr className="bg-primary text-sm font-bold uppercase tracking-wide text-white">
+                    <th className="w-16 px-4 py-3 text-left">N°</th>
+                    <th className="px-3 py-3 text-left">Désignation</th>
+                    {doc.type !== "LIVRAISON" && <th className="px-3 py-3 text-right">Prix</th>}
+                    <th className="px-3 py-3 text-center">Qté</th>
+                    {doc.type !== "LIVRAISON" && <th className="px-4 py-3 text-right">Total</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {doc.items.map((item, index) => (
-                    <tr key={item.id} className="border-b border-gray-100 last:border-0">
-                      <td className="px-3 py-3 text-center text-gray-500">{index + 1}.</td>
-                      <td className="px-3 py-3">{item.productVariant ? `${item.productVariant.product.name} — ${item.productVariant.format}` : "Article retiré du catalogue"}</td>
-                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-3 py-3 text-right">{formatPrice(item.unitPrice)}</td>}
-                      <td className="whitespace-nowrap px-3 py-3 text-center">{item.quantity}{item.productVariant?.unit ? ` ${item.productVariant.unit}` : ""}</td>
-                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">{formatPrice(item.lineTotal)}</td>}
+                    <tr key={item.id} className={index % 2 === 0 ? "bg-gray-100" : "bg-gray-200"}>
+                      <td className="px-4 py-4 text-gray-600">{String(index + 1).padStart(2, "0")}.</td>
+                      <td className="px-3 py-4">
+                        <p className="font-semibold text-gray-900">{item.productVariant ? item.productVariant.product.name : "Article retiré du catalogue"}</p>
+                        {item.productVariant && <p className="text-gray-600">{item.productVariant.format}</p>}
+                      </td>
+                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-3 py-4 text-right">{formatPrice(item.unitPrice)}</td>}
+                      <td className="whitespace-nowrap px-3 py-4 text-center">{item.quantity}{item.productVariant?.unit ? ` ${item.productVariant.unit}` : ""}</td>
+                      {doc.type !== "LIVRAISON" && <td className="whitespace-nowrap px-4 py-4 text-right font-semibold">{formatPrice(item.lineTotal)}</td>}
                     </tr>
                   ))}
                   {/* avoir partiel : une seule ligne, le motif */}
                   {doc.items.length === 0 && doc.type === "AVOIR" && (
-                    <tr>
-                      <td className="px-3 py-3 text-center text-gray-500">1.</td>
-                      <td className="px-3 py-3">Avoir sur la facture {doc.parent?.reference}{doc.notes ? ` : ${doc.notes}` : ""}</td>
-                      <td className="whitespace-nowrap px-3 py-3 text-right">{formatPrice(doc.total)}</td>
-                      <td className="px-3 py-3 text-center">1</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">{formatPrice(doc.total)}</td>
+                    <tr className="bg-gray-100">
+                      <td className="px-4 py-4 text-gray-600">01.</td>
+                      <td className="px-3 py-4 font-semibold">Avoir sur la facture {doc.parent?.reference}{doc.notes ? ` : ${doc.notes}` : ""}</td>
+                      <td className="whitespace-nowrap px-3 py-4 text-right">{formatPrice(doc.total)}</td>
+                      <td className="px-3 py-4 text-center">1</td>
+                      <td className="whitespace-nowrap px-4 py-4 text-right font-semibold">{formatPrice(doc.total)}</td>
                     </tr>
                   )}
                 </tbody>
@@ -473,11 +492,12 @@ export default function B2bDocumentPage() {
             )}
 
             <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-[1fr_minmax(0,18rem)]">
-              {/* à gauche : mode de paiement, informations et conditions */}
-              <div className="order-2 space-y-4 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700 sm:order-1">
+              {/* à gauche : mode de paiement et conditions côte à côte, puis informations */}
+              <div className="order-2 space-y-4 text-sm text-gray-700 sm:order-1">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {showBank && bank && (
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Mode de paiement</p>
+                    <p className="text-sm font-extrabold text-gray-900">Mode de paiement</p>
                     <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
                       {bank.accountNumber && <><dt className="text-gray-500">N° de compte</dt><dd className="font-mono font-semibold">{bank.accountNumber}</dd></>}
                       {bank.accountHolder && <><dt className="text-gray-500">Titulaire</dt><dd>{bank.accountHolder}</dd></>}
@@ -489,9 +509,14 @@ export default function B2bDocumentPage() {
                     <p className="mt-1 text-gray-600">Merci d&apos;indiquer la référence {doc.reference} avec votre paiement.</p>
                   </div>
                 )}
+                <div>
+                  <p className="text-sm font-extrabold text-gray-900">Conditions</p>
+                  <p className="mt-1.5 text-gray-600">{DOC_TEXT[doc.type].conditions}</p>
+                </div>
+                </div>
                 {(doc.parent || doc.children.length > 0 || invoice || people.createdBy || people.commercial) && (
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Informations</p>
+                    <p className="text-sm font-extrabold text-gray-900">Informations</p>
                     {doc.parent && doc.type === "AVOIR" && <p className="mt-1">Avoir sur la facture <span className="font-mono">{doc.parent.reference}</span></p>}
                     {doc.parent && doc.type !== "AVOIR" && <p className="mt-1">Établi à partir de : {TYPE_LABEL[doc.parent.type].one.toLowerCase()} <span className="font-mono">{doc.parent.reference}</span></p>}
                     {doc.type === "FACTURE" && doc.deliveredAt && <p className="mt-1">Marchandises livrées le {formatDate(doc.deliveredAt)}</p>}
@@ -505,28 +530,24 @@ export default function B2bDocumentPage() {
                 )}
                 {doc.deliveryTerms && doc.type !== "FACTURE" && doc.type !== "AVOIR" && (
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Livraison</p>
+                    <p className="text-sm font-extrabold text-gray-900">Livraison</p>
                     <p className="mt-1 whitespace-pre-line">{doc.deliveryTerms}</p>
                   </div>
                 )}
                 {doc.notes && (
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-900">{doc.type === "AVOIR" ? "Motif" : "Remarques"}</p>
+                    <p className="text-sm font-extrabold text-gray-900">{doc.type === "AVOIR" ? "Motif" : "Remarques"}</p>
                     <p className="mt-1 whitespace-pre-line">{doc.notes}</p>
                   </div>
                 )}
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Conditions</p>
-                  <p className="mt-1 text-gray-600">{DOC_TEXT[doc.type].conditions}</p>
-                </div>
               </div>
 
-              {/* à droite : totaux */}
+              {/* à droite : totaux, total en bandeau */}
               {doc.type !== "LIVRAISON" ? (
                 <div className="order-1 text-sm sm:order-2">
-                  <p className="flex justify-between px-4 py-2 text-gray-700"><span>Sous-total</span><span>{formatPrice(doc.subtotal)}</span></p>
-                  <p className="flex justify-between px-4 py-2 text-gray-700"><span>Remise</span><span>{doc.discount > 0 ? `− ${formatPrice(doc.discount)}` : formatPrice(0)}</span></p>
-                  <p className="mt-1 flex justify-between rounded-xl bg-primary px-4 py-3 text-base font-bold text-white">
+                  <p className="flex justify-between px-4 py-1.5 text-gray-700"><span className="font-semibold">Sous-total :</span><span>{formatPrice(doc.subtotal)}</span></p>
+                  <p className="flex justify-between px-4 py-1.5 text-gray-700"><span className="font-semibold">Remise :</span><span>{doc.discount > 0 ? `− ${formatPrice(doc.discount)}` : formatPrice(0)}</span></p>
+                  <p className="mt-3 flex justify-between bg-primary px-4 py-3 text-base font-bold text-white">
                     <span>{doc.type === "FACTURE" ? "Total à payer" : doc.type === "AVOIR" ? "Montant de l'avoir" : "Total"}</span><span>{formatPrice(doc.total)}</span>
                   </p>
                   {invoice && invoice.credited > 0 && <p className="flex justify-between px-4 pt-2 text-gray-700"><span>Avoirs</span><span>− {formatPrice(invoice.credited)}</span></p>}
@@ -558,7 +579,7 @@ export default function B2bDocumentPage() {
 
             {invoice && invoice.payments.length > 0 && (
               <div className="mt-4 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700">
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Règlements reçus</p>
+                <p className="text-sm font-extrabold text-gray-900">Règlements reçus</p>
                 <table className="mt-1 w-full text-left">
                   <tbody>
                     {invoice.payments.map((p) => (
@@ -581,7 +602,7 @@ export default function B2bDocumentPage() {
 
             {invoice && invoice.credits.length > 0 && (
               <div className="mt-4 rounded-2xl border border-gray-200 p-4 text-sm text-gray-700">
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-900">Avoirs</p>
+                <p className="text-sm font-extrabold text-gray-900">Avoirs</p>
                 <table className="mt-1 w-full text-left">
                   <tbody>
                     {invoice.credits.map((c) => (
@@ -600,24 +621,32 @@ export default function B2bDocumentPage() {
             )}
 
             {/* signature : la facture et l'avoir ne sont signés que par LCG ; les autres documents aussi par le client */}
-            <div className={`mt-10 grid gap-8 text-sm text-gray-700 ${doc.type === "FACTURE" || doc.type === "AVOIR" ? "grid-cols-1 sm:ml-auto sm:w-72" : "grid-cols-2"}`}>
-              {doc.type !== "FACTURE" && doc.type !== "AVOIR" && (
+            <div className="mt-10 flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
+              <div className={`grid shrink-0 gap-8 text-sm text-gray-700 ${doc.type === "FACTURE" || doc.type === "AVOIR" ? "grid-cols-1 sm:w-60" : "grid-cols-2 sm:w-[26rem]"}`}>
                 <div className="text-center">
-                  <div className="mt-12 border-t border-gray-400 pt-1.5">{doc.type === "LIVRAISON" ? "Reçu par le client" : "Bon pour accord du client"}</div>
+                  <div className="mt-12 border-t border-gray-400 pt-1.5 font-semibold text-gray-900">Signature autorisée — LCG</div>
                   <p className="text-xs text-gray-500">Nom, signature et cachet</p>
                 </div>
-              )}
-              <div className="text-center">
-                <div className="mt-12 border-t border-gray-400 pt-1.5">Signature autorisée — LCG</div>
-                <p className="text-xs text-gray-500">Nom, signature et cachet</p>
+                {doc.type !== "FACTURE" && doc.type !== "AVOIR" && (
+                  <div className="text-center">
+                    <div className="mt-12 border-t border-gray-400 pt-1.5 font-semibold text-gray-900">{doc.type === "LIVRAISON" ? "Reçu par le client" : "Bon pour accord du client"}</div>
+                    <p className="text-xs text-gray-500">Nom, signature et cachet</p>
+                  </div>
+                )}
+              </div>
+              <div className="sm:text-right">
+                <p className="text-xl font-extrabold text-primary">Merci de votre confiance !</p>
+                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-600 sm:justify-end">
+                  {company.phones && <span className="inline-flex items-center gap-1.5"><Phone className="h-4 w-4 text-primary" aria-hidden /> {company.phones}</span>}
+                  {company.contact && <span className="inline-flex items-center gap-1.5"><Mail className="h-4 w-4 text-primary" aria-hidden /> {company.contact}</span>}
+                </div>
               </div>
             </div>
           </div>
 
-          <footer className="rounded-t-[2rem] bg-primary px-5 py-4 text-center text-white sm:px-10">
-            <p className="text-sm font-semibold">Merci de votre confiance</p>
-            {company.legal && <p className="mt-1 text-xs text-white/75">{company.legal}</p>}
-          </footer>
+          {company.legal && (
+            <footer className="border-t border-gray-200 px-5 py-3 text-center text-xs text-gray-500 sm:px-10">{company.legal}</footer>
+          )}
         </article>
       )}
 
