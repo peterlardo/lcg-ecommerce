@@ -22,6 +22,9 @@ const REF_PREFIX: Record<string, string> = {
 /** Documents qui se saisissent ; les autres naissent du document précédent de la chaîne. */
 const CREATABLE_TYPES = ["DEVIS"]
 
+/** Tailles de page proposées par la liste des documents (même liste dans b2b-documents-screen.tsx). */
+const DOC_PAGE_SIZES = [5, 10, 20]
+
 const DOCUMENT_STATUSES =["DRAFT", "SENT", "CONFIRMED", "REJECTED", "DELIVERED", "INVOICED", "CANCELLED"]
 
 /** Devis qu'on peut encore reprendre dans un bon de commande : ni refusé, ni annulé, ni déjà transformé. */
@@ -50,7 +53,9 @@ export async function GET(req: Request) {
     const page = url.searchParams.get("page") === null ? 1 : Number(url.searchParams.get("page"))
     // « available=1 » : devis encore disponibles pour un bon de commande (liste du formulaire, sans pagination utile)
     const available = url.searchParams.get("available") === "1"
-    const perPage = available ? 200 : 20
+    // taille de page choisie à l'écran (5 par défaut, demande du 2026-10-23), 20 pour les autres appels
+    const wantedPerPage = Number(url.searchParams.get("perPage"))
+    const perPage = available ? 200 : DOC_PAGE_SIZES.includes(wantedPerPage) ? wantedPerPage : 20
 
     // filtres additionnels : client, période de création, état de règlement (factures), tri
     const clientId = url.searchParams.get("clientId")?.trim() || ""
