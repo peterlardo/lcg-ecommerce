@@ -123,11 +123,10 @@ export default function CommandesPage() {
   const PER_PAGE = 5
   const { data: session } = useSession()
   const role = (session?.user as { role?: string } | undefined)?.role
-  // L'accueil transmet ses commandes à la caisse (il n'établit pas le ticket lui-même)
-  const isOperateur = role === "OPERATEUR_ACCUEIL"
-  // Commerciaux et responsable commercial : commandes en lecture seule (2026-10-16) — ni création,
-  // ni envoi à la caisse, ni ticket, ni attribution
-  const readOnly = isCommercialRole(role)
+  // Profils qui transmettent leurs commandes à la caisse (ils n'établissent pas le ticket eux-mêmes) :
+  // l'accueil, les commerciaux et le responsable commercial (mis en lecture seule le 2026-10-16,
+  // création rétablie le 2026-10-23 à la demande de l'utilisateur)
+  const isOperateur = role === "OPERATEUR_ACCUEIL" || isCommercialRole(role)
   const [cashiers, setCashiers] = useState<{ id: string; name: string | null; email: string; role: string }[]>([])
   const [sendCashier, setSendCashier] = useState<Record<string, string>>({})
   const [sending, setSending] = useState<string | null>(null)
@@ -177,6 +176,24 @@ export default function CommandesPage() {
     }, 10000)
     return () => clearInterval(id)
   }, [load])
+
+  // Commerciaux et responsable commercial : points de vente où enregistrer leurs commandes (« Compte LCG »,
+  // « LCG Mobile »…, réglés dans Paramètres) ; le premier est proposé par défaut
+  const [commercialPoints, setCommercialPoints] = useState<{ id: string; name: string }[]>([])
+  const [orderPointId, setOrderPointId] = useState("")
+  useEffect(() => {
+    if (!showModal || !isCommercialRole(role)) return
+    const controller = new AbortController()
+    fetch("/api/points-de-vente/commerciaux", { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : { points: [] }))
+      .then((data: { points?: { id: string; name: string }[] }) => {
+        const points = data.points ?? []
+        setCommercialPoints(points)
+        setOrderPointId((current) => (points.some((p) => p.id === current) ? current : points[0]?.id ?? ""))
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [showModal, role])
 
   // Arrivée depuis le tableau de bord (« Voir les commandes du jour ») : ?jour=AAAA-MM-JJ
   const [dayFilter, setDayFilter] = useState("")
@@ -338,6 +355,7 @@ export default function CommandesPage() {
           deliveryZoneId: pickup ? null : form.deliveryZoneId,
           source: "OPERATOR",
           items,
+          ...(orderPointId ? { pointOfSaleId: orderPointId } : {}),
         }),
       })
       const data = await res.json()
@@ -390,23 +408,15 @@ export default function CommandesPage() {
             <Archive className="h-4 w-4" />
             Archives
           </Link>
-          {!readOnly && (
-            <button
-              onClick={() => setShowModal(true)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Nouvelle commande
-            </button>
-          )}
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary hover:opacity-90 rounded-lg transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Nouvelle commande
+          </button>
         </div>
       </div>
-
-      {readOnly && (
-        <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 sm:px-4">
-          Consultation seule : vos ventes se font par devis, facture puis bon de livraison (menu Commercial).
-        </p>
-      )}
 
       {dayFilter && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 sm:px-4">
@@ -506,7 +516,7 @@ export default function CommandesPage() {
                   })()}
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                  {!isOperateur && !readOnly && (
+                  {!isOperateur && (
                     <Link
                       href={(order.paymentStatus === "PAID" && order.ticketGenerated) ? `/admin/commandes/${order.id}/facture` : order.paymentStatus === "PAID" ? "#" : `/admin/commandes/${order.id}/facture`}
                       onClick={(e) => {
@@ -631,7 +641,7 @@ export default function CommandesPage() {
                       )}
                     </div>
 
-                    {!readOnly && <div className="mt-4 space-y-3">
+                    <div className="mt-4 space-y-3">
                       <div className="flex flex-col sm:flex-row gap-2">
                         <select
                           className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
@@ -722,7 +732,7 @@ export default function CommandesPage() {
                           )}
                         </div>
                       )}
-                    </div>}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -751,7 +761,7 @@ export default function CommandesPage() {
         )}
       </div>
 
-      {showModal && !readOnly && (
+      {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 overflow-y-auto">
           <div className="bg-white sm:rounded-2xl rounded-t-2xl shadow-xl w-full sm:max-w-2xl max-w-full max-h-[90vh] sm:max-h-none my-0 sm:my-8 overflow-y-auto">
             <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100">
@@ -811,6 +821,26 @@ export default function CommandesPage() {
                     <option value="CARD">Carte bancaire</option>
                   </select>
                 </div>
+                {/* commerciaux et responsable commercial : point de vente de la commande (réglé dans Paramètres) */}
+                {isCommercialRole(role) && commercialPoints.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Point de vente</label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {commercialPoints.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setOrderPointId(p.id)}
+                          aria-pressed={orderPointId === p.id}
+                          className={`min-h-11 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors ${orderPointId === p.id ? "border-primary bg-primary text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">La caisse prendra le stock sur ce point de vente au moment du ticket.</p>
+                  </div>
+                )}
                 <div className="sm:col-span-2 grid grid-cols-2 gap-2">
                   {([["DELIVERY", "Livraison à domicile"], ["PICKUP", "Retrait sur place"]] as const).map(([mode, label]) => (
                     <button
