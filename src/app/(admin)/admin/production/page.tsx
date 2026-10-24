@@ -94,6 +94,7 @@ interface ExpiredLotRow {
 interface CoherencePayload {
   rows: CoherenceRow[]
   expiredList?: ExpiredLotRow[]
+  expiredListError?: string | null
   summary: { unlocatedFormats: number; unlocatedUnits: number; uncoveredFormats: number; uncoveredUnits: number; globalGapFormats: number; excessFormats: number; excessUnits: number; expiredFormats: number; expiredUnits: number; fixable: number }
 }
 
@@ -153,6 +154,7 @@ export default function ProductionPage() {
   const [coherence, setCoherence] = useState<CoherencePayload | null>(null)
   const [regularising, setRegularising] = useState(false)
   const [checkedExpired, setCheckedExpired] = useState<Record<string, boolean>>({})
+  const [coherenceError, setCoherenceError] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
@@ -200,13 +202,30 @@ export default function ProductionPage() {
           return null
         }
       }
+      // la cohérence garde le message du serveur en cas d'échec, pour l'afficher dans l'onglet
+      const getCoherence = async (): Promise<CoherencePayload | null> => {
+        try {
+          const res = await fetch("/api/lots/coherence", { signal })
+          const body = await res.json().catch(() => null)
+          if (res.ok && body) {
+            setCoherenceError("")
+            return body as CoherencePayload
+          }
+          setCoherenceError(`${res.status === 403 ? "Accès refusé" : body?.error ?? "Erreur serveur"} (code ${res.status})`)
+          return null
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") throw err
+          setCoherenceError(err instanceof Error ? err.message : "Connexion impossible")
+          return null
+        }
+      }
       try {
         const [lotsJson, reportJson, stockJson, pointsJson, coherenceJson] = await Promise.all([
           get<LotsPayload>("/api/lots" + (filterStatus ? `?status=${filterStatus}` : "")),
           get<ReportPayload>("/api/reports"),
           get<{ variants?: StockVariant[] }>("/api/stock"),
           get<PointOfSaleOption[]>("/api/points-de-vente/list"),
-          get<CoherencePayload>("/api/lots/coherence"),
+          getCoherence(),
         ])
         if (signal?.aborted) return
 
@@ -914,7 +933,10 @@ export default function ProductionPage() {
             </div>
           </div>
 
-          {!coherence && <p className="text-xs text-gray-500 sm:text-sm">L&apos;état de cohérence n&apos;a pas pu être chargé.</p>}
+          {!coherence && <p className="text-xs text-gray-500 sm:text-sm">L&apos;état de cohérence n&apos;a pas pu être chargé{coherenceError ? ` : ${coherenceError}` : ""}.</p>}
+          {coherence?.expiredListError && (
+            <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">La liste des lots périmés n&apos;a pas pu être chargée : {coherence.expiredListError}</p>
+          )}
           {coherence && coherence.summary.fixable === 0 && coherence.summary.excessFormats === 0 && coherence.summary.expiredFormats === 0 && !coherence.expiredList?.length && (
             <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700 sm:text-sm">Tout est cohérent : chaque unité en stock est couverte par un lot.</p>
           )}

@@ -13,12 +13,22 @@ export async function GET() {
   if (forbidden) return forbidden
 
   try {
-    // la liste des lots périmés (même au reste nul) permet de les choisir un par un dans l'onglet Cohérence
-    const [rows, expiredList] = await getPrisma().$transaction(async (tx) => [await stockCoherenceTx(tx), await expiredLotsTx(tx)] as const)
-    return NextResponse.json({ rows, summary: coherenceSummary(rows), expiredList })
+    const prisma = getPrisma()
+    const rows = await prisma.$transaction((tx) => stockCoherenceTx(tx), { timeout: 20000, maxWait: 10000 })
+    // la liste des lots périmés (même au reste nul) permet de les choisir un par un dans l'onglet Cohérence ;
+    // lue à part : si elle échoue, l'état de cohérence s'affiche quand même
+    let expiredList: Awaited<ReturnType<typeof expiredLotsTx>> = []
+    let expiredListError: string | null = null
+    try {
+      expiredList = await prisma.$transaction((tx) => expiredLotsTx(tx), { timeout: 20000, maxWait: 10000 })
+    } catch (error) {
+      console.error("GET lots/coherence expiredList error:", error)
+      expiredListError = error instanceof Error ? error.message : "Erreur serveur"
+    }
+    return NextResponse.json({ rows, summary: coherenceSummary(rows), expiredList, expiredListError })
   } catch (error) {
     console.error("GET lots/coherence error:", error)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur serveur" }, { status: 500 })
   }
 }
 
