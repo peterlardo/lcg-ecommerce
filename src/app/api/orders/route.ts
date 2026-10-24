@@ -200,6 +200,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Adresse de livraison requise" }, { status: 400 })
     }
 
+    // Date de livraison prévue (AAAA-MM-JJ, facultative) : pas avant aujourd'hui, heure de Brazzaville.
+    let scheduledDate: Date | null = null
+    if (body.scheduledDate) {
+      const day = String(body.scheduledDate)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(`${day}T12:00:00+01:00`))) {
+        return NextResponse.json({ error: "Date de livraison prévue invalide" }, { status: 400 })
+      }
+      if (day < new Date().toLocaleDateString("fr-CA", { timeZone: "Africa/Brazzaville" })) {
+        return NextResponse.json({ error: "La date de livraison prévue ne peut pas être passée" }, { status: 400 })
+      }
+      scheduledDate = new Date(`${day}T12:00:00+01:00`)
+    }
+
     // La zone et le livreur ne sont plus demandés au client : l'équipe LCG les
     // attribue à la confirmation. Une zone reste acceptée si elle est fournie
     // (saisie opérateur), mais n'est plus obligatoire.
@@ -242,6 +255,7 @@ export async function POST(request: Request) {
       deliveryMode,
       deliveryZoneId: deliveryMode === "DELIVERY" && body.deliveryZoneId ? String(body.deliveryZoneId) : null,
       deliveryAgentId: deliveryMode === "DELIVERY" && body.deliveryAgentId ? String(body.deliveryAgentId) : null,
+      scheduledDate,
       couponCode: body.couponCode ? String(body.couponCode).trim().toUpperCase() : null,
       items: items.map((item: OrderItemBody) => ({
         productId: String(item.productId || ""),

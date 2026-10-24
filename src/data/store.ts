@@ -75,6 +75,8 @@ export interface OrderInput {
   deliveryMode?: string
   deliveryZoneId?: string | null
   deliveryAgentId?: string | null
+  /** Date de livraison (ou de retrait) prévue, saisie par l'opérateur. */
+  scheduledDate?: Date | null
   couponCode?: string | null
   items: OrderItemInput[]
 }
@@ -576,6 +578,7 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
             address: input.address,
             city: input.city,
             district: input.district || null,
+            scheduledDate: input.scheduledDate ?? null,
             notes: input.notes || null,
           },
         },

@@ -19,14 +19,14 @@ import { isArchivedOrder } from "@/lib/archives"
 import { isCommercialRole } from "@/lib/permissions"
 import type { Product } from "@/data/products"
 
+// « Confirmée » est devenu « Commandes prévues » ; « En production », « Prête » et « En livraison »
+// sont retirés (demande du 2026-10-24) : ces commandes restent visibles dans « Toutes ».
+const PLANNED_TAB = "Commandes prévues"
 const statusFilters = [
   "Toutes",
   "En attente",
   "Commande envoyée à la Caisse",
-  "Confirmée",
-  "En production",
-  "Prête",
-  "En livraison",
+  PLANNED_TAB,
   "Livrée",
   "Annulée",
 ]
@@ -57,7 +57,7 @@ interface Order {
   userName?: string | null
   ticketGenerated?: boolean
   items: OrderItem[]
-  delivery: { address: string; city: string; district: string | null; notes: string | null } | null
+  delivery: { address: string; city: string; district: string | null; notes: string | null; scheduledDate?: string | null; mode?: string } | null
   pointOfSaleId: string | null
   pointOfSale?: { name: string } | null
   cashierId?: string | null
@@ -71,6 +71,26 @@ const orderStatusLabel = (order: Order): string =>
 
 /** La commande a été transmise à la caisse (elle le reste une fois la caisse passée à la suite). */
 const isSentToCashier = (order: Order): boolean => Boolean(order.cashierId) || order.status === "SENT_TO_CASHIER"
+
+/** Jour (AAAA-MM-JJ) à l'heure de Brazzaville. */
+const brazzavilleDay = (date: Date | string = new Date()): string =>
+  new Date(date).toLocaleDateString("fr-CA", { timeZone: "Africa/Brazzaville" })
+
+/** Jour de livraison prévu de la commande, s'il a été saisi. */
+const plannedDay = (order: Order): string | null =>
+  order.delivery?.scheduledDate ? brazzavilleDay(order.delivery.scheduledDate) : null
+
+const formatPlannedDay = (day: string): string =>
+  new Date(`${day}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
+
+/**
+ * Commande prévue un autre jour qu'aujourd'hui et pas encore partie en livraison :
+ * elle remonte dans l'onglet « Commandes prévues » (demande du 2026-10-24).
+ */
+const isPlannedOtherDay = (order: Order, today: string): boolean => {
+  const day = plannedDay(order)
+  return Boolean(day) && day !== today && !["OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(order.status)
+}
 
 const paymentLabels: Record<string, string> = {
   CARD: "Carte bancaire",
@@ -100,7 +120,7 @@ function formatDate(iso: string): string {
   return `${d.toLocaleDateString("fr-FR")} à ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
 }
 
-const EMPTY_ORDER_FORM = { customerName: "", customerPhone: "", customerEmail: "", address: "", district: "", paymentMethod: "CASH_ON_DELIVERY", notes: "", deliveryMode: "DELIVERY", deliveryZoneId: "" }
+const EMPTY_ORDER_FORM = { customerName: "", customerPhone: "", customerEmail: "", address: "", district: "", paymentMethod: "CASH_ON_DELIVERY", notes: "", deliveryMode: "DELIVERY", deliveryZoneId: "", scheduledDate: "" }
 
 export default function CommandesPage() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -233,15 +253,29 @@ export default function CommandesPage() {
     (order) => (dayFilter ? localDay(order.createdAt) === dayFilter : !isArchivedOrder(order))
   )
 
+  // onglet « Commandes prévues » : les commandes confirmées, plus toutes celles prévues un autre jour qu'aujourd'hui
+  const today = brazzavilleDay()
+  const inTab = (order: Order, tab: string): boolean =>
+    tab === PLANNED_TAB
+      ? order.status === "CONFIRMED" || isPlannedOtherDay(order, today)
+      : tab === "Toutes" || getStatusLabel(order.status) === tab
+
   const filtered = activeOrders.filter((order) => {
-    const matchesTab =
-      activeTab === "Toutes" || getStatusLabel(order.status) === activeTab
+    const matchesTab = inTab(order, activeTab)
     const matchesName =
       !searchName || order.customerName.toLowerCase().includes(searchName.toLowerCase())
     const matchesCode =
       !searchCode || order.orderNumber.toLowerCase().includes(searchCode.toLowerCase())
     return matchesTab && matchesName && matchesCode
   })
+  // dans « Commandes prévues », celles qui ont une date passent en tête, de la plus proche à la plus lointaine
+  if (activeTab === PLANNED_TAB) {
+    filtered.sort((a, b) => {
+      const da = isPlannedOtherDay(a, today) ? plannedDay(a)! : "9999-12-31"
+      const db = isPlannedOtherDay(b, today) ? plannedDay(b)! : "9999-12-31"
+      return da.localeCompare(db)
+    })
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const currentPage = Math.min(page, totalPages)
@@ -447,7 +481,7 @@ export default function CommandesPage() {
             {tab}
             {tab !== "Toutes" && (
               <span className="ml-1.5 text-xs opacity-70">
-                ({activeOrders.filter((o) => getStatusLabel(o.status) === tab).length})
+                ({activeOrders.filter((o) => inTab(o, tab)).length})
               </span>
             )}
           </button>
@@ -499,6 +533,19 @@ export default function CommandesPage() {
                         }`}
                       >
                         {orderStatusLabel(order)}
+                      </span>
+                    )}
+                    {plannedDay(order) && (
+                      <span
+                        className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                          plannedDay(order) === today
+                            ? "bg-blue-100 text-blue-700"
+                            : isPlannedOtherDay(order, today) && plannedDay(order)! < today
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {plannedDay(order) === today ? "Prévue aujourd'hui" : `Prévue le ${formatPlannedDay(plannedDay(order)!)}`}
                       </span>
                     )}
                   </div>
@@ -604,6 +651,10 @@ export default function CommandesPage() {
                         {order.delivery
                           ? `${order.delivery.address}${order.delivery.district ? ` — ${order.delivery.district}` : ""} (${order.delivery.city})`
                           : "—"}
+                      </p>
+                      <p className="text-gray-700">
+                        <span className="font-medium text-gray-500">{order.delivery?.mode === "PICKUP" ? "Retrait prévu: " : "Livraison prévue: "}</span>
+                        {plannedDay(order) ? formatPlannedDay(plannedDay(order)!) : "non renseignée"}
                       </p>
                       <p className="text-gray-700">
                         <span className="font-medium text-gray-500">Paiement: </span>
@@ -854,6 +905,20 @@ export default function CommandesPage() {
                       {label}
                     </button>
                   ))}
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="order-scheduled-date" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                    {form.deliveryMode === "PICKUP" ? "Date de retrait prévue" : "Date de livraison prévue"}
+                  </label>
+                  <input
+                    id="order-scheduled-date"
+                    type="date"
+                    min={brazzavilleDay()}
+                    value={form.scheduledDate}
+                    onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })}
+                    className="w-full min-h-11 px-3 py-2.5 text-base sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Une commande prévue un autre jour qu&apos;aujourd&apos;hui apparaît dans l&apos;onglet « Commandes prévues ».</p>
                 </div>
                 {form.deliveryMode === "DELIVERY" && (
                 <div className="sm:col-span-2">
