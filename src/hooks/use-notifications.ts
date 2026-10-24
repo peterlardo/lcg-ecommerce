@@ -6,7 +6,7 @@ import { playNotificationSound, unlockNotificationAudio } from "@/lib/notificati
 
 export interface AppNotification {
   id: string
-  kind?: "commande" | "precommande" | "vente"
+  kind?: "commande" | "precommande" | "vente" | "rappel"
   orderNumber: string
   customerName: string
   status: string
@@ -14,6 +14,9 @@ export interface AppNotification {
   createdAt: string
   source: string
   href?: string
+  /** Rappels : jour de livraison (ou de retrait) prévu, demain. */
+  scheduledDate?: string | null
+  pickup?: boolean
 }
 
 const desktopStatusLabels: Record<string, string> = {
@@ -28,6 +31,7 @@ const desktopStatusLabels: Record<string, string> = {
 }
 
 function desktopTitle(n: AppNotification): string {
+  if (n.kind === "rappel") return n.pickup ? "RAPPEL : retrait prévu demain" : "RAPPEL : livraison prévue demain"
   if (n.kind === "vente") return "VENTE RÉALISÉE"
   if (n.kind === "precommande") {
     if (n.status === "PENDING") return "Nouvelle pré-commande"
@@ -51,6 +55,22 @@ function showDesktopNotification(n: AppNotification) {
       window.focus()
       if (n.href) window.location.href = n.href
     }
+  } catch {}
+}
+
+// Rappels déjà affichés pendant cette session du navigateur (sans stockage disponible : affichés à chaque ouverture)
+const REMINDERS_KEY = "lcg-rappels-vus"
+function reminderShown(id: string): boolean {
+  try {
+    return (JSON.parse(sessionStorage.getItem(REMINDERS_KEY) || "[]") as string[]).includes(id)
+  } catch {
+    return false
+  }
+}
+function markReminderShown(id: string) {
+  try {
+    const seen = JSON.parse(sessionStorage.getItem(REMINDERS_KEY) || "[]") as string[]
+    if (!seen.includes(id)) sessionStorage.setItem(REMINDERS_KEY, JSON.stringify([...seen, id].slice(-50)))
   } catch {}
 }
 
@@ -85,7 +105,16 @@ export function useNotifications(pollInterval = 8000) {
           setNewCount((c) => c + fresh.length)
           fresh.forEach(showDesktopNotification)
           playNotificationSound()
+        } else if (!primed.current) {
+          // À l'ouverture, les rappels de la veille déjà présents s'affichent quand même (une fois par session)
+          const reminders = fresh.filter((n) => n.kind === "rappel" && !reminderShown(n.id))
+          if (reminders.length > 0) {
+            setNotifications((prev) => [...reminders, ...prev].slice(0, 10))
+            setNewCount((c) => c + reminders.length)
+            reminders.forEach((n) => markReminderShown(n.id))
+          }
         }
+        if (primed.current) fresh.filter((n) => n.kind === "rappel").forEach((n) => markReminderShown(n.id))
         data.forEach((n) => seenIds.current.add(n.id))
         primed.current = true
       } catch {

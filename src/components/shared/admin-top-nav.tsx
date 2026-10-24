@@ -214,6 +214,8 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead, posMode, onPosMod
   const [openIndex, setOpenIndex] = useState<number | null>(null)
   const [openSide, setOpenSide] = useState<"left" | "right">("left")
   const [notifOpen, setNotifOpen] = useState(false)
+  // cloche en rouge tant qu'une livraison est prévue demain
+  const hasReminders = recent.some((notification) => notification.kind === "rappel")
   const [mobileOpen, setMobileOpen] = useState(false)
   const [prevPathname, setPrevPathname] = useState<string | null>(null)
   const navRef = useRef<HTMLElement | null>(null)
@@ -542,7 +544,10 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead, posMode, onPosMod
                 setNotifOpen((value) => !value)
                 setOpenIndex(null)
               }}
-              className="relative rounded-lg p-2.5 text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+              className={`relative rounded-lg p-2.5 transition-colors ${
+                hasReminders ? "bg-red-600 text-white hover:bg-red-700" : "text-white/85 hover:bg-white/10 hover:text-white"
+              }`}
+              title={hasReminders ? "Livraisons prévues demain" : undefined}
             >
               <Bell className="h-5 w-5" />
               {newCount > 0 && (
@@ -571,6 +576,33 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead, posMode, onPosMod
                 {recent.map((notification) => {
                   const isPrecommande = notification.kind === "precommande"
                   const isVente = notification.kind === "vente"
+                  if (notification.kind === "rappel") {
+                    // rappel de la veille : en rouge, en tête de liste
+                    return (
+                      <Link
+                        key={notification.id}
+                        href={notification.href || "/admin/commandes"}
+                        onClick={() => {
+                          setNotifOpen(false)
+                          onMarkAllRead()
+                        }}
+                        className="block border-l-4 border-t border-l-red-600 border-t-red-100 bg-red-50 px-4 py-2.5 transition-colors hover:bg-red-100"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-red-800">{notification.orderNumber}</span>
+                          <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                            {notification.pickup ? "Retrait demain" : "Livraison demain"}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-red-700">
+                          {notification.customerName || "Client"} · {formatPrice(notification.total)}
+                          {notification.scheduledDate
+                            ? ` · ${new Date(notification.scheduledDate).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Brazzaville" })}`
+                            : ""}
+                        </p>
+                      </Link>
+                    )
+                  }
                   return (
                     <Link
                       key={notification.id}

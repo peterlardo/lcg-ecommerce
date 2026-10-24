@@ -1,12 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ShoppingCart, Bell, X, Globe, User, ReceiptText } from "lucide-react"
+import { ShoppingCart, Bell, X, Globe, User, ReceiptText, CalendarClock } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 
 interface Notification {
   id: string
-  kind?: "commande" | "precommande" | "vente"
+  kind?: "commande" | "precommande" | "vente" | "rappel"
+  pickup?: boolean
   orderNumber: string
   customerName: string
   cashierName?: string
@@ -62,12 +63,14 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
   return (
     <div
       style={{ animation: "toast-in 0.35s cubic-bezier(.22, 1, .36, 1) both" }}
-      className="overflow-hidden rounded-xl bg-[#1d4ed8] text-white shadow-lg ring-1 ring-white/20"
+      className={`overflow-hidden rounded-xl text-white shadow-lg ring-1 ring-white/20 ${notification.kind === "rappel" ? "bg-red-600" : "bg-[#1d4ed8]"}`}
     >
       <div className="p-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 shrink-0">
-            {notification.kind === "vente" ? (
+            {notification.kind === "rappel" ? (
+              <CalendarClock className="h-5 w-5 text-white" />
+            ) : notification.kind === "vente" ? (
               <ReceiptText className="h-5 w-5 text-white" />
             ) : notification.status === "PENDING" ? (
               <Bell className="h-5 w-5 text-white" />
@@ -77,8 +80,12 @@ function NotificationItem({ notification, onDismiss }: { notification: Notificat
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className={`text-sm font-semibold text-white ${notification.kind === "vente" ? "uppercase tracking-wide" : ""}`}>
-                {notification.kind === "vente"
+              <p className={`text-sm font-semibold text-white ${notification.kind === "vente" || notification.kind === "rappel" ? "uppercase tracking-wide" : ""}`}>
+                {notification.kind === "rappel"
+                  ? notification.pickup
+                    ? "Rappel : retrait prévu demain"
+                    : "Rappel : livraison prévue demain"
+                  : notification.kind === "vente"
                   ? "VENTE RÉALISÉE"
                   : notification.kind === "precommande"
                   ? notification.status === "PENDING"

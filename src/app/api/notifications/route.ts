@@ -67,7 +67,14 @@ export async function GET() {
   const since = new Date(Date.now() - DAY_MS)
   const prisma = getPrisma()
 
-  const [orders, reservations] = await Promise.all([
+  // Rappels (demande du 2026-10-24) : la veille, livraisons prévues le lendemain (heure de Brazzaville)
+  // et pas encore parties. L'administrateur et les profils qui voient tout reçoivent toutes les commandes ;
+  // les autres, celles qu'ils voient déjà dans la cloche.
+  const tomorrow = new Date(Date.now() + DAY_MS).toLocaleDateString("fr-CA", { timeZone: "Africa/Brazzaville" })
+  const tomorrowStart = new Date(`${tomorrow}T00:00:00+01:00`)
+  const tomorrowEnd = new Date(tomorrowStart.getTime() + DAY_MS)
+
+  const [orders, reservations, reminders] = await Promise.all([
     prisma.order.findMany({
       where: {
         createdAt: { gte: since },
@@ -107,7 +114,41 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
+    prisma.order.findMany({
+      where: {
+        delivery: { scheduledDate: { gte: tomorrowStart, lt: tomorrowEnd } },
+        status: { notIn: ["OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"] },
+        ...(seesAll ? {} : orderVisible),
+        ...(isComptableRole ? { b2bClientId: { not: null } } : {}),
+      },
+      select: {
+        id: true,
+        orderNumber: true,
+        customerName: true,
+        status: true,
+        total: true,
+        source: true,
+        delivery: { select: { scheduledDate: true, mode: true } },
+      },
+      orderBy: { createdAt: "asc" },
+      take: 20,
+    }),
   ])
+
+  const reminderItems = reminders.map((order) => ({
+    // un identifiant par jour : le rappel sonne une fois, la veille
+    id: `rappel-${order.id}-${tomorrow}`,
+    kind: "rappel" as const,
+    orderNumber: order.orderNumber,
+    customerName: order.customerName ?? "",
+    status: order.status,
+    total: order.total,
+    createdAt: new Date().toISOString(),
+    scheduledDate: order.delivery?.scheduledDate?.toISOString() ?? null,
+    pickup: order.delivery?.mode === "PICKUP",
+    source: order.source || "WEB",
+    href: `/admin/commandes/${order.id}/facture`,
+  }))
 
   const items = [
     ...orders.map((order) => ({
@@ -140,5 +181,6 @@ export async function GET() {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 20)
 
-  return NextResponse.json(items)
+  // les rappels restent en tête de la cloche toute la journée
+  return NextResponse.json([...reminderItems, ...items])
 }
