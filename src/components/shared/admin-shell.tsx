@@ -9,7 +9,7 @@ import { usePosMode } from "@/hooks/use-pos-mode"
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   useInactivityTimer()
-  const { notifications, recent, newCount, dismiss, dismissAll } = useNotifications(5000)
+  const { notifications, recent, newCount, plannedCount, dismiss, dismissAll } = useNotifications(5000)
   const { posMode, setOverride } = usePosMode()
 
   return (
@@ -17,6 +17,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <AdminTopNav
         recent={recent}
         newCount={newCount}
+        plannedCount={plannedCount}
         onMarkAllRead={dismissAll}
         posMode={posMode}
         onPosModeChange={setOverride}

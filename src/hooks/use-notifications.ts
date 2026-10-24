@@ -83,6 +83,8 @@ export function useNotifications(pollInterval = 8000) {
   // s'afficherait jamais.
   const primed = useRef(false)
   const [newCount, setNewCount] = useState(0)
+  // nombre de commandes prévues un autre jour qu'aujourd'hui (en-tête de la réponse)
+  const [plannedCount, setPlannedCount] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -99,6 +101,7 @@ export function useNotifications(pollInterval = 8000) {
         if (!active) return
 
         setRecent(data)
+        setPlannedCount(Number(res.headers.get("X-Commandes-Prevues")) || 0)
         const fresh = data.filter((n) => !seenIds.current.has(n.id))
         if (fresh.length > 0 && primed.current) {
           setNotifications((prev) => [...fresh, ...prev].slice(0, 10))
@@ -171,5 +174,5 @@ export function useNotifications(pollInterval = 8000) {
 
   const dismissAll = useCallback(() => { setNotifications([]); setNewCount(0) }, [])
 
-  return { notifications, recent, newCount, dismiss, dismissAll }
+  return { notifications, recent, newCount, plannedCount, dismiss, dismissAll }
 }

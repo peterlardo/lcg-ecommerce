@@ -218,6 +218,8 @@ export default function CommandesPage() {
     const jour = new URLSearchParams(window.location.search).get("jour")
     // eslint-disable-next-line react-hooks/set-state-in-effect -- état initial tiré de l'adresse
     if (jour && /^\d{4}-\d{2}-\d{2}$/.test(jour)) setDayFilter(jour)
+    // arrivée depuis la cloche (« N commandes prévues ») : ?onglet=prevues
+    if (new URLSearchParams(window.location.search).get("onglet") === "prevues") setActiveTab(PLANNED_TAB)
   }, [])
   const localDay = (iso: string) => new Date(iso).toLocaleDateString("fr-CA")
 
@@ -494,7 +496,10 @@ export default function CommandesPage() {
         {!loading && paged.map((order) => (
           <div
             key={order.id}
-            className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+            // commande prévue un autre jour qu'aujourd'hui : fond bleu clair (demande du 2026-10-24)
+            className={`rounded-xl border overflow-hidden ${
+              isPlannedOtherDay(order, today) ? "bg-blue-50 border-blue-200" : "bg-white border-gray-200"
+            }`}
           >
             <button
               onClick={() => setExpanded(expanded === order.id ? null : order.id)}

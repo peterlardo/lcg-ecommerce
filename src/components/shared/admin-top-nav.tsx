@@ -202,13 +202,15 @@ const SUBMENU_OFFSET = 100
 interface AdminTopNavProps {
   recent: AppNotification[]
   newCount: number
+  /** Commandes prévues un autre jour qu'aujourd'hui, pas encore parties. */
+  plannedCount: number
   onMarkAllRead: () => void
   /** Caisse tactile : barre réduite au logo, aux écrans de vente et à la déconnexion. */
   posMode: boolean
   onPosModeChange: (value: PosModeOverride) => void
 }
 
-export function AdminTopNav({ recent, newCount, onMarkAllRead, posMode, onPosModeChange }: AdminTopNavProps) {
+export function AdminTopNav({ recent, newCount, plannedCount, onMarkAllRead, posMode, onPosModeChange }: AdminTopNavProps) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const [openIndex, setOpenIndex] = useState<number | null>(null)
@@ -555,6 +557,14 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead, posMode, onPosMod
                   {newCount > 99 ? "99+" : newCount}
                 </span>
               )}
+              {plannedCount > 0 && (
+                <span
+                  aria-label={`${plannedCount} commande${plannedCount > 1 ? "s" : ""} prévue${plannedCount > 1 ? "s" : ""}`}
+                  className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-sky-200 px-1 text-[10px] font-bold leading-none text-sky-900 ring-1 ring-white"
+                >
+                  {plannedCount > 99 ? "99+" : plannedCount}
+                </span>
+              )}
             </button>
             {notifOpen && (
               <div className="absolute right-0 top-full z-50 mt-1.5 w-[340px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-lg border border-gray-200 bg-white py-1.5 shadow-xl">
@@ -570,6 +580,19 @@ export function AdminTopNav({ recent, newCount, onMarkAllRead, posMode, onPosMod
                     </button>
                   )}
                 </div>
+                {plannedCount > 0 && (
+                  // lien classique : l'onglet est lu au chargement de la page, même si elle est déjà ouverte
+                  <a
+                    href="/admin/commandes?onglet=prevues"
+                    onClick={() => setNotifOpen(false)}
+                    className="flex items-center justify-between gap-2 border-t border-sky-100 bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-900 transition-colors hover:bg-sky-100"
+                  >
+                    <span>
+                      {plannedCount} commande{plannedCount > 1 ? "s" : ""} prévue{plannedCount > 1 ? "s" : ""}
+                    </span>
+                    <span className="text-xs font-medium text-sky-700">Voir →</span>
+                  </a>
+                )}
                 {recent.length === 0 && (
                   <p className="px-4 py-3 text-sm text-gray-500">Aucune notification récente.</p>
                 )}

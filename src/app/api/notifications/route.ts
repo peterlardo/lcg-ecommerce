@@ -73,8 +73,9 @@ export async function GET() {
   const tomorrow = new Date(Date.now() + DAY_MS).toLocaleDateString("fr-CA", { timeZone: "Africa/Brazzaville" })
   const tomorrowStart = new Date(`${tomorrow}T00:00:00+01:00`)
   const tomorrowEnd = new Date(tomorrowStart.getTime() + DAY_MS)
+  const todayStart = new Date(tomorrowStart.getTime() - DAY_MS)
 
-  const [orders, reservations, reminders] = await Promise.all([
+  const [orders, reservations, reminders, plannedCount] = await Promise.all([
     prisma.order.findMany({
       where: {
         createdAt: { gte: since },
@@ -133,6 +134,25 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
       take: 20,
     }),
+    // Nombre de commandes prévues (affiché sur la cloche) : mêmes commandes que l'onglet « Commandes prévues »
+    // de /admin/commandes — confirmées, ou prévues un autre jour qu'aujourd'hui et pas encore parties.
+    prisma.order.count({
+      where: {
+        AND: [
+          seesAll ? {} : orderVisible,
+          isComptableRole ? { b2bClientId: { not: null } } : {},
+          {
+            OR: [
+              { status: "CONFIRMED" },
+              {
+                delivery: { OR: [{ scheduledDate: { lt: todayStart } }, { scheduledDate: { gte: tomorrowStart } }] },
+                status: { notIn: ["OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"] },
+              },
+            ],
+          },
+        ],
+      },
+    }),
   ])
 
   const reminderItems = reminders.map((order) => ({
@@ -182,5 +202,5 @@ export async function GET() {
     .slice(0, 20)
 
   // les rappels restent en tête de la cloche toute la journée
-  return NextResponse.json([...reminderItems, ...items])
+  return NextResponse.json([...reminderItems, ...items], { headers: { "X-Commandes-Prevues": String(plannedCount) } })
 }
