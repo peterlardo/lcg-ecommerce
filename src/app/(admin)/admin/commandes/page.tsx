@@ -80,9 +80,6 @@ const brazzavilleDay = (date: Date | string = new Date()): string =>
 const plannedDay = (order: Order): string | null =>
   order.delivery?.scheduledDate ? brazzavilleDay(order.delivery.scheduledDate) : null
 
-const formatPlannedDay = (day: string): string =>
-  new Date(`${day}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
-
 /**
  * Commande prévue un autre jour qu'aujourd'hui et pas encore partie en livraison :
  * elle remonte dans l'onglet « Commandes prévues » (demande du 2026-10-24).
@@ -535,19 +532,6 @@ export default function CommandesPage() {
                         {orderStatusLabel(order)}
                       </span>
                     )}
-                    {plannedDay(order) && (
-                      <span
-                        className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                          plannedDay(order) === today
-                            ? "bg-blue-100 text-blue-700"
-                            : isPlannedOtherDay(order, today) && plannedDay(order)! < today
-                              ? "bg-red-100 text-red-700"
-                              : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {plannedDay(order) === today ? "Prévue aujourd'hui" : `Prévue le ${formatPlannedDay(plannedDay(order)!)}`}
-                      </span>
-                    )}
                   </div>
                   <p className="break-words text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
                   {/* qui a créé la commande, et qui l'a encaissée (caissière à qui elle a été transmise, ou vente faite en caisse) */}
@@ -651,10 +635,6 @@ export default function CommandesPage() {
                         {order.delivery
                           ? `${order.delivery.address}${order.delivery.district ? ` — ${order.delivery.district}` : ""} (${order.delivery.city})`
                           : "—"}
-                      </p>
-                      <p className="text-gray-700">
-                        <span className="font-medium text-gray-500">{order.delivery?.mode === "PICKUP" ? "Retrait prévu: " : "Livraison prévue: "}</span>
-                        {plannedDay(order) ? formatPlannedDay(plannedDay(order)!) : "non renseignée"}
                       </p>
                       <p className="text-gray-700">
                         <span className="font-medium text-gray-500">Paiement: </span>
