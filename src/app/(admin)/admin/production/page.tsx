@@ -435,6 +435,36 @@ export default function ProductionPage() {
     }
   }
 
+  // Lots périmés d'un ou plusieurs formats : leur reste sort du stock, les lots sont retirés (archivés s'ils ont un historique).
+  const retirePerimes = async (rows: CoherenceRow[]) => {
+    const targets = rows.filter((r) => r.expiredLots > 0)
+    if (targets.length === 0) return
+    const units = targets.reduce((s, r) => s + r.expiredLots, 0)
+    const what = targets.length === 1 ? `de « ${targets[0].productName} · ${targets[0].format} »` : `de ${targets.length} formats`
+    if (!confirm(`Retirer les lots périmés ${what} (${units} unité(s) restantes) ?\n\nCes unités sortent du stock des points de vente et du stock global (mouvement conservé). Les lots périmés sont archivés s'ils ont servi à des ventes, effacés sinon. Les lots actifs ne changent pas.`)) return
+    setError("")
+    setSuccess("")
+    setRegularising(true)
+    try {
+      const res = await fetch("/api/lots/expired-writeoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantIds: targets.map((r) => r.variantId) }),
+      })
+      const body = await res.json().catch(() => null)
+      if (!res.ok) {
+        fail(res.status === 403 ? "Action réservée aux profils autorisés à supprimer des lots" : body?.error ?? "Suppression impossible")
+        return
+      }
+      await load()
+      succeed(`${body.lots} lot(s) périmé(s) retiré(s)${body.archived ? ` (dont ${body.archived} archivé(s))` : ""}, ${body.units} unité(s) sortie(s) du stock`)
+    } catch (e) {
+      fail(e instanceof Error ? e.message : "Erreur")
+    } finally {
+      setRegularising(false)
+    }
+  }
+
   const viewLot = async (lot: Lot) => {
     try {
       const res = await fetch(`/api/lots/${lot.id}`)
@@ -840,6 +870,13 @@ export default function ProductionPage() {
               >
                 <Trash2 className="h-4 w-4" /> Supprimer lots périmés (SANS LOT)
               </button>
+              <button
+                onClick={() => coherence && retirePerimes(coherence.rows)}
+                disabled={regularising || !coherence || coherence.summary.expiredFormats === 0}
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 sm:text-sm"
+              >
+                <Trash2 className="h-4 w-4" /> Retirer tous les lots périmés{coherence && coherence.summary.expiredFormats > 0 ? ` (${coherence.summary.expiredUnits})` : ""}
+              </button>
               <button onClick={regularise} disabled={regularising || !coherence || coherence.summary.fixable === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:text-sm">
                 <CheckCircle2 className="h-4 w-4" /> {regularising ? "Régularisation..." : "Régulariser"}
               </button>
@@ -925,6 +962,15 @@ export default function ProductionPage() {
                             title="Supprimer le stock sans lot de ce format"
                           >
                             <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                          </button>
+                        ) : r.expiredLots > 0 ? (
+                          <button
+                            onClick={() => retirePerimes([r])}
+                            disabled={regularising}
+                            className="inline-flex min-h-9 items-center gap-1 rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                            title="Sortir du stock le reste des lots périmés de ce format et retirer ces lots"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Retirer les périmés
                           </button>
                         ) : (
                           <span className="text-gray-400">—</span>
