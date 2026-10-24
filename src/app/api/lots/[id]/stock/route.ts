@@ -74,7 +74,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             ? expired ? "EXPIRED" : "ACTIVE"
             : lot.status
 
-      const reference = `LOT-${lot.lotNumber}`
+      // le numéro de lot commence déjà par « LOT- » : CORR-LOT-AAAAMMJJ-NNN
+      const reference = `CORR-${lot.lotNumber}`
       await tx.productionLot.update({ where: { id }, data: { remainingQuantity: target, status } })
       await tx.productVariant.update({ where: { id: lot.variantId }, data: { stock: { increment: diff } } })
       await tx.pointOfSaleStock.upsert({
