@@ -78,16 +78,21 @@ export async function GET() {
   const [orders, reservations, reminders, plannedCount] = await Promise.all([
     prisma.order.findMany({
       where: {
-        createdAt: { gte: since },
-        ...orderVisible,
-        // Filtre strict B2B : le comptable n'est notifié que des commandes
-        // rattachées à un client B2B.
-        ...(isComptableRole ? { b2bClientId: { not: null } } : {}),
+        AND: [
+          // une commande prévue créée il y a plusieurs jours et transmise aujourd'hui sonne chez la caissière ciblée
+          { OR: [{ createdAt: { gte: since } }, { cashierId: selfId, sentToCashierAt: { gte: since } }] },
+          orderVisible,
+          // Filtre strict B2B : le comptable n'est notifié que des commandes
+          // rattachées à un client B2B.
+          isComptableRole ? { b2bClientId: { not: null } } : {},
+        ],
       },
       select: {
         id: true,
         orderNumber: true,
         customerName: true,
+        cashierId: true,
+        sentToCashierAt: true,
         cashier: { select: { name: true } },
         user: { select: { name: true } },
         status: true,
@@ -180,7 +185,11 @@ export async function GET() {
       userName: order.user?.name ?? "",
       status: order.status,
       total: order.total,
-      createdAt: order.createdAt.toISOString(),
+      // pour la caissière ciblée, l'heure de transmission (une commande prévue peut être ancienne)
+      createdAt: (order.cashierId === selfId && order.sentToCashierAt && order.sentToCashierAt > order.createdAt
+        ? order.sentToCashierAt
+        : order.createdAt
+      ).toISOString(),
       source: order.source || "WEB",
       href: `/admin/commandes/${order.id}/facture`,
     })),

@@ -47,8 +47,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       data: {
         cashierId,
         sentToCashierAt: cashierId ? new Date() : null,
+        // une commande prévue déjà confirmée (stock déjà sorti) garde son statut : seule la caissière change
         ...(cashierId
-          ? { status: "SENT_TO_CASHIER" }
+          ? order.status === "PENDING" || order.status === "SENT_TO_CASHIER" ? { status: "SENT_TO_CASHIER" } : {}
           : order.status === "SENT_TO_CASHIER"
             ? { status: "PENDING" }
             : {}),

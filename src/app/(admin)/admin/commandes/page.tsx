@@ -89,6 +89,9 @@ const isPlannedOtherDay = (order: Order, today: string): boolean => {
   return Boolean(day) && day !== today && !["OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(order.status)
 }
 
+/** Commande de l'onglet « Commandes prévues » : confirmée, ou prévue un autre jour qu'aujourd'hui. */
+const isPlannedOrder = (order: Order, today: string): boolean => order.status === "CONFIRMED" || isPlannedOtherDay(order, today)
+
 const paymentLabels: Record<string, string> = {
   CARD: "Carte bancaire",
   MOBILE_MONEY: "Mobile Money",
@@ -148,6 +151,7 @@ export default function CommandesPage() {
   const [sendCashier, setSendCashier] = useState<Record<string, string>>({})
   const [sending, setSending] = useState<string | null>(null)
   const [sendError, setSendError] = useState("")
+  const [sendFailedId, setSendFailedId] = useState<string | null>(null)
   const load = useCallback(async () => {
     try {
       const ordersRes = await fetch("/api/orders")
@@ -256,8 +260,12 @@ export default function CommandesPage() {
   const today = brazzavilleDay()
   const inTab = (order: Order, tab: string): boolean =>
     tab === PLANNED_TAB
-      ? order.status === "CONFIRMED" || isPlannedOtherDay(order, today)
+      ? isPlannedOrder(order, today)
       : tab === "Toutes" || getStatusLabel(order.status) === tab
+  // commande prévue pas encore payée : « Envoyer à la caisse » directement sur la carte (demande du 2026-10-24),
+  // pour l'administrateur et les profils qui transmettent leurs commandes à la caisse
+  const canSendPlanned = (order: Order): boolean =>
+    order.paymentStatus !== "PAID" && isPlannedOrder(order, today) && (role === "ADMIN" || isOperateur)
 
   const filtered = activeOrders.filter((order) => {
     const matchesTab = inTab(order, activeTab)
@@ -313,6 +321,7 @@ export default function CommandesPage() {
     if (!cashierId) return
     setSending(orderId)
     setSendError("")
+    setSendFailedId(null)
     try {
       const res = await fetch(`/api/orders/${orderId}/send`, {
         method: "POST",
@@ -322,12 +331,14 @@ export default function CommandesPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSendError(data.error || "Erreur lors de l'envoi")
+        setSendFailedId(orderId)
         return
       }
       await load()
     } catch (error) {
       console.error("Erreur envoi caisse:", error)
       setSendError("Erreur interne")
+      setSendFailedId(orderId)
     } finally {
       setSending(null)
     }
@@ -599,6 +610,39 @@ export default function CommandesPage() {
               </div>
             </button>
 
+            {canSendPlanned(order) && (
+              <div className="flex flex-col gap-2 border-t border-blue-200 px-3 py-2.5 sm:flex-row sm:items-center sm:px-4">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-primary-800 sm:shrink-0">
+                  <BellRing className="h-4 w-4" />
+                  {order.cashierName ? <>Transmise à {order.cashierName}</> : "Envoyer à la caisse"}
+                </p>
+                <select
+                  aria-label={`Caissière pour la commande ${order.orderNumber}`}
+                  className="min-h-11 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500 sm:text-sm"
+                  value={sendCashier[order.id] ?? ""}
+                  disabled={sending === order.id}
+                  onChange={(e) => setSendCashier((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                >
+                  <option value="">{cashiers.length === 0 ? "Aucune caissière disponible" : "Choisir une caissière…"}</option>
+                  {cashiers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name ?? c.email}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={sending === order.id || !sendCashier[order.id] || sendCashier[order.id] === order.cashierId}
+                  onClick={() => handleSendToCashier(order.id)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  <BellRing className="h-4 w-4" />
+                  {sending === order.id ? "Envoi…" : order.cashierId ? "Changer de caissière" : "Envoyer à la caisse"}
+                </button>
+                {sendError && sendFailedId === order.id &&<p className="text-xs text-red-600 sm:basis-full">{sendError}</p>}
+              </div>
+            )}
+
             {expanded === order.id && (
               <div className="border-t border-gray-100 bg-gray-50/50 p-3 sm:p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -725,7 +769,7 @@ export default function CommandesPage() {
                         </button>
                       )}
 
-                      {isOperateur && (
+                      {isOperateur && !canSendPlanned(order) && (
                         <div className="space-y-2 rounded-lg border border-primary-200 bg-primary-50/60 p-2.5">
                           <p className="flex items-center gap-1.5 text-xs font-semibold text-primary-800">
                             <BellRing className="h-3.5 w-3.5" />
