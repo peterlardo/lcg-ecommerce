@@ -12,6 +12,13 @@ interface StockVariant {
   unit: string | null
 }
 
+/** Point de vente et ses quantités par format (réponse de /api/stock). */
+interface StockLocation {
+  id: string
+  name: string
+  stocks: { variantId: string; quantity: number }[]
+}
+
 interface LotAllocation {
   id: string
   quantity: number
@@ -62,6 +69,7 @@ function fmtDateTime(v: string) { return new Date(v).toLocaleString("fr-FR", { d
 export default function LotsPage() {
   const [data, setData] = useState<LotsPayload | null>(null)
   const [stockVariants, setStockVariants] = useState<StockVariant[]>([])
+  const [locations, setLocations] = useState<StockLocation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
@@ -77,6 +85,12 @@ export default function LotsPage() {
   const [editExpiry, setEditExpiry] = useState("")
   const [editNotes, setEditNotes] = useState("")
   const [detailLoading, setDetailLoading] = useState(false)
+  // correction du stock du lot : quantité réellement restante, point de vente de l'écart, motif
+  const [adjustQty, setAdjustQty] = useState("")
+  const [adjustPos, setAdjustPos] = useState("")
+  const [adjustReason, setAdjustReason] = useState("")
+  const [adjusting, setAdjusting] = useState(false)
+  const [adjustError, setAdjustError] = useState("")
 
   const load = async () => {
     try {
@@ -88,6 +102,7 @@ export default function LotsPage() {
       setData(await lotsRes.json())
       const sv = await stockRes.json()
       setStockVariants(sv.variants ?? [])
+      setLocations(sv.locations ?? [])
       if (!variantId && sv.variants?.[0]) setVariantId(sv.variants[0].variantId)
     } catch {
       setError("Erreur de chargement")
@@ -110,6 +125,7 @@ export default function LotsPage() {
         setData(data)
         const sv = await stockRes.json()
         setStockVariants(sv.variants ?? [])
+        setLocations(sv.locations ?? [])
         setVariantId((current) => current || sv.variants?.[0]?.variantId || "")
       } catch (err) {
         if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Erreur de chargement")
@@ -159,9 +175,18 @@ export default function LotsPage() {
     await load()
   }
 
+  /** Quantité d'un format dans un point de vente. */
+  const posQty = (loc: StockLocation, variant: string) => loc.stocks.find((st) => st.variantId === variant)?.quantity ?? 0
+
   const openDetail = async (lot: Lot) => {
     setDetailLoading(true)
     setSelectedLot(lot)
+    // par défaut : le point de vente qui détient le plus de ce format
+    const holders = [...locations].sort((a, b) => posQty(b, lot.variantId) - posQty(a, lot.variantId))
+    setAdjustQty(String(lot.remainingQuantity))
+    setAdjustPos(holders[0]?.id ?? "")
+    setAdjustReason("")
+    setAdjustError("")
     setEditExpiry(lot.expiryDate ? lot.expiryDate.slice(0, 10) : "")
     setEditNotes(lot.notes ?? "")
     try {
@@ -193,6 +218,36 @@ export default function LotsPage() {
     setSuccess(body?.reactivated ? `Lot ${selectedLot.lotNumber} de nouveau vendable en caisse` : "Lot modifie")
     setSelectedLot(null)
     await load()
+  }
+
+  const adjustLotStock = async () => {
+    if (!selectedLot || adjusting) return
+    const target = Number(adjustQty)
+    if (!Number.isInteger(target) || target < 0) { setAdjustError("Saisissez une quantité entière, 0 ou plus"); return }
+    if (target === selectedLot.remainingQuantity) { setAdjustError("C'est déjà la quantité du lot : rien à corriger"); return }
+    if (!adjustPos) { setAdjustError("Choisissez le point de vente concerné"); return }
+    if (!adjustReason.trim()) { setAdjustError("Indiquez le motif (inventaire, casse, erreur de saisie…)"); return }
+    const diff = target - selectedLot.remainingQuantity
+    const posName = locations.find((l) => l.id === adjustPos)?.name ?? "le point de vente"
+    if (!window.confirm(`Lot ${selectedLot.lotNumber} : ${selectedLot.remainingQuantity} → ${target} (${diff > 0 ? "+" : ""}${diff}).\n\nLe stock de ${posName} et le stock global changent aussi de ${diff > 0 ? "+" : ""}${diff}. Confirmer ?`)) return
+    setAdjusting(true)
+    setAdjustError("")
+    try {
+      const res = await fetch(`/api/lots/${selectedLot.id}/stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity: target, pointOfSaleId: adjustPos, reason: adjustReason.trim() }),
+      })
+      const body = await res.json().catch(() => null)
+      if (!res.ok) { setAdjustError(body?.error ?? "Correction impossible"); return }
+      setSuccess(`Lot ${selectedLot.lotNumber} corrigé : ${target} restant(s) (${diff > 0 ? "+" : ""}${diff} sur ${posName})`)
+      setSelectedLot(null)
+      await load()
+    } catch {
+      setAdjustError("Connexion au serveur impossible : rien n'a été modifié")
+    } finally {
+      setAdjusting(false)
+    }
   }
 
   const deleteLot = async (lotId: string, expired = false) => {
@@ -400,6 +455,68 @@ export default function LotsPage() {
                   </label>
                   {selectedLot.createdBy && <p className="text-xs text-gray-500">Cree par : {selectedLot.createdBy.name}</p>}
                 </div>
+
+                {selectedLot.status !== "ARCHIVED" && (
+                  <div className="mb-4 rounded-lg border border-primary-200 bg-primary-50/40 p-3">
+                    <p className="text-sm font-semibold text-gray-900">Corriger le stock du lot</p>
+                    <p className="mt-0.5 text-xs text-gray-600">
+                      Saisissez la quantité réellement restante. L&apos;écart est appliqué au lot, au point de vente choisi et au stock global
+                      {selectedLot.status === "EXPIRED" ? " (lot expiré : seulement à la baisse)" : ""}.
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Quantité restante
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={selectedLot.status === "EXPIRED" ? selectedLot.remainingQuantity : selectedLot.initialQuantity}
+                          value={adjustQty}
+                          onChange={(e) => setAdjustQty(e.target.value)}
+                          className="mt-1 min-h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-primary-500 focus:outline-none"
+                        />
+                        {adjustQty !== "" && Number(adjustQty) !== selectedLot.remainingQuantity && Number.isInteger(Number(adjustQty)) && (
+                          <span className={`mt-1 block text-xs font-semibold ${Number(adjustQty) > selectedLot.remainingQuantity ? "text-green-700" : "text-red-700"}`}>
+                            Écart : {Number(adjustQty) > selectedLot.remainingQuantity ? "+" : ""}{Number(adjustQty) - selectedLot.remainingQuantity}
+                          </span>
+                        )}
+                      </label>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Point de vente concerné
+                        <select
+                          value={adjustPos}
+                          onChange={(e) => setAdjustPos(e.target.value)}
+                          className="mt-1 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base focus:border-primary-500 focus:outline-none"
+                        >
+                          <option value="">Choisir…</option>
+                          {locations.map((loc) => (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.name} ({posQty(loc, selectedLot.variantId)} en stock)
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-sm font-medium text-gray-700 sm:col-span-2">
+                        Motif
+                        <input
+                          value={adjustReason}
+                          onChange={(e) => setAdjustReason(e.target.value)}
+                          placeholder="Inventaire, casse, erreur de saisie…"
+                          className="mt-1 min-h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-primary-500 focus:outline-none"
+                        />
+                      </label>
+                    </div>
+                    {adjustError && <p role="alert" className="mt-2 text-sm text-red-700">{adjustError}</p>}
+                    <button
+                      type="button"
+                      onClick={adjustLotStock}
+                      disabled={adjusting}
+                      className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+                    >
+                      {adjusting ? "Correction…" : "Corriger le stock"}
+                    </button>
+                  </div>
+                )}
 
                 <div className="mb-4 flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-gray-900">Allocations ({(selectedLot.allocations ?? []).length})</h4>
