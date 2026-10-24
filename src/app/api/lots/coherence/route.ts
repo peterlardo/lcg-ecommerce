@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { logActivity } from "@/lib/activity"
 import { coherenceSummary, regulariseStockTx, stockCoherenceTx } from "@/lib/lot-coherence"
 import { isLotNumberConflict } from "@/lib/lot-utils"
+import { expiredLotsTx } from "@/lib/lot-expired"
 
 /** État de cohérence du stock (emplacements, ancien stock global, lots) : lecture pour tout le personnel. */
 export async function GET() {
@@ -12,8 +13,9 @@ export async function GET() {
   if (forbidden) return forbidden
 
   try {
-    const rows = await getPrisma().$transaction((tx) => stockCoherenceTx(tx))
-    return NextResponse.json({ rows, summary: coherenceSummary(rows) })
+    // la liste des lots périmés (même au reste nul) permet de les choisir un par un dans l'onglet Cohérence
+    const [rows, expiredList] = await getPrisma().$transaction(async (tx) => [await stockCoherenceTx(tx), await expiredLotsTx(tx)] as const)
+    return NextResponse.json({ rows, summary: coherenceSummary(rows), expiredList })
   } catch (error) {
     console.error("GET lots/coherence error:", error)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })

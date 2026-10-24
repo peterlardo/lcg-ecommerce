@@ -79,8 +79,21 @@ interface CoherenceRow {
   unlocated: number
 }
 
+/** Lot périmé de la liste de l'onglet Cohérence (y compris ceux dont le reste est nul). */
+interface ExpiredLotRow {
+  id: string
+  lotNumber: string
+  productName: string
+  format: string
+  initialQuantity: number
+  remainingQuantity: number
+  expiryDate: string | null
+  hasHistory: boolean
+}
+
 interface CoherencePayload {
   rows: CoherenceRow[]
+  expiredList?: ExpiredLotRow[]
   summary: { unlocatedFormats: number; unlocatedUnits: number; uncoveredFormats: number; uncoveredUnits: number; globalGapFormats: number; excessFormats: number; excessUnits: number; expiredFormats: number; expiredUnits: number; fixable: number }
 }
 
@@ -139,6 +152,7 @@ export default function ProductionPage() {
   const [points, setPoints] = useState<PointOfSaleOption[]>([])
   const [coherence, setCoherence] = useState<CoherencePayload | null>(null)
   const [regularising, setRegularising] = useState(false)
+  const [checkedExpired, setCheckedExpired] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
@@ -441,7 +455,19 @@ export default function ProductionPage() {
     if (targets.length === 0) return
     const units = targets.reduce((s, r) => s + r.expiredLots, 0)
     const what = targets.length === 1 ? `de « ${targets[0].productName} · ${targets[0].format} »` : `de ${targets.length} formats`
-    if (!confirm(`Retirer les lots périmés ${what} (${units} unité(s) restantes) ?\n\nCes unités sortent du stock des points de vente et du stock global (mouvement conservé). Les lots périmés sont archivés s'ils ont servi à des ventes, effacés sinon. Les lots actifs ne changent pas.`)) return
+    await writeOffExpired({ variantIds: targets.map((r) => r.variantId) }, `Retirer les lots périmés ${what} (${units} unité(s) restantes) ?`)
+  }
+
+  // Lots périmés cochés un par un dans la liste de l'onglet Cohérence (même ceux dont le reste est nul).
+  const retireExpiredLots = async (lots: ExpiredLotRow[]) => {
+    if (lots.length === 0) return
+    const units = lots.reduce((s, l) => s + Math.max(0, l.remainingQuantity), 0)
+    const what = lots.length === 1 ? `le lot périmé ${lots[0].lotNumber}` : `${lots.length} lots périmés`
+    await writeOffExpired({ lotIds: lots.map((l) => l.id) }, `Supprimer ${what} (${units} unité(s) restantes) ?`)
+  }
+
+  const writeOffExpired = async (payload: { variantIds?: string[]; lotIds?: string[] }, question: string) => {
+    if (!confirm(`${question}\n\nLe reste de ces lots sort du stock des points de vente et du stock global (mouvement conservé). Les lots périmés sont archivés s'ils ont servi à des ventes, effacés sinon. Les lots actifs ne changent pas.`)) return
     setError("")
     setSuccess("")
     setRegularising(true)
@@ -449,13 +475,14 @@ export default function ProductionPage() {
       const res = await fetch("/api/lots/expired-writeoff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variantIds: targets.map((r) => r.variantId) }),
+        body: JSON.stringify(payload),
       })
       const body = await res.json().catch(() => null)
       if (!res.ok) {
         fail(res.status === 403 ? "Action réservée aux profils autorisés à supprimer des lots" : body?.error ?? "Suppression impossible")
         return
       }
+      setCheckedExpired({})
       await load()
       succeed(`${body.lots} lot(s) périmé(s) retiré(s)${body.archived ? ` (dont ${body.archived} archivé(s))` : ""}, ${body.units} unité(s) sortie(s) du stock`)
     } catch (e) {
@@ -487,6 +514,10 @@ export default function ProductionPage() {
       </select>
     </label>
   )
+
+  const expiredList = coherence?.expiredList ?? []
+  const checkedLots = expiredList.filter((l) => checkedExpired[l.id])
+  const allExpiredChecked = expiredList.length > 0 && checkedLots.length === expiredList.length
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -871,11 +902,11 @@ export default function ProductionPage() {
                 <Trash2 className="h-4 w-4" /> Supprimer lots périmés (SANS LOT)
               </button>
               <button
-                onClick={() => coherence && retirePerimes(coherence.rows)}
-                disabled={regularising || !coherence || coherence.summary.expiredFormats === 0}
+                onClick={() => retireExpiredLots(expiredList)}
+                disabled={regularising || expiredList.length === 0}
                 className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 sm:text-sm"
               >
-                <Trash2 className="h-4 w-4" /> Retirer tous les lots périmés{coherence && coherence.summary.expiredFormats > 0 ? ` (${coherence.summary.expiredUnits})` : ""}
+                <Trash2 className="h-4 w-4" /> Retirer tous les lots périmés{expiredList.length > 0 ? ` (${expiredList.length})` : ""}
               </button>
               <button onClick={regularise} disabled={regularising || !coherence || coherence.summary.fixable === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:text-sm">
                 <CheckCircle2 className="h-4 w-4" /> {regularising ? "Régularisation..." : "Régulariser"}
@@ -884,7 +915,7 @@ export default function ProductionPage() {
           </div>
 
           {!coherence && <p className="text-xs text-gray-500 sm:text-sm">L&apos;état de cohérence n&apos;a pas pu être chargé.</p>}
-          {coherence && coherence.summary.fixable === 0 && coherence.summary.excessFormats === 0 && coherence.summary.expiredFormats === 0 && (
+          {coherence && coherence.summary.fixable === 0 && coherence.summary.excessFormats === 0 && coherence.summary.expiredFormats === 0 && !coherence.expiredList?.length && (
             <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700 sm:text-sm">Tout est cohérent : chaque unité en stock est couverte par un lot.</p>
           )}
           {coherence && coherence.summary.unlocatedFormats > 0 && (
@@ -892,6 +923,51 @@ export default function ProductionPage() {
           )}
           {coherence && coherence.summary.excessFormats > 0 && (
             <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:text-sm">{coherence.summary.excessFormats} format(s) ont plus de reste dans leurs lots que de stock présent ({coherence.summary.excessUnits} unités) : à vérifier par un inventaire, la régularisation n&apos;y touche pas.</p>
+          )}
+
+          {expiredList.length > 0 && (
+              <div className="mb-4 rounded-lg border border-red-200">
+                <div className="flex flex-col gap-2 border-b border-red-200 bg-red-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold text-red-800">
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 accent-red-600"
+                      checked={allExpiredChecked}
+                      onChange={() => setCheckedExpired(allExpiredChecked ? {} : Object.fromEntries(expiredList.map((l) => [l.id, true])))}
+                    />
+                    Lots périmés ({expiredList.length}) : cochez ceux à supprimer
+                  </label>
+                  <button
+                    onClick={() => retireExpiredLots(checkedLots)}
+                    disabled={regularising || checkedLots.length === 0}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" /> Supprimer la sélection ({checkedLots.length})
+                  </button>
+                </div>
+                <ul className="max-h-80 divide-y divide-red-100 overflow-y-auto">
+                  {expiredList.map((l) => (
+                    <li key={l.id}>
+                      <label className="flex min-h-12 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-red-50/50">
+                        <input
+                          type="checkbox"
+                          className="h-5 w-5 shrink-0 accent-red-600"
+                          checked={!!checkedExpired[l.id]}
+                          onChange={(e) => setCheckedExpired((prev) => ({ ...prev, [l.id]: e.target.checked }))}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="font-semibold text-gray-900">{l.lotNumber}</span>
+                          <span className="text-gray-600"> · {l.productName} · {l.format}</span>
+                          <span className="block text-xs text-gray-500">
+                            {l.expiryDate ? `Expiré le ${fmtDate(l.expiryDate)}` : "Expiré"} · reste {l.remainingQuantity} / {l.initialQuantity}
+                            {l.hasHistory ? " · sera archivé (historique de ventes)" : ""}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
           )}
 
           {coherence && (

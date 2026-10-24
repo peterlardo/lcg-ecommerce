@@ -9,7 +9,8 @@ import { removeExpiredLotsTx } from "@/lib/lot-expired"
 export const maxDuration = 60
 
 /**
- * Onglet Cohérence, « Retirer les périmés » (demande du 2026-10-24) : pour chaque format désigné,
+ * Onglet Cohérence, « Retirer les périmés » (demande du 2026-10-24) : pour chaque format désigné
+ * (variantIds : tous ses lots périmés) ou chaque lot coché dans la liste des lots périmés (lotIds),
  * - le reste des lots périmés sort du stock (points de vente et stock global), mouvement ADJUSTMENT_OUT tracé ;
  *   on ne sort que les unités que les lots actifs ne couvrent pas (stock présent − lots actifs), au plus le
  *   reste des lots périmés, en commençant par le point de vente qui en a le plus ;
@@ -22,8 +23,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json().catch(() => ({}))
-    const variantIds: string[] = Array.isArray(body.variantIds) ? body.variantIds.filter((v: unknown) => typeof v === "string") : []
-    if (variantIds.length === 0) return NextResponse.json({ error: "Aucun format sélectionné" }, { status: 400 })
+    const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x: unknown): x is string => typeof x === "string") : [])
+    const variantIds = strings(body.variantIds)
+    // lotIds : lots périmés choisis un par un (liste de l'onglet Cohérence), même ceux dont le reste est nul
+    const lotIds = strings(body.lotIds)
+    if (variantIds.length === 0 && lotIds.length === 0) return NextResponse.json({ error: "Aucun lot sélectionné" }, { status: 400 })
     const actorId = (await auth())?.user?.id ?? null
 
     const result = await getPrisma().$transaction(
@@ -31,25 +35,32 @@ export async function POST(req: Request) {
         await expireOverdueLotsTx(tx)
         const formats: { variantId: string; label: string; units: number; lots: number; archived: number }[] = []
 
-        for (const variantId of variantIds) {
+        const selected = await tx.productionLot.findMany({
+          where: { status: "EXPIRED", OR: [{ variantId: { in: variantIds } }, { id: { in: lotIds } }] },
+          select: { id: true, variantId: true, remainingQuantity: true },
+        })
+        const byVariant = new Map<string, typeof selected>()
+        for (const lot of selected) byVariant.set(lot.variantId, [...(byVariant.get(lot.variantId) ?? []), lot])
+
+        for (const [variantId, expiredLots] of byVariant) {
           const variant = await tx.productVariant.findUnique({
             where: { id: variantId },
             select: { stock: true, format: true, product: { select: { name: true } } },
           })
           if (!variant) continue
-          const expiredLots = await tx.productionLot.findMany({
-            where: { variantId, status: "EXPIRED" },
-            select: { id: true, remainingQuantity: true },
-          })
-          if (expiredLots.length === 0) continue
 
-          const [active, stocks] = await Promise.all([
+          const [active, otherExpired, stocks] = await Promise.all([
             tx.productionLot.aggregate({ where: { variantId, status: "ACTIVE", remainingQuantity: { gt: 0 } }, _sum: { remainingQuantity: true } }),
+            // les lots périmés non choisis gardent le stock qu'ils couvrent
+            tx.productionLot.aggregate({
+              where: { variantId, status: "EXPIRED", remainingQuantity: { gt: 0 }, id: { notIn: expiredLots.map((l) => l.id) } },
+              _sum: { remainingQuantity: true },
+            }),
             tx.pointOfSaleStock.findMany({ where: { variantId, quantity: { gt: 0 } }, orderBy: { quantity: "desc" } }),
           ])
           const expiredUnits = expiredLots.reduce((s, l) => s + Math.max(0, l.remainingQuantity), 0)
           const present = stocks.reduce((s, p) => s + p.quantity, 0)
-          const covered = active._sum.remainingQuantity ?? 0
+          const covered = (active._sum.remainingQuantity ?? 0) + (otherExpired._sum.remainingQuantity ?? 0)
           const units = Math.min(expiredUnits, Math.max(0, present - covered))
 
           // sortie du stock, point de vente par point de vente (le plus fourni d'abord)
