@@ -13,6 +13,7 @@ import {
   Receipt,
   BellRing,
   CheckCircle2,
+  CalendarClock,
 } from "lucide-react"
 import { formatPrice, getStatusLabel, getStatusColor } from "@/lib/utils"
 import { isArchivedOrder } from "@/lib/archives"
@@ -88,6 +89,10 @@ const isPlannedOtherDay = (order: Order, today: string): boolean => {
   const day = plannedDay(order)
   return Boolean(day) && day !== today && !["OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(order.status)
 }
+
+/** Date prévue lisible, à l'heure de Brazzaville : « samedi 25/10/2026 ». */
+const formatPlannedDay = (date: string): string =>
+  new Date(date).toLocaleDateString("fr-FR", { timeZone: "Africa/Brazzaville", weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })
 
 /** Commande de l'onglet « Commandes prévues » : confirmée, ou prévue un autre jour qu'aujourd'hui. */
 const isPlannedOrder = (order: Order, today: string): boolean => order.status === "CONFIRMED" || isPlannedOtherDay(order, today)
@@ -548,6 +553,13 @@ export default function CommandesPage() {
                         {orderStatusLabel(order)}
                       </span>
                     )}
+                    {/* date de livraison (ou de retrait) prévue, quand elle a été saisie */}
+                    {order.delivery?.scheduledDate && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        {order.delivery.mode === "PICKUP" ? "Retrait prévu le" : "Livraison prévue le"} {formatPlannedDay(order.delivery.scheduledDate)}
+                      </span>
+                    )}
                   </div>
                   <p className="break-words text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
                   {/* qui a créé la commande, et qui l'a encaissée (caissière à qui elle a été transmise, ou vente faite en caisse) */}
@@ -685,6 +697,12 @@ export default function CommandesPage() {
                           ? `${order.delivery.address}${order.delivery.district ? ` — ${order.delivery.district}` : ""} (${order.delivery.city})`
                           : "—"}
                       </p>
+                      {order.delivery?.scheduledDate && (
+                        <p className="text-gray-700">
+                          <span className="font-medium text-gray-500">{order.delivery.mode === "PICKUP" ? "Retrait prévu : " : "Livraison prévue : "}</span>
+                          <span className="font-semibold text-blue-800">{formatPlannedDay(order.delivery.scheduledDate)}</span>
+                        </p>
+                      )}
                       <p className="text-gray-700">
                         <span className="font-medium text-gray-500">Paiement: </span>
                         {paymentLabels[order.paymentMethod] || order.paymentMethod || "—"}
