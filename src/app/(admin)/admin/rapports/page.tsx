@@ -52,7 +52,7 @@ const todayIso = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 const SUPPLY_LBL: Record<string, string> = { IN: "Entree", PRODUCTION: "Production", TRANSFER_IN: "Transfert", RETURN: "Retour" }
-const LOT_STATUS: Record<string, string> = { ACTIVE: "Actif", EXHAUSTED: "Epuise", EXPIRED: "Expire" }
+const LOT_STATUS: Record<string, string> = { ACTIVE: "Actif", EXHAUSTED: "Epuise", EXPIRED: "Expire", DISABLED: "Désactivé" }
 
 const ax = { tick: { fontSize: 12 }, stroke: "#9ca3af" }
 const tt = { contentStyle: { borderRadius: "8px", border: "1px solid #e5e7eb" } }

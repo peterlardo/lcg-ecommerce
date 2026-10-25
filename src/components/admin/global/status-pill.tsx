@@ -16,6 +16,7 @@ const EXTRA: Record<string, string> = {
   EXHAUSTED: "bg-gray-100 text-gray-700",
   EXPIRED: "bg-red-100 text-red-800",
   ARCHIVED: "bg-gray-100 text-gray-700",
+  DISABLED: "bg-amber-100 text-amber-800",
   UNPAID: "bg-gray-100 text-gray-700",
 }
 

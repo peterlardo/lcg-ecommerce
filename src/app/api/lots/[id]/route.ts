@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
 import { requireManagementAccess, saleMovementsFilter, isRestrictedOrder } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
-import { LOT_STATUSES } from "@/lib/lot-input"
+import { DISABLED_LOT_STATUS, LOT_STATUSES } from "@/lib/lot-input"
 import { logActivity } from "@/lib/activity"
 import { startOfToday } from "@/lib/lot-utils"
 import { removeExpiredLotsTx } from "@/lib/lot-expired"
@@ -101,6 +101,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (newExpiry && Number.isNaN(newExpiry.getTime())) {
       return NextResponse.json({ error: "Date de péremption invalide" }, { status: 400 })
     }
+
+    // Désactiver / réactiver : seul un lot actif se désactive, seul un lot désactivé se réactive.
+    // À la réactivation, le lot reprend l'état que lui donnent son reste et sa date (épuisé, expiré ou actif).
+    let nextStatus: string | undefined = status ? String(status) : undefined
+    if (nextStatus === DISABLED_LOT_STATUS && lot.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Seul un lot actif peut être désactivé" }, { status: 400 })
+    }
+    if (nextStatus === "ACTIVE" && lot.status === DISABLED_LOT_STATUS) {
+      const expiry = newExpiry !== undefined ? newExpiry : lot.expiryDate
+      nextStatus = lot.remainingQuantity <= 0 ? "EXHAUSTED" : expiry && expiry < startOfToday() ? "EXPIRED" : "ACTIVE"
+    }
+    const toggled = nextStatus !== undefined && (nextStatus === DISABLED_LOT_STATUS) !== (lot.status === DISABLED_LOT_STATUS)
     // Repousser la péremption d'un lot expiré (aujourd'hui ou plus tard, ou sans date) le rend de
     // nouveau vendable ; sans cela, il restait « expiré » et la caisse refusait toujours la vente.
     const reactivated = !status && newExpiry !== undefined && lot.status === "EXPIRED" && lot.remainingQuantity > 0
@@ -109,13 +121,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const updated = await getPrisma().productionLot.update({
       where: { id },
       data: {
-        ...(status ? { status } : reactivated ? { status: "ACTIVE" } : {}),
+        ...(nextStatus ? { status: nextStatus } : reactivated ? { status: "ACTIVE" } : {}),
         ...(newExpiry !== undefined ? { expiryDate: newExpiry } : {}),
         ...(notes !== undefined ? { notes } : {}),
       },
     })
     if (reactivated) {
       await logActivity({ module: "production", action: "Réactivation", entity: "ProductionLot", entityId: id, summary: `Lot ${lot.lotNumber} de nouveau vendable : péremption repoussée` })
+    }
+    if (toggled) {
+      const off = nextStatus === DISABLED_LOT_STATUS
+      await logActivity({
+        module: "production",
+        action: off ? "Désactivation" : "Réactivation",
+        entity: "ProductionLot",
+        entityId: id,
+        summary: off
+          ? `Lot ${lot.lotNumber} désactivé : ${lot.remainingQuantity} unité(s) retirée(s) de la vente`
+          : `Lot ${lot.lotNumber} réactivé (${nextStatus})`,
+      })
     }
 
     return NextResponse.json({ lot: updated, reactivated })

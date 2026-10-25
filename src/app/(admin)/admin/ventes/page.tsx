@@ -997,10 +997,10 @@ export default function VentesPage() {
                       </div>
                       <p className={`mt-2 sm:mt-3 text-sm sm:text-base font-semibold ${variant.stock <= lowStockThreshold ? "text-red-600" : "text-gray-500"}`}>Stock : {variant.stock} {variant.unit ?? ""}</p>
                       {lotExpired && (
-                        <p className="mt-1 text-sm font-semibold text-red-700">Lot périmé : non vendable. Repoussez la date de péremption dans Lots, ou enregistrez une nouvelle production.</p>
+                        <p className="mt-1 text-sm font-semibold text-red-700">Aucun lot vendable (périmé, désactivé ou absent). Prolongez ou réactivez le lot dans Lots, ou enregistrez une nouvelle production.</p>
                       )}
                       {!lotExpired && variant.sellable < variant.stock && (
-                        <p className="mt-1 text-sm font-semibold text-amber-700">Vendable : {variant.sellable} (le reste est dans un lot périmé)</p>
+                        <p className="mt-1 text-sm font-semibold text-amber-700">Vendable : {variant.sellable} (le reste est dans un lot périmé ou désactivé, ou sans lot)</p>
                       )}
                     </div>
                   )

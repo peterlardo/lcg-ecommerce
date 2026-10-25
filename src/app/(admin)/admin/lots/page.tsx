@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, CheckCircle2, Download, FileText, FileSpreadsheet, PackagePlus, RefreshCw, Search, Trash2, XCircle } from "lucide-react"
+import { AlertCircle, CheckCircle2, Download, FileText, FileSpreadsheet, PackagePlus, PowerOff, RefreshCw, Search, Trash2, XCircle } from "lucide-react"
 import { exportLotsPDF, exportLotsExcel } from "@/lib/report-export"
+import { LotActions } from "@/components/admin/lot-actions"
 
 interface StockVariant {
   variantId: string
@@ -59,6 +60,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
   EXHAUSTED: { label: "Epuise", color: "text-gray-600 bg-gray-100", icon: XCircle },
   EXPIRED: { label: "Expire", color: "text-red-700 bg-red-100", icon: AlertCircle },
   ARCHIVED: { label: "Archivé", color: "text-gray-600 bg-gray-100", icon: XCircle },
+  DISABLED: { label: "Désactivé", color: "text-amber-700 bg-amber-100", icon: PowerOff },
 }
 
 const ALLOC_LABEL: Record<string, string> = { SALE: "Vente", TRANSFER: "Transfert", LOSS: "Perte", ADJUSTMENT: "Ajustement", PRODUCTION: "Production" }
@@ -365,6 +367,7 @@ export default function LotsPage() {
                 <option value="ACTIVE">Actif</option>
                 <option value="EXHAUSTED">Epuise</option>
                 <option value="EXPIRED">Expire</option>
+                <option value="DISABLED">Désactivé</option>
                 <option value="ARCHIVED">Archivé</option>
               </select>
             </div>
@@ -404,10 +407,15 @@ export default function LotsPage() {
                         </td>
                         <td className="px-2 py-2 sm:px-3 sm:py-2.5 text-gray-600 hidden lg:table-cell">{fmtDate(lot.productionDate)}</td>
                         <td className="px-2 py-2 sm:px-3 sm:py-2.5 text-gray-600 hidden lg:table-cell">{lot.expiryDate ? fmtDate(lot.expiryDate) : "-"}</td>
-                        <td className="px-2 py-2 sm:px-3 sm:py-2.5 text-center">
-                          <button onClick={(e) => { e.stopPropagation(); openDetail(lot) }} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="Details">
+                        <td className="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-2.5 text-center">
+                          <button onClick={(e) => { e.stopPropagation(); openDetail(lot) }} className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="Details">
                             <FileText className="h-4 w-4" />
                           </button>
+                          <LotActions
+                            lot={lot}
+                            onDone={async (message) => { setError(""); setSelectedLot(null); await load(); setSuccess(message) }}
+                            onError={(message) => { setSuccess(""); setError(message) }}
+                          />
                         </td>
                       </tr>
                     )

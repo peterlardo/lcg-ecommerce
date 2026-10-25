@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client"
 import { createCoverageLotTx, expireOverdueLotsTx } from "@/lib/lot-utils"
+import { DISABLED_LOT_STATUS } from "@/lib/lot-input"
 
 type TxClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0]
 
@@ -7,9 +8,12 @@ type TxClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0]
  * Cohérence du stock d'un format entre ses trois sources :
  * - le stock des emplacements (PointOfSaleStock), qui fait foi : c'est lui que les ventes contrôlent ;
  * - l'ancien stock global (ProductVariant.stock), qui doit lui être égal ;
- * - le reste des lots (actifs ou expirés), qui doit le couvrir : une vente est refusée
+ * - le reste des lots (actifs, expirés ou désactivés), qui doit le couvrir : une vente est refusée
  *   (« Stock insuffisant par lots ») dès que les lots actifs ne couvrent plus la quantité.
  */
+
+/** Lots dont le reste couvre le stock présent, vendable ou non (un lot désactivé n'est pas vendu mais existe). */
+const COVERING_LOT_STATUSES = ["ACTIVE", "EXPIRED", DISABLED_LOT_STATUS]
 export interface CoherenceRow {
   variantId: string
   productName: string
@@ -19,6 +23,8 @@ export interface CoherenceRow {
   hasLocationStock: boolean
   activeLots: number
   expiredLots: number
+  /** Reste des lots désactivés : couvre le stock mais n'est pas vendu. */
+  disabledLots: number
   /** Stock présent sans aucun lot : invendable tant qu'un lot ne le couvre pas. */
   uncovered: number
   /** Reste des lots supérieur au stock présent : à vérifier par un inventaire. */
@@ -42,7 +48,7 @@ export async function stockCoherenceTx(tx: TxClient): Promise<CoherenceRow[]> {
     tx.pointOfSaleStock.groupBy({ by: ["variantId"], _sum: { quantity: true }, _count: { _all: true } }),
     tx.productionLot.groupBy({
       by: ["variantId", "status"],
-      where: { status: { in: ["ACTIVE", "EXPIRED"] }, remainingQuantity: { gt: 0 } },
+      where: { status: { in: COVERING_LOT_STATUSES }, remainingQuantity: { gt: 0 } },
       _sum: { remainingQuantity: true },
     }),
   ])
@@ -57,7 +63,8 @@ export async function stockCoherenceTx(tx: TxClient): Promise<CoherenceRow[]> {
     const locationStock = location?._sum.quantity ?? 0
     const activeLots = lotsOf(v.id, "ACTIVE")
     const expiredLots = lotsOf(v.id, "EXPIRED")
-    const covered = activeLots + expiredLots
+    const disabledLots = lotsOf(v.id, DISABLED_LOT_STATUS)
+    const covered = activeLots + expiredLots + disabledLots
     return {
       variantId: v.id,
       productName: v.product.name,
@@ -67,6 +74,7 @@ export async function stockCoherenceTx(tx: TxClient): Promise<CoherenceRow[]> {
       hasLocationStock,
       activeLots,
       expiredLots,
+      disabledLots,
       uncovered: Math.max(0, locationStock - covered),
       excess: Math.max(0, covered - locationStock),
       // sans aucun emplacement connu, le stock global reste la seule information : on n'y touche pas
@@ -92,7 +100,7 @@ export async function placeUnlocatedStockTx(
   const [located, lots] = await Promise.all([
     tx.pointOfSaleStock.aggregate({ where: { variantId }, _sum: { quantity: true } }),
     tx.productionLot.aggregate({
-      where: { variantId, status: { in: ["ACTIVE", "EXPIRED"] }, remainingQuantity: { gt: 0 } },
+      where: { variantId, status: { in: COVERING_LOT_STATUSES }, remainingQuantity: { gt: 0 } },
       _sum: { remainingQuantity: true },
     }),
   ])

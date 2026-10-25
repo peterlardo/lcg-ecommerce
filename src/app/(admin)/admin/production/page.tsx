@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle, Boxes, CheckCircle2, Factory, FileText, PackagePlus, RefreshCw, Search, Trash2, TrendingUp, XCircle } from "lucide-react"
+import { AlertCircle, Boxes, CheckCircle2, Factory, FileText, PackagePlus, PowerOff, RefreshCw, Search, Trash2, TrendingUp, XCircle } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { LotActions } from "@/components/admin/lot-actions"
 
 interface Lot {
   id: string
@@ -109,6 +110,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
   ACTIVE: { label: "Actif", color: "text-green-700 bg-green-100", icon: CheckCircle2 },
   EXHAUSTED: { label: "Épuisé", color: "text-gray-600 bg-gray-100", icon: XCircle },
   EXPIRED: { label: "Expiré", color: "text-red-700 bg-red-100", icon: AlertCircle },
+  DISABLED: { label: "Désactivé", color: "text-amber-700 bg-amber-100", icon: PowerOff },
 }
 
 const ALLOC_TYPE: Record<string, string> = { SALE: "Vente", TRANSFER: "Transfert", LOSS: "Perte", ADJUSTMENT: "Ajustement" }
@@ -782,7 +784,7 @@ export default function ProductionPage() {
           )}
 
           <div className="overflow-x-auto max-h-[400px] sm:max-h-[500px]">
-            <table className="w-full min-w-[760px] text-xs sm:text-sm">
+            <table className="w-full min-w-[880px] text-xs sm:text-sm">
               <thead className="sticky top-0 bg-gray-50/80">
                 <tr>
                   <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Numéro</th>
@@ -825,20 +827,15 @@ export default function ProductionPage() {
                       <td className={`px-2 py-2 sm:px-4 sm:py-2.5 ${late ? "font-semibold text-red-700" : "text-gray-600"}`} title={late ? "Date d'expiration dépassée : ce lot est encore actif" : undefined}>
                         {lot.expiryDate ? fmtDate(lot.expiryDate) : "-"}{late ? " (dépassée)" : ""}
                       </td>
-                      <td className="px-2 py-2 text-center sm:px-4 sm:py-2.5">
-                        <button onClick={() => viewLot(lot)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="Détails" aria-label={`Détails du lot ${lot.lotNumber}`}>
+                      <td className="whitespace-nowrap px-2 py-2 text-center sm:px-4 sm:py-2.5">
+                        <button onClick={() => viewLot(lot)} className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600" title="Détails" aria-label={`Détails du lot ${lot.lotNumber}`}>
                           <FileText className="h-4 w-4" />
                         </button>
-                        {lot.status === "EXHAUSTED" && (
-                          <button onClick={() => deleteLot(lot)} className="ml-1 rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600" title="Supprimer ce lot épuisé" aria-label={`Supprimer le lot épuisé ${lot.lotNumber}`}>
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                        {lot.status === "EXPIRED" && (
-                          <button onClick={() => deleteLot(lot)} className="ml-1 inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50" aria-label={`Supprimer le lot expiré ${lot.lotNumber}`}>
-                            <Trash2 className="h-3.5 w-3.5" /> Supprimer
-                          </button>
-                        )}
+                        <LotActions
+                          lot={lot}
+                          onDone={async (message) => { setSelectedLot(null); await load(); succeed(message) }}
+                          onError={fail}
+                        />
                       </td>
                     </tr>
                   )

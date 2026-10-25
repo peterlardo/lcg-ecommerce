@@ -73,6 +73,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
   EXHAUSTED: { label: "Epuise", color: "text-gray-600 bg-gray-100", icon: XCircle },
   EXPIRED: { label: "Expire", color: "text-red-700 bg-red-100", icon: AlertCircle },
   ARCHIVED: { label: "Archivé (périmé)", color: "text-gray-600 bg-gray-100", icon: XCircle },
+  DISABLED: { label: "Désactivé", color: "text-amber-700 bg-amber-100", icon: AlertCircle },
 }
 
 const ALLOC_LABEL: Record<string, string> = { SALE: "Vente", TRANSFER: "Transfert", LOSS: "Perte", ADJUSTMENT: "Ajustement" }

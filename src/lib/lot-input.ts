@@ -3,7 +3,10 @@
  * (lot simple et production groupée) : mêmes règles, mêmes messages.
  */
 
-export const LOT_STATUSES = ["ACTIVE", "EXHAUSTED", "EXPIRED"]
+export const LOT_STATUSES = ["ACTIVE", "EXHAUSTED", "EXPIRED", "DISABLED"]
+
+/** Lot mis de côté à la main : son reste couvre toujours le stock, mais la caisse ne le vend pas. */
+export const DISABLED_LOT_STATUS = "DISABLED"
 
 /** Nombre de lots renvoyés à l'écran ; au-delà, la liste est signalée comme partielle. */
 export const LOT_LIST_LIMIT = 200
