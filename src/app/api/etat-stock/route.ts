@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { consumePointOfSaleStockTx, restockPointOfSaleStockTx } from "@/lib/stock-service"
 import { createCoverageLotTx } from "@/lib/lot-utils"
+import { uncoveredStockTx } from "@/lib/lot-coherence"
 import { COMPTOIR_CODE } from "@/lib/comptoir"
 
 const VIEW_ROLES = ["ADMIN", "STOCK_MANAGER", "COMMERCIAL", "DELIVERY_AGENT"]
@@ -426,14 +427,19 @@ export async function POST(request: Request) {
         // le stock trouvé en plus à l'inventaire est couvert par un lot, sinon il serait refusé à la vente
         await createCoverageLotTx(tx, { variantId, quantity: delta, notes: `Inventaire ${reference} : ${reason}`, createdById: movementUserId })
       } else {
+        // Le stock compté en moins part d'abord du stock sans lot : sinon l'écart vidait des lots
+        // bien réels et laissait le stock fantôme intact (incident du 25/10/2026).
+        const outQuantity = Math.abs(delta)
+        const uncovered = await uncoveredStockTx(tx, variantId)
         await consumePointOfSaleStockTx(tx, {
           variantId,
           pointOfSaleId,
-          quantity: Math.abs(delta),
+          quantity: outQuantity,
           type: "ADJUSTMENT_OUT",
           reason,
           reference,
           userId: movementUserId,
+          lotQuantity: Math.max(0, outQuantity - uncovered),
         })
       }
     })

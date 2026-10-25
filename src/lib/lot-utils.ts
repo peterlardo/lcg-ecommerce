@@ -19,7 +19,7 @@ export async function expireOverdueLotsTx(tx: TxClient, variantId?: string): Pro
   return result.count
 }
 
-/** Sorties qui retirent de la marchandise sans la vendre : elles soldent d'abord les lots expirés. */
+/** Sorties qui retirent de la marchandise sans la vendre : elles soldent d'abord les lots expirés ou désactivés. */
 const WRITE_OFF_TYPES = new Set(["LOSS", "ADJUSTMENT_OUT"])
 
 /**
@@ -41,8 +41,9 @@ async function allocateTx(tx: TxClient, variantId: string, quantity: number, typ
         ...(await tx.productionLot.findMany({ where: { ...available, status: "ACTIVE", expiryDate: null }, orderBy: byAge })),
       ]
     : await tx.productionLot.findMany({ where: { ...available, status: "ACTIVE" }, orderBy: byAge })
+  // une perte ou un ajustement en moins solde aussi les lots désactivés (non vendus, mais bien en stock)
   const expired = WRITE_OFF_TYPES.has(type)
-    ? await tx.productionLot.findMany({ where: { ...available, status: "EXPIRED" }, orderBy: byAge })
+    ? await tx.productionLot.findMany({ where: { ...available, status: { in: ["EXPIRED", "DISABLED"] } }, orderBy: byAge })
     : []
 
   let remaining = quantity

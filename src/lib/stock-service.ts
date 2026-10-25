@@ -92,11 +92,16 @@ interface ConsumeStockParams {
   reason: string;
   reference: string;
   userId?: string | null;
+  /**
+   * Part de la sortie à prélever sur les lots (par défaut : toute la quantité).
+   * Un ajustement d'inventaire en moins retire d'abord le stock sans lot : seul le reste touche les lots.
+   */
+  lotQuantity?: number;
 }
 
 export async function consumePointOfSaleStockTx(
   tx: TxClient,
-  { variantId, pointOfSaleId, quantity, type, reason, reference, userId }: ConsumeStockParams,
+  { variantId, pointOfSaleId, quantity, type, reason, reference, userId, lotQuantity = quantity }: ConsumeStockParams,
 ) {
   // Decrement POS stock
   const posStock = await tx.pointOfSaleStock.findUnique({
@@ -133,8 +138,9 @@ export async function consumePointOfSaleStockTx(
     },
   });
 
-  // FIFO lot allocation
-  const fifoResult = await allocateStockFIFOTx(tx, variantId, quantity, type, reference);
+  // FIFO lot allocation (rien à prélever si toute la sortie porte sur du stock sans lot)
+  if (lotQuantity <= 0) return { allocations: [], totalAllocated: 0 };
+  const fifoResult = await allocateStockFIFOTx(tx, variantId, Math.min(lotQuantity, quantity), type, reference);
 
   return fifoResult;
 }

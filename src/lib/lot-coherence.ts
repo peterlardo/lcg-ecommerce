@@ -84,6 +84,22 @@ export async function stockCoherenceTx(tx: TxClient): Promise<CoherenceRow[]> {
   })
 }
 
+/**
+ * Stock d'un format présent dans les points de vente sans aucun lot pour le couvrir
+ * (même règle que la colonne « Sans lot » de l'écran Cohérence).
+ */
+export async function uncoveredStockTx(tx: TxClient, variantId: string): Promise<number> {
+  await expireOverdueLotsTx(tx, variantId)
+  const [located, lots] = await Promise.all([
+    tx.pointOfSaleStock.aggregate({ where: { variantId }, _sum: { quantity: true } }),
+    tx.productionLot.aggregate({
+      where: { variantId, status: { in: COVERING_LOT_STATUSES }, remainingQuantity: { gt: 0 } },
+      _sum: { remainingQuantity: true },
+    }),
+  ])
+  return Math.max(0, (located._sum.quantity ?? 0) - (lots._sum.remainingQuantity ?? 0))
+}
+
 export const COMPTOIR_PLACEMENT_NOTE = "Stock hors point de vente placé au Comptoir LCG"
 
 /**
