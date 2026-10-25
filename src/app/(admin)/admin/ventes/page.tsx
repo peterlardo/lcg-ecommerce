@@ -199,6 +199,7 @@ export default function VentesPage() {
       buildTicketHtml({
         orderNumber: ticket.orderNumber,
         customerName: ticket.customerName || "Client comptoir",
+        customerPhone: ticket.customerPhone,
         sellerName: ticket.seller || null,
         paymentMethod: ticket.paymentMethod || "CASH_ON_DELIVERY",
         paymentStatus: "PAID",
@@ -219,6 +220,7 @@ export default function VentesPage() {
       buildTicketHtml({
         orderNumber: sale.orderNumber,
         customerName: sale.customerName || "Client comptoir",
+        customerPhone: sale.customerPhone,
         sellerName: sale.seller?.name || null,
         paymentMethod: sale.paymentMethod || "CASH_ON_DELIVERY",
         paymentStatus: sale.paymentStatus || "PAID",
@@ -942,7 +944,7 @@ export default function VentesPage() {
                 <div className="rounded-lg border border-gray-200 bg-white p-3">
                   <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Aperçu du ticket</p>
                   <iframe
-                    ref={(el) => { if (el) { try { el.contentDocument?.open(); el.contentDocument?.write(buildTicketHtml({ orderNumber: receipt.orderNumber, customerName: receipt.customerName || "Client comptoir", sellerName: receipt.seller || null, paymentMethod: receipt.paymentMethod || "CASH_ON_DELIVERY", paymentStatus: "PAID", total: receipt.total, createdAt: receipt.createdAt, pointOfSale: (() => { const point = pointsOfSale.find((p) => p.id === pointOfSaleId); return point ? { name: point.name, code: point.code } : null })(), items: receipt.items })); el.contentDocument?.close(); } catch {} } }}
+                    ref={(el) => { if (el) { try { el.contentDocument?.open(); el.contentDocument?.write(buildTicketHtml({ orderNumber: receipt.orderNumber, customerName: receipt.customerName || "Client comptoir", customerPhone: receipt.customerPhone, sellerName: receipt.seller || null, paymentMethod: receipt.paymentMethod || "CASH_ON_DELIVERY", paymentStatus: "PAID", total: receipt.total, createdAt: receipt.createdAt, pointOfSale: (() => { const point = pointsOfSale.find((p) => p.id === pointOfSaleId); return point ? { name: point.name, code: point.code } : null })(), items: receipt.items })); el.contentDocument?.close(); } catch {} } }}
                     title="Aperçu ticket"
                     className="h-[360px] w-full rounded border-0 sm:h-[420px]"
                   />
