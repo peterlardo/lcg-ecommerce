@@ -267,6 +267,7 @@ export async function POST(request: Request) {
         id: order.id,
         orderNumber: order.orderNumber,
         customerName: order.customerName,
+        customerPhone: order.customerPhone || "",
         seller: session?.user?.name ?? null,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
