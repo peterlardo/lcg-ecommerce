@@ -4,7 +4,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { getPrisma } from "./prisma"
 import { parseUserAgent } from "./device"
-import { COMMERCIAL_MANAGER_ROLE } from "./permissions"
+import { COMMERCIAL_MANAGER_ROLE, isStaffRole } from "./permissions"
 import { SESSION_OPEN_CODE, SESSION_TOUCH_MS, closeUserSessions, countActiveSessionsElsewhere, deviceKey } from "./device-session"
 
 type Role = string
@@ -42,9 +42,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { email: credentials.email as string },
         })
 
-        const STAFF_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT"]
-        const isStaff = user ? STAFF_ROLES.includes(user.role) : false
-        const nonStaffValid = user ? !STAFF_ROLES.includes(user.role) && !!user.emailVerified : false
+        // Personnel = tout rôle autre que client (caissier, commercial, comptable, profils créés par l'administrateur…) :
+        // ces comptes sont créés par un administrateur, leur e-mail n'a pas à être vérifié.
+        // Seuls les clients inscrits en ligne doivent confirmer leur e-mail.
+        const isStaff = user ? isStaffRole(user.role) : false
+        const nonStaffValid = user ? !isStaffRole(user.role) && !!user.emailVerified : false
 
         if (!user || !user.password || !user.isActive || (!isStaff && !nonStaffValid)) {
           await getPrisma().loginLog.create({
