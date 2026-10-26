@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Boxes, CircleDollarSign, Clock, ShoppingCart, Truck } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
+import { pollEconomically } from "@/lib/polling"
 
 /** Chiffres du jour lus dans /api/reports (même périmètre que l'utilisateur connecté). */
 interface DaySummary {
@@ -23,7 +24,7 @@ const todayKey = () => new Date().toLocaleDateString("fr-CA", { timeZone: "Afric
 
 /**
  * Cartes du tableau de bord classique : ventes, commandes, articles vendus, commandes en attente et
- * livraisons du jour. Relues toutes les 30 secondes.
+ * livraisons du jour. Relues toutes les minutes, onglet visible.
  */
 export function DailyStatsCards() {
   const [summary, setSummary] = useState<DaySummary | null>(null)
@@ -38,8 +39,8 @@ export function DailyStatsCards() {
       } catch {}
     }
     void read()
-    const timer = setInterval(() => void read(), 30000)
-    return () => { controller.abort(); clearInterval(timer) }
+    const stopPolling = pollEconomically(() => void read(), 60000)
+    return () => { controller.abort(); stopPolling() }
   }, [])
 
   const sold = summary?.todayOrdersDelivered ?? 0

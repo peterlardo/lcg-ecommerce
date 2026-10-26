@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { pollEconomically } from "@/lib/polling"
 
 interface Announcement {
   id: string
@@ -71,11 +72,11 @@ export function AnnouncementBanner() {
     void init()
     const onFocus = () => load()
     window.addEventListener("focus", onFocus)
-    const interval = setInterval(load, 60_000)
+    const stopPolling = pollEconomically(() => void load(), 300_000)
     return () => {
       controller.abort()
       window.removeEventListener("focus", onFocus)
-      clearInterval(interval)
+      stopPolling()
     }
   }, [load])
 

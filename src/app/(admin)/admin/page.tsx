@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
+import { pollEconomically } from "@/lib/polling"
 
 interface ReportData {
   summary: { todayRevenue: number; todayOrders: number; todayOrdersDelivered: number; stockUnits: number; deliveriesInProgress: number; lowStock: number; pendingReservations: number; totalReservations: number; totalDeliveries: number; deliveredToday: number; todayDeliveries: number; todayReservations: number; todayReservationsPending: number; cashExpected: number; revenue7: number; revenue30: number; orders7: number; orders30: number; avgOrder: number; topProduct: string; todayInDelivery: number; todayConfirmed: number; todayItems: number; yesterdayItems: number; todayProducts: { name: string; quantity: number; revenue: number }[]; todayWaiting?: number; todaySalesByCashier?: { id: string | null; name: string; sales: number; items: number; revenue: number; byMethod: Record<string, number> }[] }
@@ -171,8 +172,9 @@ export default function DashboardPage() {
       }
     }
     void init()
-    const interval = setInterval(() => { void init() }, 15000)
-    return () => { controller.abort(); clearInterval(interval) }
+    // Trois listes complètes à chaque relecture : une fois par minute, et seulement onglet visible
+    const stopPolling = pollEconomically(() => { void init() }, 60000)
+    return () => { controller.abort(); stopPolling() }
   }, [deferredTrendClient, trendDate, trendUserId, session?.user?.role])
   const loadRealTime = async (signal?: AbortSignal) => {
     try {
@@ -219,8 +221,9 @@ export default function DashboardPage() {
   useEffect(() => {
     const c = new AbortController()
     void loadRealTime(c.signal)
-    const t = setInterval(()=>void loadRealTime(c.signal), 30000)
-    return ()=>{c.abort(); clearInterval(t)}
+    // 2 × 1000 lignes à chaque relecture : toutes les 2 minutes, onglet visible seulement
+    const stopPolling = pollEconomically(() => void loadRealTime(c.signal), 120000)
+    return ()=>{c.abort(); stopPolling()}
   }, [])
 
   const role = session?.user?.role

@@ -19,6 +19,7 @@ import { formatPrice, getStatusLabel, getStatusColor } from "@/lib/utils"
 import { isArchivedOrder } from "@/lib/archives"
 import { isCommercialRole } from "@/lib/permissions"
 import type { Product } from "@/data/products"
+import { pollEconomically } from "@/lib/polling"
 
 // « Confirmée » est devenu « Commandes prévues » ; « En production », « Prête » et « En livraison »
 // sont retirés (demande du 2026-10-24) : ces commandes restent visibles dans « Toutes ».
@@ -197,10 +198,8 @@ export default function CommandesPage() {
   }, [])
 
   useEffect(() => {
-    const id = setInterval(() => {
-      load()
-    }, 10000)
-    return () => clearInterval(id)
+    // Liste complète des commandes : toutes les 30 s, onglet visible seulement (les nouvelles commandes arrivent par les notifications)
+    return pollEconomically(() => { void load() }, 30000)
   }, [load])
 
   // Commerciaux et responsable commercial : points de vente où enregistrer leurs commandes (« Compte LCG »,

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { formatPrice } from "@/lib/utils"
 import { playNotificationSound, unlockNotificationAudio } from "@/lib/notification-sound"
+import { pollEconomically } from "@/lib/polling"
 
 export interface AppNotification {
   id: string
@@ -74,7 +75,7 @@ function markReminderShown(id: string) {
   } catch {}
 }
 
-export function useNotifications(pollInterval = 8000) {
+export function useNotifications(pollInterval = 10000) {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [recent, setRecent] = useState<AppNotification[]>([])
   const seenIds = useRef(new Set<string>())
@@ -127,7 +128,8 @@ export function useNotifications(pollInterval = 8000) {
     }
 
     check()
-    const timer = setInterval(check, pollInterval)
+    // Onglet caché : une vérification par minute (le poste de caisse garde ses alertes sans solliciter la base toutes les 5 s)
+    const stopPolling = pollEconomically(() => void check(), pollInterval, 60000)
     // Edge/Chrome ralentissent ou suspendent les onglets en arrière-plan : au retour
     // sur l'onglet, on vérifie tout de suite pour afficher les commandes arrivées entre-temps.
     const onVisible = () => { if (document.visibilityState === "visible") check() }
@@ -135,7 +137,7 @@ export function useNotifications(pollInterval = 8000) {
     window.addEventListener("focus", onVisible)
     return () => {
       active = false
-      clearInterval(timer)
+      stopPolling()
       document.removeEventListener("visibilitychange", onVisible)
       window.removeEventListener("focus", onVisible)
     }

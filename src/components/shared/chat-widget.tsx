@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { AlertCircle, MessageCircle, Send, X, ChevronLeft, Paperclip, FileText, Image as ImageIcon, Download } from "lucide-react"
+import { pollEconomically } from "@/lib/polling"
 
 interface ChatUser {
   id: string
@@ -59,7 +60,6 @@ export function ChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingSentRef = useRef(false)
 
@@ -117,17 +117,18 @@ export function ChatWidget() {
       } catch {}
     }
     void init()
-    pollRef.current = setInterval(() => {
+    // Fenêtre fermée : le badge de messages non lus se relit chaque minute ; ouverte : toutes les 15 s. Onglet caché : rien.
+    const stopPolling = pollEconomically(() => {
       if (!isOpen) {
         void loadUsers()
       } else if (selectedUser) {
         void loadMessages(selectedUser.id)
         void loadUsers()
       }
-    }, 10000)
+    }, isOpen ? 15000 : 60000)
     return () => {
       controller.abort()
-      if (pollRef.current) clearInterval(pollRef.current)
+      stopPolling()
     }
   }, [isOpen, selectedUser, loadUsers, loadMessages, myId])
 
