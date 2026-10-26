@@ -28,10 +28,13 @@ export default function PersonnelLoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  // Compte déjà ouvert ailleurs : propose de reprendre la session ici (l'autre poste est déconnecté)
+  const [busy, setBusy] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, takeover = false) => {
     e.preventDefault()
     setError("")
+    setBusy(false)
     setLoading(true)
 
     try {
@@ -39,14 +42,17 @@ export default function PersonnelLoginPage() {
         email,
         password,
         deviceId: getDeviceId() ?? "",
+        takeover: takeover ? "1" : "",
         redirect: false,
       })
 
       if (result?.error) {
+        const open = result.code === "session_ouverte"
+        setBusy(open)
         setError(
-          result.code === "session_ouverte"
-            ? "Ce compte est déjà connecté sur un autre appareil. Déconnectez-le d'abord, ou demandez à un administrateur de libérer la session."
-            : "Email ou mot de passe incorrect"
+          open
+            ? "Ce compte est déjà connecté sur un autre appareil (inactif depuis moins de 10 minutes)."
+            : "Email ou mot de passe incorrect. Vérifiez l'adresse (nom@lcg.cg) et le mot de passe."
         )
         setLoading(false)
         return
@@ -99,6 +105,16 @@ export default function PersonnelLoginPage() {
               {error}
             </div>
           )}
+          {busy && (
+            <button
+              type="button"
+              disabled={loading}
+              onClick={(e) => void handleSubmit(e as unknown as React.FormEvent, true)}
+              className="w-full rounded-xl border border-white/35 bg-white px-6 py-3.5 text-base font-bold text-[#17418A] shadow-lg transition hover:bg-white/90 disabled:opacity-60"
+            >
+              Me connecter ici et déconnecter l&apos;autre appareil
+            </button>
+          )}
 
           <div>
             <label htmlFor="email" className="mb-2 block text-sm font-semibold text-white/80">
@@ -109,6 +125,9 @@ export default function PersonnelLoginPage() {
               name="email"
               type="email"
               autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

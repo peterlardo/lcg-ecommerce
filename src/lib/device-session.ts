@@ -6,10 +6,11 @@ import { deviceFingerprint } from "./device"
 // La session se libère à la déconnexion, après SESSION_IDLE_MS sans activité
 // (appareil éteint sans déconnexion), ou quand un administrateur la libère.
 
-/** Au-delà de ce délai sans activité, la session ne bloque plus une connexion ailleurs. */
-export const SESSION_IDLE_MS = 30 * 60 * 1000
-/** L'heure de dernière activité est rafraîchie au plus une fois par ce délai. */
-export const SESSION_TOUCH_MS = 2 * 60 * 1000
+/**
+ * Au-delà de ce délai sans activité de la personne (souris, clavier, toucher : /api/session-ping, toutes les 2 minutes),
+ * la session ne bloque plus une connexion ailleurs. Un onglet oublié libère ainsi le compte au bout de 10 minutes.
+ */
+export const SESSION_IDLE_MS = 10 * 60 * 1000
 
 /** Code renvoyé à l'écran de connexion quand le compte est déjà ouvert ailleurs. */
 export const SESSION_OPEN_CODE = "session_ouverte"

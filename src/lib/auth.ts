@@ -4,8 +4,9 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { getPrisma } from "./prisma"
 import { parseUserAgent } from "./device"
+import { correctStaffEmail } from "./email-typo"
 import { COMMERCIAL_MANAGER_ROLE, isStaffRole } from "./permissions"
-import { SESSION_OPEN_CODE, SESSION_TOUCH_MS, closeUserSessions, countActiveSessionsElsewhere, deviceKey } from "./device-session"
+import { SESSION_OPEN_CODE, closeUserSessions, countActiveSessionsElsewhere, deviceKey } from "./device-session"
 
 type Role = string
 
@@ -28,6 +29,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Mot de passe", type: "password" },
         deviceId: { label: "Appareil", type: "text" },
+        takeover: { label: "Reprendre la session", type: "text" },
       },
       async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) return null
@@ -38,9 +40,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           (request?.headers.get("x-forwarded-for")?.split(",")[0]?.trim()?.slice(0, 45) ||
             request?.headers.get("cf-connecting-ip")) ?? null
 
-        const user = await getPrisma().user.findUnique({
-          where: { email: credentials.email as string },
-        })
+        // Majuscules (clavier de téléphone) et espaces ne comptent pas ; un domaine proche (lcg.cgt, lcg.com) est corrigé.
+        // Le mot de passe reste exigé : la correction ne donne aucun accès.
+        const typed = String(credentials.email).trim().toLowerCase()
+        const findByEmail = (address: string) =>
+          getPrisma().user.findFirst({ where: { email: { equals: address, mode: "insensitive" } } })
+        let user = await findByEmail(typed)
+        if (!user) {
+          const corrected = correctStaffEmail(typed)
+          if (corrected) user = await findByEmail(corrected)
+        }
 
         // Personnel = tout rôle autre que client (caissier, commercial, comptable, profils créés par l'administrateur…) :
         // ces comptes sont créés par un administrateur, leur e-mail n'a pas à être vérifié.
@@ -87,7 +96,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const fingerprint = deviceKey(credentials.deviceId, userAgent)
         const sessionLimit = Math.max(1, user.sessionLimit || 1)
         const othersOpen = await countActiveSessionsElsewhere(user.id, fingerprint, userAgent)
-        if (othersOpen >= sessionLimit) {
+        // Reprise volontaire (mot de passe déjà vérifié) : l'autre poste est déconnecté au lieu de bloquer cette connexion
+        const takeover = credentials.takeover === "1"
+        if (othersOpen >= sessionLimit && !takeover) {
           await getPrisma().loginLog.create({
             data: {
               userId: user.id,
@@ -104,7 +115,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
         // Comportement historique (une seule session) : les sessions des autres appareils
         // sont fermées. Au-delà d'une session autorisée, on les laisse ouvertes.
-        if (sessionLimit <= 1) {
+        if (sessionLimit <= 1 || takeover) {
           await closeUserSessions(user.id, fingerprint)
         }
 
@@ -174,9 +185,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const device = fresh.deviceSessions[0]
             // Session fermée (déconnexion, libération par un administrateur, connexion ailleurs après inactivité)
             if (!device || !device.isActive) return null
-            if (Date.now() - device.lastActiveAt.getTime() > SESSION_TOUCH_MS) {
-              await getPrisma().userDeviceSession.update({ where: { id: device.id }, data: { lastActiveAt: new Date() } })
-            }
+            // La dernière activité n'est PAS rafraîchie ici : les relectures automatiques ne prouvent pas une présence (voir /api/session-ping)
           }
           const freshAt = fresh ? fresh.updatedAt.getTime() : null
           if (fresh && (!token.authorAt || freshAt !== token.authorAt)) {

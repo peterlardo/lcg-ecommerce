@@ -4,9 +4,11 @@ import { AdminTopNav } from "@/components/shared/admin-top-nav"
 import { ChatWidget } from "@/components/shared/chat-widget"
 import { NotificationToast } from "@/components/notification-toast"
 import { useNotifications } from "@/hooks/use-notifications"
+import { useActivityPing } from "@/hooks/use-activity-ping"
 import { usePosMode } from "@/hooks/use-pos-mode"
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
+  useActivityPing()
   // Plus de déconnexion automatique après inactivité (demande du 2026-10-26) : la session reste ouverte jusqu'à la déconnexion
   const { notifications, recent, newCount, plannedCount, dismiss, dismissAll } = useNotifications(10000)
   const { posMode, setOverride } = usePosMode()
