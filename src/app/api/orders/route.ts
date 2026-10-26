@@ -240,8 +240,18 @@ export async function POST(request: Request) {
       }
     }
 
+    // Partenaire (prix spéciaux saisis une seule fois, écran Partenaires) : réservé au personnel qui peut
+    // lire les partenaires, comme à la page Ventes ; le site public ne peut pas en demander.
+    let partnerId: string | null = null
+    if (typeof body.partnerId === "string" && body.partnerId) {
+      const denied = operator ? await requireManagementAccess(["ADMIN", "STOCK_MANAGER", ...CASHIER_ROLES], [["partenaires"], "view"]) : true
+      if (denied) return NextResponse.json({ error: "Les prix partenaires ne sont pas autorisés pour ce profil" }, { status: 403 })
+      partnerId = body.partnerId
+    }
+
     const input: OrderInput = {
       orderNumber: body.orderNumber || generateOrderNumber(),
+      partnerId,
       userId: operatorId,
       customerName: String(body.customerName),
       customerEmail: String(body.customerEmail || ""),

@@ -46,7 +46,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
       }),
       prisma.partnerPrice.findMany({
         where: { partnerId: id },
-        select: { variantId: true, price: true },
+        select: { variantId: true, price: true, variant: { select: { format: true, product: { select: { name: true, isActive: true } } } } },
       }),
     ])
 
@@ -56,6 +56,10 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
       partnerId: partner.id,
       partnerName: partner.name,
       discountPercent: partner.discountPercent,
+      // cohérence : prix restés sur un produit retiré de la vente (absent du catalogue ci-dessous)
+      retired: prices
+        .filter((p) => !p.variant.product.isActive)
+        .map((p) => ({ variantId: p.variantId, price: p.price, productName: p.variant.product.name, format: p.variant.format })),
       products: products.map((p) => ({
         id: p.id,
         name: p.name,
@@ -93,7 +97,7 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
 
   const prisma = getPrisma()
 
-  const variant = await prisma.productVariant.findUnique({ where: { id: variantId }, select: { id: true } })
+  const variant = await prisma.productVariant.findUnique({ where: { id: variantId }, select: { id: true, price: true, product: { select: { isActive: true } } } })
   if (!variant) return NextResponse.json({ error: "Produit introuvable" }, { status: 404 })
 
   const raw = body.price
@@ -106,8 +110,15 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     }
 
     const price = Number(raw)
-    if (!Number.isFinite(price) || price < 0) {
-      return NextResponse.json({ error: "Prix invalide" }, { status: 400 })
+    if (!Number.isFinite(price) || price <= 0) {
+      return NextResponse.json({ error: "Prix invalide : il doit être supérieur à 0" }, { status: 400 })
+    }
+    // cohérence avec le catalogue : un prix spécial ne dépasse pas le prix public, et ne vise qu'un produit en vente
+    if (price > variant.price) {
+      return NextResponse.json({ error: `Le prix spécial ne peut pas dépasser le prix public (${variant.price} FCFA) : laissez le champ vide pour appliquer le prix public` }, { status: 400 })
+    }
+    if (!variant.product.isActive) {
+      return NextResponse.json({ error: "Ce produit est retiré de la vente : pas de prix spécial" }, { status: 400 })
     }
 
     const saved = await prisma.partnerPrice.upsert({

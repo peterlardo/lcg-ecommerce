@@ -20,6 +20,7 @@ import { isArchivedOrder } from "@/lib/archives"
 import { isCommercialRole } from "@/lib/permissions"
 import type { Product } from "@/data/products"
 import { pollEconomically } from "@/lib/polling"
+import { applyPartnerDiscount } from "@/lib/partner-cart"
 
 // « Confirmée » est devenu « Commandes prévues » ; « En production », « Prête » et « En livraison »
 // sont retirés (demande du 2026-10-24) : ces commandes restent visibles dans « Toutes ».
@@ -126,7 +127,15 @@ function formatDate(iso: string): string {
   return `${d.toLocaleDateString("fr-FR")} à ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
 }
 
-const EMPTY_ORDER_FORM = { customerName: "", customerPhone: "", customerEmail: "", address: "", district: "", paymentMethod: "CASH_ON_DELIVERY", notes: "", deliveryMode: "DELIVERY", deliveryZoneId: "", scheduledDate: "" }
+const EMPTY_ORDER_FORM = { customerName: "", customerPhone: "", customerEmail: "", address: "", district: "", paymentMethod: "CASH_ON_DELIVERY", notes: "", deliveryMode: "DELIVERY", deliveryZoneId: "", scheduledDate: "", partnerId: "" }
+
+/** Partenaire et ses prix spéciaux (saisis une seule fois, écran Partenaires). */
+interface PartnerOption {
+  id: string
+  name: string
+  phone: string | null
+  discountPercent: number
+}
 
 export default function CommandesPage() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -142,6 +151,8 @@ export default function CommandesPage() {
   const [draftItems, setDraftItems] = useState<DraftItem[]>([{ productId: "", variantId: "", quantity: 1 }])
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState("")
+  const [partners, setPartners] = useState<PartnerOption[]>([])
+  const [partnerPrices, setPartnerPrices] = useState<Record<string, number>>({})
   const [users, setUsers] = useState<{ id: string; name: string; role: string; email: string; isActive?: boolean }[]>([])
   const [assigning, setAssigning] = useState<string | null>(null)
   const [assignError, setAssignError] = useState("")
@@ -186,6 +197,11 @@ export default function CommandesPage() {
         try {
           const cashiersRes = await fetch("/api/cashiers", { signal: controller.signal })
           if (!controller.signal.aborted && cashiersRes.ok) setCashiers(await cashiersRes.json())
+        } catch {}
+        // partenaires actifs : seulement pour les profils qui y ont accès (sinon le choix n'apparaît pas)
+        try {
+          const partnersRes = await fetch("/api/partenaires?active=1", { signal: controller.signal })
+          if (!controller.signal.aborted && partnersRes.ok) setPartners(await partnersRes.json())
         } catch {}
       } catch (error) {
         if (!controller.signal.aborted) console.error("Erreur chargement commandes:", error)
@@ -362,6 +378,38 @@ export default function CommandesPage() {
     setDraftItems((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // Prix d'un format pour la commande : prix spécial du partenaire choisi, sinon prix public moins sa remise
+  // (même règle que la page Ventes ; le serveur recalcule de son côté)
+  const selectedPartner = partners.find((p) => p.id === form.partnerId) ?? null
+  const unitPriceOf = (variant: { id: string; price: number }): number =>
+    selectedPartner
+      ? partnerPrices[variant.id] ?? applyPartnerDiscount(variant.price, selectedPartner.discountPercent)
+      : variant.price
+
+  const choosePartner = async (partnerId: string) => {
+    const partner = partners.find((p) => p.id === partnerId) ?? null
+    setPartnerPrices({})
+    setForm((prev) => ({
+      ...prev,
+      partnerId,
+      customerName: prev.customerName || partner?.name || "",
+      customerPhone: prev.customerPhone || partner?.phone || "",
+    }))
+    if (!partner) return
+    try {
+      const res = await fetch(`/api/partenaires/${partner.id}/prix`)
+      if (!res.ok) return
+      const data: { products?: { variants?: { id: string; partnerPrice: number | null }[] }[] } = await res.json()
+      const map: Record<string, number> = {}
+      for (const product of data.products ?? []) {
+        for (const variant of product.variants ?? []) {
+          if (typeof variant.partnerPrice === "number") map[variant.id] = variant.partnerPrice
+        }
+      }
+      setPartnerPrices(map)
+    } catch {}
+  }
+
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError("")
@@ -378,7 +426,7 @@ export default function CommandesPage() {
             name: product?.name || "Produit",
             format: variant?.format || "",
             quantity: item.quantity,
-            price: variant?.price || 0,
+            price: variant ? unitPriceOf(variant) : 0,
           }
         })
 
@@ -401,6 +449,7 @@ export default function CommandesPage() {
           ...form,
           address: pickup ? "Retrait sur place" : form.address,
           deliveryZoneId: pickup ? null : form.deliveryZoneId,
+          partnerId: form.partnerId || null,
           source: "OPERATOR",
           items,
           ...(orderPointId ? { pointOfSaleId: orderPointId } : {}),
@@ -414,6 +463,7 @@ export default function CommandesPage() {
       }
       setShowModal(false)
       setForm(EMPTY_ORDER_FORM)
+      setPartnerPrices({})
       setDraftItems([{ productId: "", variantId: "", quantity: 1 }])
       await load()
     } catch (error) {
@@ -875,6 +925,31 @@ export default function CommandesPage() {
             </div>
 
             <form onSubmit={handleCreateOrder} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+              {/* partenaire : ses prix spéciaux s'appliquent aux articles (saisis une seule fois, écran Partenaires) */}
+              {partners.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <label htmlFor="order-partner" className="block text-xs font-semibold text-amber-900 uppercase tracking-wider mb-1.5">Partenaire (prix spéciaux)</label>
+                  <select
+                    id="order-partner"
+                    value={form.partnerId}
+                    onChange={(e) => choosePartner(e.target.value)}
+                    className="w-full min-h-11 px-3 py-2.5 text-base sm:text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500"
+                  >
+                    <option value="">Aucun — prix public</option>
+                    {partners.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}{p.discountPercent ? ` (remise ${p.discountPercent} %)` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedPartner && (
+                    <p className="mt-1 text-xs text-amber-900">
+                      Prix spéciaux de {selectedPartner.name} appliqués aux articles
+                      {selectedPartner.discountPercent ? `, sinon prix public moins ${selectedPartner.discountPercent} %` : ", sinon prix public"}.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Client *</label>
@@ -1058,7 +1133,7 @@ export default function CommandesPage() {
                           <option value="">Format...</option>
                           {variants.map((v) => (
                             <option key={v.id} value={v.id}>
-                              {v.format} — {formatPrice(v.price)}
+                              {v.format} — {formatPrice(unitPriceOf(v))}{unitPriceOf(v) !== v.price ? ` (public ${formatPrice(v.price)})` : ""}
                             </option>
                           ))}
                         </select>
@@ -1070,7 +1145,7 @@ export default function CommandesPage() {
                           className="w-20 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none"
                         />
                         <span className="text-sm font-semibold text-gray-900 w-28 text-right sm:text-left">
-                          {variant ? formatPrice(variant.price * item.quantity) : ""}
+                          {variant ? formatPrice(unitPriceOf(variant) * item.quantity) : ""}
                         </span>
                         <button
                           type="button"

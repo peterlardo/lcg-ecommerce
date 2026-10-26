@@ -175,6 +175,8 @@ export default function VentesPage() {
   const [catalog, setCatalog] = useState<CatalogProduct[]>([])
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogDraft, setCatalogDraft] = useState<Record<string, string>>({})
+  // prix spéciaux restés sur des produits retirés de la vente (cohérence, à retirer)
+  const [retiredPrices, setRetiredPrices] = useState<{ variantId: string; price: number; productName: string; format: string }[]>([])
   const [savingVariantId, setSavingVariantId] = useState<string | null>(null)
   const [catalogSearch, setCatalogSearch] = useState("")
   const lowStockThreshold = LOW_STOCK_THRESHOLD
@@ -374,6 +376,7 @@ export default function VentesPage() {
       const res = await fetch(`/api/partenaires/${partnerId}/prix`)
       if (!res.ok) {
         setCatalog([])
+        setRetiredPrices([])
         return
       }
       const data = await res.json()
@@ -383,8 +386,10 @@ export default function VentesPage() {
         variants: product.variants ?? [],
       }))
       setCatalog(products)
+      setRetiredPrices(Array.isArray(data.retired) ? data.retired : [])
     } catch {
       setCatalog([])
+      setRetiredPrices([])
     } finally {
       setCatalogLoading(false)
     }
@@ -433,6 +438,7 @@ export default function VentesPage() {
         delete next[variant.id]
         return next
       })
+      setRetiredPrices((current) => current.filter((r) => r.variantId !== variant.id))
       setSuccess(payload === null ? "Prix préférentiel retiré." : "Prix préférentiel enregistré.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur")
@@ -1505,6 +1511,29 @@ export default function VentesPage() {
                 />
               </div>
 
+              {retiredPrices.length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                  <p className="text-sm font-semibold text-red-800">
+                    {retiredPrices.length} prix spécial(aux) sur des produits retirés de la vente : ils ne servent plus, retirez-les.
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {retiredPrices.map((r) => (
+                      <li key={r.variantId} className="flex flex-wrap items-center justify-between gap-2 text-sm text-red-800">
+                        <span>{r.productName} · {r.format} : {formatPrice(r.price)}</span>
+                        <button
+                          type="button"
+                          onClick={() => savePartnerPrice("", { id: r.variantId, format: r.format, price: r.price, partnerPrice: null })}
+                          disabled={savingVariantId === r.variantId}
+                          className="min-h-9 rounded-md border border-red-300 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          {savingVariantId === r.variantId ? "..." : "Retirer ce prix"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {catalogLoading ? (
                 <p className="py-6 text-center text-sm text-gray-500">Chargement du catalogue...</p>
               ) : filteredCatalog.length === 0 ? (
@@ -1527,6 +1556,9 @@ export default function VentesPage() {
                                   Prix public : {formatPrice(variant.price)}
                                   {current !== null && current !== undefined && (
                                     <span className="ml-2 font-medium text-primary">Préférentiel : {formatPrice(current)}</span>
+                                  )}
+                                  {current !== null && current !== undefined && current > variant.price && (
+                                    <span className="ml-2 font-semibold text-red-700">au-dessus du prix public : à corriger</span>
                                   )}
                                 </p>
                               </div>

@@ -4,6 +4,7 @@ import type { Product, ProductVariant } from "./products"
 import type { Prisma, PaymentMethod, Reservation as PrismaReservation } from "@prisma/client"
 import { getActivePromotions, pickPromotion, computePromoPrice, evaluateCoupon } from "@/lib/promotions"
 import { resolveDeliveryChoice } from "@/lib/delivery"
+import { applyPartnerDiscount } from "@/lib/partner-cart"
 import type { ActivePromotion } from "@/lib/promotions"
 
 export interface ContactMessage {
@@ -78,6 +79,8 @@ export interface OrderInput {
   /** Date de livraison (ou de retrait) prévue, saisie par l'opérateur. */
   scheduledDate?: Date | null
   couponCode?: string | null
+  /** Partenaire : ses prix spéciaux (écran Partenaires) remplacent le prix public, comme à la page Ventes. */
+  partnerId?: string | null
   items: OrderItemInput[]
 }
 
@@ -515,11 +518,23 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
       )
     }
 
+    // Partenaire : prix spécial du format, sinon prix public moins sa remise (même règle que la page Ventes)
+    const partner = input.partnerId
+      ? await tx.partner.findFirst({
+          where: { id: input.partnerId, isActive: true },
+          select: { id: true, discountPercent: true, prices: { select: { variantId: true, price: true } } },
+        })
+      : null
+    if (input.partnerId && !partner) throw new Error("Partenaire introuvable ou inactif")
+    const partnerPrices = new Map((partner?.prices ?? []).map((p) => [p.variantId, p.price]))
+
     const promos = await getActivePromotions(tx)
     const priced = input.items.map((item) => {
       const variant = variantMap.get(item.variantId)!
       const promo = pickPromotion(promos, variant.productId, variant.product.categoryId)
-      const unitPrice = promo ? computePromoPrice(variant.price, promo.percent) : variant.price
+      const unitPrice = partner
+        ? partnerPrices.get(item.variantId) ?? applyPartnerDiscount(variant.price, partner.discountPercent)
+        : promo ? computePromoPrice(variant.price, promo.percent) : variant.price
       return { item, unitPrice, total: unitPrice * item.quantity }
     })
     const subtotal = priced.reduce((s, i) => s + i.total, 0)
@@ -555,6 +570,7 @@ export async function createOrder(input: OrderInput): Promise<OrderRecord> {
         customerPhone: input.customerPhone,
         paymentMethod: input.paymentMethod as PaymentMethod,
         source: input.source || "WEB",
+        partnerId: partner?.id ?? null,
         subtotal,
         deliveryFee,
         discountAmount: discount,
