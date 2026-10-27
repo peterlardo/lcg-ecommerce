@@ -683,6 +683,35 @@ export default function EtatStockPage() {
         })}
       </div>
 
+      {(() => {
+        const soldRows = rows.filter((r) => r.ventes > 0).sort((a, b) => b.ventes - a.ventes)
+        if (soldRows.length === 0) return null
+        return (
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-sm font-semibold text-foreground">Quantités vendues par produit</h2>
+              <p className="text-xs text-muted-foreground">{formatLongDate(date)} · {sellerLabel}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {soldRows.map((row) => (
+                <div key={row.variantId} className="rounded-xl border border-border bg-card p-3 shadow-card-soft">
+                  <p className="truncate text-xs font-medium text-muted-foreground">{row.productName}</p>
+                  <p className="mt-0.5 text-sm font-semibold text-foreground">{row.format}</p>
+                  <p className="mt-2 text-2xl font-bold tabular-nums text-primary">
+                    {row.ventes}
+                    <span className="ml-1 text-xs font-medium text-muted-foreground">{row.unit ?? "u."}</span>
+                  </p>
+                  <p className="mt-1 text-xs tabular-nums text-muted-foreground">{formatPrice(row.ventesMontant)}</p>
+                  {row.ventesNonDebitees > 0 && (
+                    <p className="mt-1 text-[11px] text-amber-600">{row.ventesNonDebitees} u. non débitée(s)</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )
+      })()}
+
       <section className="rounded-xl border border-border bg-card shadow-card-soft">
         <div className="flex gap-2 overflow-x-auto border-b border-border px-3 pt-2.5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:px-5 sm:pt-3">
           {([[

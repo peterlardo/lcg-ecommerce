@@ -4,6 +4,7 @@ import { formatPrice } from "@/lib/utils"
 import { B2B_DOC_LBL, PAYMENT_METHOD_LBL } from "@/lib/report-labels"
 import type { GlobalDetails, GlobalReport } from "@/lib/report-types"
 import { SalesDetails } from "./global/sales-details"
+import { SaleLinesDetails } from "./global/sale-lines-details"
 import { ProductionFormatsDetails, ProductionMovementsDetails } from "./global/production-details"
 import { StockMovementsDetails } from "./global/movements-details"
 import { LotsDetails } from "./global/lots-details"
@@ -18,6 +19,8 @@ export function GlobalReportView({ data }: { data: GlobalReport }) {
   const details = (data as { details?: GlobalDetails }).details
   const sales = details?.sales ?? []
   const salesTotal = details?.salesTotal ?? sales.length
+  const saleLines = details?.saleLines ?? []
+  const saleLinesTotal = details?.saleLinesTotal ?? saleLines.length
   const productionFormats = details?.productionFormats ?? []
   const productionMovements = details?.productionMovements ?? []
   const productionMovementsTotal = details?.productionMovementsTotal ?? productionMovements.length
@@ -138,6 +141,7 @@ export function GlobalReportView({ data }: { data: GlobalReport }) {
 
         <div className="space-y-3">
           <SalesDetails rows={sales} total={salesTotal} />
+          <SaleLinesDetails rows={saleLines} total={saleLinesTotal} />
           <ProductionFormatsDetails rows={productionFormats} />
           <ProductionMovementsDetails rows={productionMovements} total={productionMovementsTotal} />
           <StockMovementsDetails rows={movements} total={movementsTotal} />

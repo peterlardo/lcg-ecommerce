@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import {
   BarChart3, Banknote, CalendarDays, CalendarRange, Clock, Download, Factory,
-  FileSpreadsheet, LayoutDashboard, Package, RefreshCw, ScanBarcode, ShoppingCart, TrendingUp, Truck, WalletCards,
+  FileSpreadsheet, LayoutDashboard, Package, RefreshCw, ScanBarcode, Search, ShoppingCart, TrendingUp, Truck, WalletCards,
 } from "lucide-react"
 import {
   Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -76,6 +76,9 @@ export default function RapportsPage() {
   const [globalData, setGlobalData] = useState<GlobalReport | null>(null)
   const [globalLoading, setGlobalLoading] = useState(false)
   const [globalError, setGlobalError] = useState("")
+  // Onglet « Ventes » : détail par article vendu (recherche + affichage étendu).
+  const [salesDetailQuery, setSalesDetailQuery] = useState("")
+  const [salesDetailsAll, setSalesDetailsAll] = useState(false)
 
   const periods = [
     { id: "day", label: "Journée" },
@@ -247,6 +250,20 @@ export default function RapportsPage() {
       case "lots": exportLotsExcel(data); break
     }
   }
+
+  // Détail des ventes (une ligne par article vendu) : recherche + pagination d'affichage.
+  const salesDetails = data?.salesDetails ?? []
+  const salesDetailQueryTrim = salesDetailQuery.trim().toLowerCase()
+  const salesDetailFiltered = salesDetailQueryTrim
+    ? salesDetails.filter((line) =>
+        [line.productName, line.format, line.orderNumber, line.customerName, line.cashier].some((value) =>
+          (value ?? "").toLowerCase().includes(salesDetailQueryTrim),
+        ),
+      )
+    : salesDetails
+  const salesDetailShown = salesDetailsAll ? salesDetailFiltered : salesDetailFiltered.slice(0, 100)
+  const salesDetailDate = (iso: string) =>
+    new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -548,6 +565,67 @@ export default function RapportsPage() {
                   <div className="h-56"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data?.paymentBreakdown30 ?? []} dataKey="total" nameKey="method" innerRadius={40} outerRadius={65} paddingAngle={3}>{(data?.paymentBreakdown30 ?? []).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip formatter={(v: TooltipValueType | undefined) => formatPrice(Number(v))} /></PieChart></ResponsiveContainer></div>
                 </section>
               </div>
+              <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900"><Package className="h-4 w-4" /> Détail des ventes</h2>
+                  <span className="text-xs text-gray-500">{salesDetailFiltered.length} article(s) vendu(s)</span>
+                </div>
+                <div className="relative mb-3 max-w-sm">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={salesDetailQuery}
+                    onChange={(e) => { setSalesDetailQuery(e.target.value); setSalesDetailsAll(false) }}
+                    placeholder="Produit, format, client, caissière..."
+                    className="h-9 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm focus:border-primary focus:bg-white focus:outline-none"
+                  />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-left text-xs sm:text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-[11px] uppercase tracking-wide text-gray-500">
+                        <th className="px-2 py-2 font-medium">Date</th>
+                        <th className="px-2 py-2 font-medium">Produit</th>
+                        <th className="px-2 py-2 font-medium">Format</th>
+                        <th className="px-2 py-2 text-right font-medium">Qté</th>
+                        <th className="px-2 py-2 text-right font-medium">Montant</th>
+                        <th className="px-2 py-2 font-medium">Client</th>
+                        <th className="px-2 py-2 font-medium">Caissière</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {salesDetailShown.map((line) => (
+                        <tr key={line.id} className="hover:bg-gray-50">
+                          <td className="whitespace-nowrap px-2 py-2 text-gray-500">{salesDetailDate(line.createdAt)}</td>
+                          <td className="px-2 py-2 font-medium text-gray-900">{line.productName}</td>
+                          <td className="px-2 py-2 text-gray-700">{line.format}</td>
+                          <td className="px-2 py-2 text-right font-semibold tabular-nums text-gray-900">{line.quantity}</td>
+                          <td className="whitespace-nowrap px-2 py-2 text-right font-medium tabular-nums text-gray-900">{formatPrice(line.amount)}</td>
+                          <td className="px-2 py-2 text-gray-700">{line.customerName || <span className="text-gray-400">—</span>}</td>
+                          <td className="px-2 py-2 text-gray-700">{line.cashier || <span className="text-gray-400">—</span>}</td>
+                        </tr>
+                      ))}
+                      {salesDetailShown.length === 0 && (
+                        <tr><td colSpan={7} className="px-2 py-8 text-center text-sm text-gray-400">Aucune vente sur la période.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {salesDetailFiltered.length > 100 && (
+                  <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
+                    <p className="text-xs text-gray-500">
+                      {salesDetailsAll ? `${salesDetailFiltered.length} ligne(s) affichée(s)` : `100 premières lignes sur ${salesDetailFiltered.length}`}
+                      {(data?.salesDetailsTotal ?? 0) > salesDetails.length && ` · ${data?.salesDetailsTotal} au total`}
+                    </p>
+                    <button
+                      onClick={() => setSalesDetailsAll(!salesDetailsAll)}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      {salesDetailsAll ? "Réduire" : "Tout afficher"}
+                    </button>
+                  </div>
+                )}
+              </section>
             </div>
           )}
 

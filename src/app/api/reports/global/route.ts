@@ -71,7 +71,7 @@ const orderSelect = {
   user: { select: { name: true } },
   cashier: { select: { name: true } },
   pointOfSale: { select: { name: true } },
-  items: { select: { productId: true, quantity: true, total: true, variant: { select: { product: { select: { name: true } } } } } },
+  items: { select: { id: true, productId: true, quantity: true, total: true, variant: { select: { format: true, product: { select: { name: true } } } } } },
 } as const
 
 const variantSelect = {
@@ -387,6 +387,26 @@ export async function GET(request: Request) {
         pointOfSale: o.pointOfSale?.name ?? null,
       }))
 
+    // Détail des ventes PAR ARTICLE vendu : une ligne = un produit+format vendu
+    // (quantité, montant, client, caissière, date) — complémente la vue par commande.
+    const saleLineRows = [...ordersRaw]
+      .filter((o) => o.status !== "CANCELLED")
+      .sort((a, b) => byDateDesc(a.createdAt, b.createdAt))
+      .flatMap((o) =>
+        o.items.map((i) => ({
+          id: i.id,
+          createdAt: o.createdAt.toISOString(),
+          orderNumber: o.orderNumber,
+          productName: i.variant?.product?.name ?? "Produit",
+          format: i.variant?.format ?? "-",
+          quantity: i.quantity,
+          amount: i.total,
+          customerName: o.customerName,
+          cashier: o.cashier?.name ?? (o.source === "CAISSE" ? o.user?.name ?? null : null),
+          pointOfSale: o.pointOfSale?.name ?? null,
+        })),
+      )
+
     const toMovementDetail = (m: (typeof movements)[number]) => ({
       id: m.id,
       type: m.type,
@@ -574,6 +594,8 @@ export async function GET(request: Request) {
       details: {
         sales: salesRows.slice(0, DETAIL_LIMIT),
         salesTotal: salesRows.length,
+        saleLines: saleLineRows.slice(0, DETAIL_LIMIT),
+        saleLinesTotal: saleLineRows.length,
         productionFormats,
         productionMovements: productionMovementRows.slice(0, DETAIL_LIMIT),
         productionMovementsTotal: productionMovementRows.length,

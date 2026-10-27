@@ -1394,9 +1394,26 @@ export function exportGlobalPDF(data: GlobalReport) {
     ]),
   )
 
+  const saleLines = details?.saleLines ?? []
+  detailTable(
+    detailPage("12. Ventes par produit", countNote(saleLines.length, details?.saleLinesTotal ?? saleLines.length)),
+    ["Date", "N° commande", "Produit", "Format", "Qté", "Montant", "Client", "Caissière", "PDV"],
+    saleLines.map((l) => [
+      dt(l.createdAt),
+      l.orderNumber,
+      l.productName,
+      l.format,
+      String(l.quantity),
+      fmt(l.amount),
+      l.customerName ?? "-",
+      l.cashier ?? "-",
+      l.pointOfSale ?? "-",
+    ]),
+  )
+
   const prodFormats = details?.productionFormats ?? []
   detailTable(
-    detailPage("12. Production par format", periodNote + "  |  " + prodFormats.length + " format(s)"),
+    detailPage("13. Production par format", periodNote + "  |  " + prodFormats.length + " format(s)"),
     ["Produit", "Format", "Quantité", "Mouvements", "Part", "Lots", "Restant"],
     prodFormats.map((p) => [
       p.productName,
@@ -1411,7 +1428,7 @@ export function exportGlobalPDF(data: GlobalReport) {
 
   const prodMovements = details?.productionMovements ?? []
   detailTable(
-    detailPage("13. Mouvements de production", countNote(prodMovements.length, details?.productionMovementsTotal ?? prodMovements.length)),
+    detailPage("14. Mouvements de production", countNote(prodMovements.length, details?.productionMovementsTotal ?? prodMovements.length)),
     ["Heure", "Produit", "Format", "Qté", "Motif", "PDV", "Lot", "Auteur"],
     prodMovements.map((m) => [
       dt(m.createdAt),
@@ -1427,7 +1444,7 @@ export function exportGlobalPDF(data: GlobalReport) {
 
   const movements = details?.movements ?? []
   detailTable(
-    detailPage("14. Mouvements de stock", countNote(movements.length, details?.movementsTotal ?? movements.length)),
+    detailPage("15. Mouvements de stock", countNote(movements.length, details?.movementsTotal ?? movements.length)),
     ["Heure", "Type", "Produit", "Format", "Qté", "Motif", "PDV", "Lot", "Référence", "Auteur"],
     movements.map((m) => [
       dt(m.createdAt),
@@ -1445,7 +1462,7 @@ export function exportGlobalPDF(data: GlobalReport) {
 
   const lots = details?.lots ?? []
   detailTable(
-    detailPage("15. Lots de production", countNote(lots.length, details?.lotsTotal ?? lots.length)),
+    detailPage("16. Lots de production", countNote(lots.length, details?.lotsTotal ?? lots.length)),
     ["N° lot", "Produit", "Format", "Initiale", "Restante", "Production", "Péremption", "Statut", "Auteur"],
     lots.map((l) => [
       l.lotNumber,
@@ -1462,7 +1479,7 @@ export function exportGlobalPDF(data: GlobalReport) {
 
   const stock = details?.stock ?? []
   detailTable(
-    detailPage("16. Stock par format", countNote(stock.length, details?.stockTotal ?? stock.length)),
+    detailPage("17. Stock par format", countNote(stock.length, details?.stockTotal ?? stock.length)),
     ["Produit", "Format", "Catégorie", "Stock total", "Par point de vente", "Seuil", "Alerte"],
     stock.map((s) => [
       s.productName,
@@ -1477,7 +1494,7 @@ export function exportGlobalPDF(data: GlobalReport) {
 
   const cashSessions = details?.cashSessions ?? []
   detailTable(
-    detailPage("17. Sessions de caisse", countNote(cashSessions.length, details?.cashSessionsTotal ?? cashSessions.length)),
+    detailPage("18. Sessions de caisse", countNote(cashSessions.length, details?.cashSessionsTotal ?? cashSessions.length)),
     ["Ouverture", "Fermeture", "Caissier", "PDV", "Fonds", "Clôture", "Écart", "Statut", "Réf. rapport"],
     cashSessions.map((c) => [
       dt(c.openedAt),
@@ -1494,7 +1511,7 @@ export function exportGlobalPDF(data: GlobalReport) {
 
   const deliveries = details?.deliveries ?? []
   detailTable(
-    detailPage("18. Livraisons", countNote(deliveries.length, details?.deliveriesTotal ?? deliveries.length)),
+    detailPage("19. Livraisons", countNote(deliveries.length, details?.deliveriesTotal ?? deliveries.length)),
     ["Heure", "Client", "Commande", "Mode", "Zone", "Livreur", "Statut", "Frais", "Adresse"],
     deliveries.map((d) => [
       dt(d.createdAt),
@@ -1511,7 +1528,7 @@ export function exportGlobalPDF(data: GlobalReport) {
 
   const reservations = details?.reservations ?? []
   detailTable(
-    detailPage("19. Pré-commandes", countNote(reservations.length, details?.reservationsTotal ?? reservations.length)),
+    detailPage("20. Pré-commandes", countNote(reservations.length, details?.reservationsTotal ?? reservations.length)),
     ["Créée le", "Client", "Téléphone", "Type", "Date", "Heure", "Statut", "PDV"],
     reservations.map((r) => [
       dt(r.createdAt),
@@ -1527,7 +1544,7 @@ export function exportGlobalPDF(data: GlobalReport) {
 
   const b2bDocs = details?.b2bDocuments ?? []
   detailTable(
-    detailPage("20. Documents commerciaux B2B", countNote(b2bDocs.length, details?.b2bDocumentsTotal ?? b2bDocs.length)),
+    detailPage("21. Documents commerciaux B2B", countNote(b2bDocs.length, details?.b2bDocumentsTotal ?? b2bDocs.length)),
     ["Heure", "Référence", "Client", "Type", "Montant", "Statut"],
     b2bDocs.map((b) => [
       dt(b.createdAt),
@@ -1630,6 +1647,15 @@ export function exportGlobalExcel(data: GlobalReport) {
     ]),
   ]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ventes), "Ventes")
+
+  const ventesLignes: (string | number)[][] = [
+    ["Date", "N° commande", "Produit", "Format", "Quantité", "Montant", "Client", "Caissière", "PDV"],
+    ...(details?.saleLines ?? []).map((l) => [
+      dt(l.createdAt), l.orderNumber, l.productName, l.format, l.quantity, l.amount,
+      l.customerName ?? "", l.cashier ?? "", l.pointOfSale ?? "",
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ventesLignes), "Ventes produits")
 
   const prodFormats: (string | number)[][] = [
     ["Produit", "Format", "Quantité", "Mouvements", "Part (%)", "Lots", "Restant"],

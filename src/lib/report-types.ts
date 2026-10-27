@@ -298,6 +298,23 @@ export interface JourneeReport {
   orders: JourneeOrder[]
 }
 
+/** Une ligne de vente détaillée : UN article vendu (produit + format) rattaché à sa commande. */
+export interface SaleDetailLine {
+  id: string
+  /** Horodatage ISO de la commande (heure locale côté client). */
+  createdAt: string
+  orderNumber: string
+  productName: string
+  format: string
+  /** Quantité vendue de cet article. */
+  quantity: number
+  /** Montant de cette ligne (quantité × prix). */
+  amount: number
+  customerName: string | null
+  /** Caissière ayant encaissé (repli sur l'opérateur pour les ventes caisse). */
+  cashier: string | null
+}
+
 export interface ReportPayload {
   period: string
   periodLabel: string
@@ -342,6 +359,10 @@ export interface ReportPayload {
   cashSessionsSummary: CashSessionsSummary
   recentMovements: SupplyMovement[]
   deliveries: DeliveryPoint[]
+  /** Détail des ventes : une ligne par article vendu (produit, format, qté, caissière, date). */
+  salesDetails: SaleDetailLine[]
+  /** Nombre total de lignes de détail (avant plafond). */
+  salesDetailsTotal: number
 }
 
 /* ------------------------------------------------------------------ *
@@ -448,6 +469,22 @@ export interface GlobalSaleDetail {
   /** Nombre d'articles vendus (somme des quantités). */
   items: number
   total: number
+  pointOfSale: string | null
+}
+
+/** Une ligne de vente détaillée du rapport global : UN article vendu. */
+export interface GlobalSaleLine {
+  id: string
+  createdAt: string
+  orderNumber: string
+  productName: string
+  format: string
+  /** Quantité vendue de cet article. */
+  quantity: number
+  /** Montant de cette ligne (quantité × prix). */
+  amount: number
+  customerName: string | null
+  cashier: string | null
   pointOfSale: string | null
 }
 
@@ -572,6 +609,10 @@ export interface GlobalDetails {
   sales: GlobalSaleDetail[]
   /** Nombre total de commandes de la période (avant plafond). */
   salesTotal: number
+  /** Détail des ventes par article : une ligne par produit vendu (produit, format, qté, caissière, date). */
+  saleLines: GlobalSaleLine[]
+  /** Nombre total de lignes de vente détaillées (avant plafond). */
+  saleLinesTotal: number
   productionFormats: GlobalProductionFormat[]
   productionMovements: GlobalMovementDetail[]
   productionMovementsTotal: number

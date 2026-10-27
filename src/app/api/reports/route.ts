@@ -640,6 +640,26 @@ export async function GET(request: Request) {
       productName: m.variant.product.name, format: m.variant.format, pointOfSale: m.pointOfSale?.name ?? null, createdAt: m.createdAt.toISOString(),
     }))
 
+    // Détail des ventes : une ligne PAR ARTICLE vendu (produit, format, quantité,
+    // montant, client, caissière, date) pour la période sélectionnée.
+    const SALE_DETAIL_LIMIT = 1000
+    const salesDetailRows = allOrders
+      .filter((o) => o.status !== "CANCELLED")
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .flatMap((o) =>
+        o.items.map((i) => ({
+          id: i.id,
+          createdAt: o.createdAt.toISOString(),
+          orderNumber: o.orderNumber,
+          productName: i.variant?.product?.name ?? "Produit",
+          format: i.variant?.format ?? "-",
+          quantity: i.quantity,
+          amount: i.total,
+          customerName: o.customerName,
+          cashier: o.cashier?.name ?? (o.source === "CAISSE" ? o.user?.name ?? null : null),
+        })),
+      )
+
     return NextResponse.json({
       period,
       periodLabel,
@@ -697,6 +717,8 @@ export async function GET(request: Request) {
       },
       cashSessionsByDay, cashSessionsSummary,
       recentMovements,
+      salesDetails: salesDetailRows.slice(0, SALE_DETAIL_LIMIT),
+      salesDetailsTotal: salesDetailRows.length,
       deliveries: deliveries.map((d) => ({ id: d.id, orderNumber: d.order?.orderNumber ?? "", customer: d.order?.customerName ?? "Client", status: d.status, address: d.address })),
     })
   } catch (error) {
