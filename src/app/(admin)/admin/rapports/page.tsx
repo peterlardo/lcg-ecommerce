@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import {
-  BarChart3, Banknote, CalendarDays, CalendarRange, Clock, Download, Factory,
-  FileSpreadsheet, LayoutDashboard, Package, RefreshCw, ScanBarcode, Search, ShoppingCart, TrendingUp, Truck, WalletCards,
+  BarChart3, CalendarDays, Clock, Download,
+  FileSpreadsheet, Package, RefreshCw, Search, ShoppingCart, TrendingUp, WalletCards,
 } from "lucide-react"
 import {
   Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -14,7 +14,6 @@ import {
   exportVentesPDF, exportVentesExcel,
   exportStocksPDF, exportStocksExcel,
   exportApproPDF, exportApproExcel,
-  exportCommandesPDF, exportCommandesExcel,
   exportReservationsPDF, exportReservationsExcel,
   exportProductionPDF, exportProductionExcel,
   exportCaissePDF, exportCaisseExcel,
@@ -22,24 +21,25 @@ import {
   exportJourneePDF, exportJourneeExcel,
   exportGlobalPDF, exportGlobalExcel,
 } from "@/lib/report-export"
-import type { ReportPayload, JourneeReport, GlobalReport } from "@/lib/report-types"
+import type { ReportPayload, JourneeReport, GlobalReport, OrdersReport } from "@/lib/report-types"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
 import { GlobalReportView } from "@/components/admin/global-report-view"
+import { OrdersReportView } from "@/components/admin/orders-report-view"
 import { DateRangePicker } from "@/components/admin/date-range-picker"
 
 type Tab = "global" | "journee" | "ventes" | "stocks" | "appro" | "commandes" | "reservations" | "production" | "lots" | "caisse"
 
-const tabList: { id: Tab; label: string; icon: typeof BarChart3 }[] = [
-  { id: "global", label: "Global", icon: LayoutDashboard },
-  { id: "journee", label: "Journée", icon: CalendarDays },
-  { id: "ventes", label: "Ventes", icon: BarChart3 },
-  { id: "stocks", label: "Stocks", icon: Package },
-  { id: "appro", label: "Approvisionnements", icon: Truck },
-  { id: "commandes", label: "Commandes", icon: ShoppingCart },
-  { id: "reservations", label: "Pré-commandes", icon: CalendarRange },
-  { id: "production", label: "Production", icon: Factory },
-  { id: "lots", label: "Lots", icon: ScanBarcode },
-  { id: "caisse", label: "Caisse", icon: Banknote },
+const tabList: { id: Tab; label: string }[] = [
+  { id: "global", label: "Global" },
+  { id: "journee", label: "Journée" },
+  { id: "commandes", label: "Commandes" },
+  { id: "ventes", label: "Ventes" },
+  { id: "stocks", label: "Stocks" },
+  { id: "appro", label: "Approvisionnements" },
+  { id: "reservations", label: "Pré-commandes" },
+  { id: "production", label: "Production" },
+  { id: "lots", label: "Lots" },
+  { id: "caisse", label: "Caisse" },
 ]
 
 const PAYMENT: Record<string, string> = { CASH_ON_DELIVERY: "Especes", MOBILE_MONEY: "Mobile Money", CARD: "Carte" }
@@ -76,6 +76,10 @@ export default function RapportsPage() {
   const [globalData, setGlobalData] = useState<GlobalReport | null>(null)
   const [globalLoading, setGlobalLoading] = useState(false)
   const [globalError, setGlobalError] = useState("")
+  // Rapport « Commandes » : toutes les commandes émises sur la période.
+  const [ordersData, setOrdersData] = useState<OrdersReport | null>(null)
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [ordersError, setOrdersError] = useState("")
   // Onglet « Ventes » : détail par article vendu (recherche + affichage étendu).
   const [salesDetailQuery, setSalesDetailQuery] = useState("")
   const [salesDetailsAll, setSalesDetailsAll] = useState(false)
@@ -215,6 +219,35 @@ export default function RapportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, period, pos, fromDate, toDate])
 
+  const customPeriodIncomplete = period === "custom" && (!fromDate || !toDate)
+
+  const fetchOrders = async (signal?: AbortSignal) => {
+    try {
+      const params = periodParams(period, pos, fromDate, toDate)
+      const res = await fetch(`/api/reports/commandes?${params}`, { signal })
+      if (!res.ok) throw new Error("Impossible de charger le rapport des commandes")
+      setOrdersData(await res.json())
+      setOrdersError("")
+    } catch (err) {
+      if (!signal?.aborted) setOrdersError(err instanceof Error ? err.message : "Erreur")
+    } finally {
+      if (!signal?.aborted) setOrdersLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (tab !== "commandes") return
+    if (customPeriodIncomplete) return
+    const controller = new AbortController()
+    const init = async () => {
+      setOrdersLoading(true)
+      await fetchOrders(controller.signal)
+    }
+    void init()
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, period, pos, fromDate, toDate])
+
   const s = data?.summary
   // Colonnes de stock par point de vente, quand le rapport couvre tous les points de vente.
   const posColumns = pos === "all" && (data?.pointsOfSale.length ?? 0) > 1 ? data!.pointsOfSale : []
@@ -227,7 +260,6 @@ export default function RapportsPage() {
       case "ventes": exportVentesPDF(data); break
       case "stocks": exportStocksPDF(data); break
       case "appro": exportApproPDF(data); break
-      case "commandes": exportCommandesPDF(data); break
       case "reservations": exportReservationsPDF(data); break
       case "production": exportProductionPDF(data); break
       case "caisse": exportCaissePDF(data); break
@@ -243,7 +275,6 @@ export default function RapportsPage() {
       case "ventes": exportVentesExcel(data); break
       case "stocks": exportStocksExcel(data); break
       case "appro": exportApproExcel(data); break
-      case "commandes": exportCommandesExcel(data); break
       case "reservations": exportReservationsExcel(data); break
       case "production": exportProductionExcel(data); break
       case "caisse": exportCaisseExcel(data); break
@@ -272,10 +303,10 @@ export default function RapportsPage() {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Rapports</h1>
           <p className="mt-1 text-sm text-gray-500">Tableaux de bord detailles par domaine.</p>
         </div>
-        <button onClick={() => (tab === "journee" ? refreshDay() : tab === "global" ? fetchGlobal() : load())} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <button onClick={() => (tab === "journee" ? refreshDay() : tab === "global" ? fetchGlobal() : tab === "commandes" ? (customPeriodIncomplete ? undefined : fetchOrders()) : load())} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-50">
           <RefreshCw className="h-4 w-4" /> Actualiser
         </button>
-        {!loading && (data || (tab === "global" && globalData)) && (
+        {!loading && tab !== "commandes" && (data || (tab === "global" && globalData)) && (
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={exportPDF} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs sm:text-sm font-medium text-red-700 hover:bg-red-100 transition-colors">
               <Download className="h-4 w-4" /> PDF
@@ -289,16 +320,44 @@ export default function RapportsPage() {
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-2 sm:px-4 sm:py-3 text-sm text-red-700">{error}</div>}
 
+      <div className="flex flex-wrap items-center gap-3">
+        <label htmlFor="report-type" className="shrink-0 text-sm font-medium text-gray-500">Rapport :</label>
+        <select
+          id="report-type"
+          value={tab}
+          onChange={(e) => setTab(e.target.value as Tab)}
+          className="min-w-[220px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-primary-500 focus:outline-none"
+        >
+          {tabList.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+      </div>
+
+      {tab === "journee" && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+          <CalendarDays className="h-4 w-4 text-gray-400" />
+          <span className="shrink-0 text-sm font-medium text-gray-500">Journée :</span>
+          <input
+            type="date"
+            value={dayDate}
+            max={todayIso()}
+            onChange={(e) => handleDayDateChange(e.target.value)}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none"
+          />
+          {dayData && <span className="text-xs text-gray-400">({dayData.label})</span>}
+        </div>
+      )}
+
       {tab !== "journee" && (
       <div className="flex flex-wrap items-center gap-3">
-        <span className="shrink-0 text-sm font-medium text-gray-500">Période :</span>
-        <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
-          {periods.map((p) => (
-            <button key={p.id} onClick={() => handlePeriodChange(p.id)} className={`rounded-md px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-medium transition-colors ${period === p.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <label htmlFor="report-period" className="shrink-0 text-sm font-medium text-gray-500">Période :</label>
+        <select
+          id="report-period"
+          value={period}
+          onChange={(e) => handlePeriodChange(e.target.value)}
+          className="min-w-[180px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-primary-500 focus:outline-none"
+        >
+          {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
         {period === "custom" && (
           <DateRangePicker
             value={{ from: fromDate, to: toDate }}
@@ -312,14 +371,17 @@ export default function RapportsPage() {
 
       {((tab === "global" ? globalData?.pointsOfSale.length : data?.pointsOfSale.length) ?? 0) > 1 && (
         <div className="flex flex-wrap items-center gap-3">
-          <span className="shrink-0 text-sm font-medium text-gray-500">Point de vente :</span>
-          <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
+          <label htmlFor="report-pos" className="shrink-0 text-sm font-medium text-gray-500">Point de vente :</label>
+          <select
+            id="report-pos"
+            value={pos}
+            onChange={(e) => handlePosChange(e.target.value)}
+            className="min-w-[180px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-primary-500 focus:outline-none"
+          >
             {[{ id: "all", name: "Tous" }, ...((tab === "global" ? globalData?.pointsOfSale : data?.pointsOfSale) ?? [])].map((p) => (
-              <button key={p.id} onClick={() => handlePosChange(p.id)} className={`rounded-md px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-medium transition-colors ${pos === p.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-                {p.name}
-              </button>
+              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </div>
+          </select>
         </div>
       )}
 
@@ -343,32 +405,6 @@ export default function RapportsPage() {
             })}
           </div>
         </section>
-      )}
-
-      <div className="flex gap-1 overflow-x-auto rounded-lg border border-gray-200 bg-gray-100 p-1">
-        {tabList.map((t) => {
-          const Icon = t.icon
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 whitespace-nowrap rounded-md px-2 py-2 sm:px-4 sm:py-2 text-sm font-medium transition-colors ${tab === t.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              <Icon className="h-4 w-4" /> {t.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {tab === "journee" && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
-          <CalendarDays className="h-4 w-4 text-gray-400" />
-          <span className="shrink-0 text-sm font-medium text-gray-500">Journée :</span>
-          <input
-            type="date"
-            value={dayDate}
-            max={todayIso()}
-            onChange={(e) => handleDayDateChange(e.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none"
-          />
-          {dayData && <span className="text-xs text-gray-400">({dayData.label})</span>}
-        </div>
       )}
 
       {loading ? (
@@ -671,24 +707,15 @@ export default function RapportsPage() {
           )}
 
           {tab === "commandes" && (
-            <div className="space-y-4 sm:space-y-6">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">Commandes {data?.periodLabel ?? "Mois"}</p><p className="mt-1 text-lg font-bold text-gray-900">{s?.orders30 ?? 0}</p></div>
-                <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">CA commandes</p><p className="mt-1 text-lg font-bold text-gray-900">{formatPrice(s?.revenue30 ?? 0)}</p></div>
-                <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">Aujourd&apos;hui</p><p className="mt-1 text-lg font-bold text-gray-900">{s?.todayOrders ?? 0}</p></div>
-                <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-xs font-medium text-gray-500">En livraison</p><p className="mt-1 text-lg font-bold text-gray-900">{s?.deliveriesInProgress ?? 0}</p></div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-                <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
-                  <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Commandes / jour</h2>
-                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.ordersByDay ?? []}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" /><XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#9ca3af" minTickGap={8} interval="preserveStartEnd" /><YAxis {...ax} /><Tooltip {...tt} /><Bar dataKey="commandes" fill="#1f4fa3" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
-                </section>
-                <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
-                  <h2 className="mb-4 text-xs sm:text-sm font-semibold text-gray-900">Par statut</h2>
-                  <div className="space-y-3">{(data?.ordersByStatus ?? []).map((item) => <div key={item.status} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BG[item.status] ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LBL[item.status] ?? item.status}</span><div className="text-right"><p className="font-semibold">{item.count} cmd(s)</p><p className="text-xs text-gray-500">{formatPrice(item.total)}</p></div></div>)}</div>
-                </section>
-              </div>
-            </div>
+            customPeriodIncomplete ? (
+              <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-8 text-center text-xs sm:text-sm text-gray-500">Choisissez les dates de début et de fin.</div>
+            ) : ordersError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{ordersError}</div>
+            ) : !ordersData || ordersLoading ? (
+              <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-8 text-center text-xs sm:text-sm text-gray-500">Chargement du rapport des commandes...</div>
+            ) : (
+              <OrdersReportView report={ordersData} />
+            )
           )}
 
           {tab === "reservations" && (
