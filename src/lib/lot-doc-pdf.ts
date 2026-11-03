@@ -175,7 +175,7 @@ export function generateLotDocumentationPDF(): jsPDF {
   y = bulletPoint(doc, y, "OrderItem.lotId : Lien entre chaque article de commande et le lot FIFO qui l'a fulfillment")
 
   y = sectionTitle(doc, y, "Architecture technique")
-  y = flowStep(doc, y, 1, "Cr\u00e9ation du lot", "L'op\u00e9rateur saisit la variante, la quantit\u00e9 et optionnellement la date d'expiration. Le g\u00e9n\u00e9rateur cr\u00e9e un num\u00e9ro unique LOT-YYYYMMDD-NNN.")
+  y = flowStep(doc, y, 1, "Cr\u00e9ation du lot", "L'op\u00e9rateur saisit la variante, la quantit\u00e9 et optionnellement la date d'expiration. Le g\u00e9n\u00e9rateur cr\u00e9e un num\u00e9ro unique LOT-YYYYMMDD-DIMINUTIF-NNN.")
   y = flowStep(doc, y, 2, "Mise \u00e0 jour du stock", "Dans une transaction atomique : cr\u00e9ation du ProductionLot + incr\u00e9mentation du stock variante + cr\u00e9ation d'un StockMovement type PRODUCTION.")
   y = flowStep(doc, y, 3, "Allocation lors d'une vente", "Lors d'une commande, l'algorithme FIFO s\u00e9lectionne les plus anciens lots actifs, cr\u00e9e des LotAllocation et met \u00e0 jour remainingQuantity.")
   y = flowStep(doc, y, 4, "Tra\u00e7abilit\u00e9", "Chaque lot est consultable via l'onglet Tra\u00e7abilit\u00e9 : historique des allocations, mouvements de stock, et liens avec les commandes clients.")
@@ -187,7 +187,7 @@ export function generateLotDocumentationPDF(): jsPDF {
   y = sectionTitle(doc, y, "ProductionLot")
   y = fieldTable(doc, y, [
     ["id", "String (CUID)", "Identifiant unique"],
-    ["lotNumber", "String (unique)", "Num\u00e9ro format LOT-YYYYMMDD-NNN"],
+    ["lotNumber", "String (unique)", "Num\u00e9ro format LOT-YYYYMMDD-DIMINUTIF-NNN"],
     ["variantId", "String (FK)", "Variante de produit associ\u00e9e"],
     ["initialQuantity", "Int", "Quantit\u00e9 produite \u00e0 la cr\u00e9ation"],
     ["remainingQuantity", "Int", "Quantit\u00e9 restante (d\u00e9cr\u00e9ment\u00e9e lors des allocations)"],
@@ -231,7 +231,7 @@ export function generateLotDocumentationPDF(): jsPDF {
   y = bulletPoint(doc, y, "Note : Texte libre de production")
 
   y = sectionTitle(doc, y, "Num\u00e9rotation automatique")
-  y = bodyText(doc, y, "Le num\u00e9ro de lot suit le format LOT-YYYYMMDD-NNN o\u00f9 NNN est un s\u00e9quenceur quotidien remis \u00e0 z\u00e9ro chaque jour. Exemple : LOT-20260811-001, LOT-20260811-002, etc.")
+  y = bodyText(doc, y, "Le num\u00e9ro de lot suit le format LOT-YYYYMMDD-DIMINUTIF-NNN o\u00f9 NNN est un s\u00e9quenceur quotidien remis \u00e0 z\u00e9ro chaque jour. Exemple : LOT-20260811-GC-001, LOT-20260811-GC-002, etc. Le diminutif désigne le produit (PG = pain de glace, GC = glaçon creux, GCB = glaçon cubes, GP = glaçon pilé, GLP = glaçon plein).")
 
   y = sectionTitle(doc, y, "Transaction atomique")
   y = bodyText(doc, y, "La cr\u00e9ation s'effectue dans une transaction prisma.$transaction() garantissant l'int\u00e9grit\u00e9 des donn\u00e9es :")
@@ -257,7 +257,7 @@ export function generateLotDocumentationPDF(): jsPDF {
   y = bulletPoint(doc, y, "3\u00e8me crit\u00e8re : createdAt ASC (ordre de cr\u00e9ation)")
 
   y = sectionTitle(doc, y, "G\u00e9n\u00e9ration du num\u00e9ro de lot")
-  y = bodyText(doc, y, "Le num\u00e9ro suit le format LOT-YYYYMMDD-NNN. Le s\u00e9quenceur NNN est calcul\u00e9 en comptant les lots cr\u00e9\u00e9s le jour m\u00eame, puis en ajoutant 1, avec z\u00e9ros de gauche sur 3 chiffres.")
+  y = bodyText(doc, y, "Le num\u00e9ro suit le format LOT-YYYYMMDD-DIMINUTIF-NNN. Le s\u00e9quenceur NNN est calcul\u00e9 en comptant les lots cr\u00e9\u00e9s le jour m\u00eame, puis en ajoutant 1, avec z\u00e9ros de gauche sur 3 chiffres.")
 
   // ── PAGE 7: INT\u00c9GRATION COMMANDES ──
   doc.addPage()
@@ -309,7 +309,7 @@ export function generateLotDocumentationPDF(): jsPDF {
   addPageHeader(doc, "7. R\u00e8gles m\u00e9tier", 9)
   y = 38
   y = sectionTitle(doc, y, "R\u00e8gles de gestion des lots")
-  y = bulletPoint(doc, y, "Les num\u00e9ros de lot sont uniques et g\u00e9n\u00e9r\u00e9s automatiquement (LOT-YYYYMMDD-NNN)")
+  y = bulletPoint(doc, y, "Les num\u00e9ros de lot sont uniques et g\u00e9n\u00e9r\u00e9s automatiquement (LOT-YYYYMMDD-DIMINUTIF-NNN)")
   y = bulletPoint(doc, y, "Le stock augmente \u00e0 la cr\u00e9ation du lot (m\u00eame transaction)")
   y = bulletPoint(doc, y, "Le stock diminue lors de la commande (avant l'allocation FIFO)")
   y = bulletPoint(doc, y, "FIFO : les lots les plus anciens sont consomm\u00e9s en priorit\u00e9")

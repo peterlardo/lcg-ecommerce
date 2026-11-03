@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       const created: { lotNumber: string; variantId: string }[] = []
 
       for (const [variantId, quantity] of cleaned) {
-        const lotNumber = await generateLotNumberTx(tx)
+        const lotNumber = await generateLotNumberTx(tx, variantId)
         const newLot = await tx.productionLot.create({
           data: {
             lotNumber,

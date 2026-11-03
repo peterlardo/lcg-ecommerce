@@ -189,7 +189,7 @@ export async function POST(req: Request) {
     }
 
     const lot = await getPrisma().$transaction(async (tx) => {
-      const lotNumber = await generateLotNumberTx(tx)
+      const lotNumber = await generateLotNumberTx(tx, variantId)
       const newLot = await tx.productionLot.create({
         data: {
           lotNumber,

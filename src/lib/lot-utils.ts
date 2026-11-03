@@ -97,17 +97,40 @@ export async function allocateStockFEFOTx(tx: TxClient, variantId: string, quant
   return allocateTx(tx, variantId, quantity, type, reference, "FEFO")
 }
 
-export async function generateLotNumber(): Promise<string> {
-  return generateLotNumberTx(getPrisma())
+/** Diminutif du produit utilisé dans les numéros de lot (PG, GC, GCB, GP, GLP). */
+export function productCode(productName: string | null | undefined): string {
+  const name = (productName ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+  if (name.includes("pain")) return "PG"
+  if (name.includes("creux")) return "GC"
+  if (name.includes("cube")) return "GCB"
+  if (name.includes("pil")) return "GP"
+  if (name.includes("plein")) return "GLP"
+  const initials = name.split(/[^a-z0-9]+/).filter(Boolean).map((word) => word[0]).join("").slice(0, 4).toUpperCase()
+  return initials || "DIV"
+}
+
+export async function generateLotNumber(variantId?: string): Promise<string> {
+  return generateLotNumberTx(getPrisma(), variantId)
 }
 
 /**
- * Numéro du prochain lot du jour : LOT-AAAAMMJJ-NNN.
- * Le rang suit le plus grand numéro déjà attribué ce jour-là, et non le nombre de lots :
+ * Numéro du prochain lot du jour : LOT-AAAAMMJJ-<DIMINUTIF>-NNN.
+ * Le rang suit le plus grand numéro déjà attribué ce jour-là pour ce produit, et non le nombre de lots :
  * après la suppression d'un lot, compter les lots redonnait un numéro déjà pris.
  */
-export async function generateLotNumberTx(tx: TxClient): Promise<string> {
-  const prefix = `LOT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-`
+export async function generateLotNumberTx(tx: TxClient, variantId?: string): Promise<string> {
+  let code = ""
+  if (variantId) {
+    const variant = await tx.productVariant.findUnique({
+      where: { id: variantId },
+      select: { product: { select: { name: true } } },
+    })
+    code = `-${productCode(variant?.product?.name)}`
+  }
+  const prefix = `LOT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}${code}-`
   const existing = await tx.productionLot.findMany({
     where: { lotNumber: { startsWith: prefix } },
     select: { lotNumber: true },
@@ -130,7 +153,7 @@ export async function createCoverageLotTx(
 ) {
   return tx.productionLot.create({
     data: {
-      lotNumber: await generateLotNumberTx(tx),
+      lotNumber: await generateLotNumberTx(tx, variantId),
       variantId,
       initialQuantity: quantity,
       remainingQuantity: quantity,

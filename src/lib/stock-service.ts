@@ -299,7 +299,7 @@ export async function createProductionForLocationTx(
   }: CreateProductionLocationParams,
 ) {
   // Create a production lot for traceability
-  const lotNumber = await generateLotNumberTx(tx);
+  const lotNumber = await generateLotNumberTx(tx, variantId);
 
   const lot = await tx.productionLot.create({
     data: {
