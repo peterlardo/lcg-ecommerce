@@ -320,70 +320,72 @@ export default function RapportsPage() {
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-2 sm:px-4 sm:py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <label htmlFor="report-type" className="shrink-0 text-sm font-medium text-gray-500">Rapport :</label>
-        <select
-          id="report-type"
-          value={tab}
-          onChange={(e) => setTab(e.target.value as Tab)}
-          className="min-w-[220px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-primary-500 focus:outline-none"
-        >
-          {tabList.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-        </select>
-      </div>
-
-      {tab === "journee" && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
-          <CalendarDays className="h-4 w-4 text-gray-400" />
-          <span className="shrink-0 text-sm font-medium text-gray-500">Journée :</span>
-          <input
-            type="date"
-            value={dayDate}
-            max={todayIso()}
-            onChange={(e) => handleDayDateChange(e.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none"
-          />
-          {dayData && <span className="text-xs text-gray-400">({dayData.label})</span>}
-        </div>
-      )}
-
-      {tab !== "journee" && (
-      <div className="flex flex-wrap items-center gap-3">
-        <label htmlFor="report-period" className="shrink-0 text-sm font-medium text-gray-500">Période :</label>
-        <select
-          id="report-period"
-          value={period}
-          onChange={(e) => handlePeriodChange(e.target.value)}
-          className="min-w-[180px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-primary-500 focus:outline-none"
-        >
-          {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </select>
-        {period === "custom" && (
-          <DateRangePicker
-            value={{ from: fromDate, to: toDate }}
-            onChange={handleRangeChange}
-            max={new Date()}
-          />
-        )}
-        {data?.periodLabel && <span className="min-w-0 text-xs text-gray-400">({data.periodLabel})</span>}
-      </div>
-      )}
-
-      {((tab === "global" ? globalData?.pointsOfSale.length : data?.pointsOfSale.length) ?? 0) > 1 && (
-        <div className="flex flex-wrap items-center gap-3">
-          <label htmlFor="report-pos" className="shrink-0 text-sm font-medium text-gray-500">Point de vente :</label>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-gray-200 bg-white p-3">
+        <div className="flex items-center gap-2">
+          <label htmlFor="report-type" className="shrink-0 text-sm font-medium text-gray-500">Rapport :</label>
           <select
-            id="report-pos"
-            value={pos}
-            onChange={(e) => handlePosChange(e.target.value)}
+            id="report-type"
+            value={tab}
+            onChange={(e) => setTab(e.target.value as Tab)}
             className="min-w-[180px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-primary-500 focus:outline-none"
           >
-            {[{ id: "all", name: "Tous" }, ...((tab === "global" ? globalData?.pointsOfSale : data?.pointsOfSale) ?? [])].map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
+            {tabList.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         </div>
-      )}
+
+        {tab === "journee" ? (
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-gray-400" />
+            <span className="shrink-0 text-sm font-medium text-gray-500">Journée :</span>
+            <input
+              type="date"
+              value={dayDate}
+              max={todayIso()}
+              onChange={(e) => handleDayDateChange(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none"
+            />
+            {dayData && <span className="text-xs text-gray-400">({dayData.label})</span>}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <label htmlFor="report-period" className="shrink-0 text-sm font-medium text-gray-500">Période :</label>
+              <select
+                id="report-period"
+                value={period}
+                onChange={(e) => handlePeriodChange(e.target.value)}
+                className="min-w-[160px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-primary-500 focus:outline-none"
+              >
+                {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </div>
+            {period === "custom" && (
+              <DateRangePicker
+                value={{ from: fromDate, to: toDate }}
+                onChange={handleRangeChange}
+                max={new Date()}
+              />
+            )}
+            {data?.periodLabel && <span className="min-w-0 text-xs text-gray-400">({data.periodLabel})</span>}
+          </>
+        )}
+
+        {((tab === "global" ? globalData?.pointsOfSale.length : data?.pointsOfSale.length) ?? 0) > 1 && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="report-pos" className="shrink-0 text-sm font-medium text-gray-500">Point de vente :</label>
+            <select
+              id="report-pos"
+              value={pos}
+              onChange={(e) => handlePosChange(e.target.value)}
+              className="min-w-[160px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-primary-500 focus:outline-none"
+            >
+              {[{ id: "all", name: "Tous" }, ...((tab === "global" ? globalData?.pointsOfSale : data?.pointsOfSale) ?? [])].map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
 
       {(data?.byPointOfSale.length ?? 0) > 1 && (
         <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
