@@ -320,7 +320,7 @@ export default function RapportsPage() {
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-2 sm:px-4 sm:py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-gray-200 bg-white p-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
         <div className="flex items-center gap-2">
           <label htmlFor="report-type" className="shrink-0 text-sm font-medium text-gray-500">Rapport :</label>
           <select
