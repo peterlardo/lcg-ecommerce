@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireManagementAccess } from "@/lib/api-auth"
+import { OPERATEUR_ACCUEIL_ROLE, requireManagementAccess } from "@/lib/api-auth"
 import { getPrisma } from "@/lib/prisma"
 import { CASHIER_ROLES } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
-const PARTNER_READ_ROLES = ["ADMIN", "STOCK_MANAGER", ...CASHIER_ROLES]
+const PARTNER_READ_ROLES = ["ADMIN", "STOCK_MANAGER", OPERATEUR_ACCUEIL_ROLE, ...CASHIER_ROLES]
 const PARTNER_WRITE_ROLES = ["ADMIN"]
 
 type Ctx = { params: Promise<{ id: string }> }

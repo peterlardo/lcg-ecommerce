@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireManagementAccess } from "@/lib/api-auth"
+import { OPERATEUR_ACCUEIL_ROLE, requireManagementAccess } from "@/lib/api-auth"
 import { getPrisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 import { CASHIER_ROLES } from "@/lib/permissions"
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic"
 
 // Lecture alignée sur le POST de /api/sales : les rôles qui vendent au comptoir
 // doivent pouvoir choisir un partenaire et lire sa grille de prix.
-const PARTNER_READ_ROLES = ["ADMIN", "STOCK_MANAGER", ...CASHIER_ROLES]
+const PARTNER_READ_ROLES = ["ADMIN", "STOCK_MANAGER", OPERATEUR_ACCUEIL_ROLE, ...CASHIER_ROLES]
 
 const partnerSummary = {
   id: true,
