@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle, Boxes, CheckCircle2, Factory, FileText, PackagePlus, PowerOff, RefreshCw, Search, Trash2, TrendingUp, XCircle } from "lucide-react"
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { AlertCircle, Boxes, CheckCircle2, Factory, FileText, PackagePlus, PowerOff, RefreshCw, Search, Trash2, XCircle } from "lucide-react"
 import { LotActions } from "@/components/admin/lot-actions"
 
 interface Lot {
@@ -52,7 +51,6 @@ interface LotsPayload {
 }
 
 interface ReportPayload {
-  productionByDay: { name: string; quantity: number }[]
   stockAlerts: { variantId: string; productName: string; format: string; stock: number; categoryName: string }[]
 }
 
@@ -62,41 +60,9 @@ interface StockVariant {
   format: string
   stock: number
   unit: string | null
+  categoryName?: string
+  price?: number
   storageStocks?: { pointOfSaleId: string; quantity: number }[]
-}
-
-/** Cohérence d'un format entre le stock des points de vente, l'ancien stock global et le reste des lots. */
-interface CoherenceRow {
-  variantId: string
-  productName: string
-  format: string
-  globalStock: number
-  locationStock: number
-  activeLots: number
-  expiredLots: number
-  uncovered: number
-  excess: number
-  globalGap: number
-  unlocated: number
-}
-
-/** Lot périmé de la liste de l'onglet Cohérence (y compris ceux dont le reste est nul). */
-interface ExpiredLotRow {
-  id: string
-  lotNumber: string
-  productName: string
-  format: string
-  initialQuantity: number
-  remainingQuantity: number
-  expiryDate: string | null
-  hasHistory: boolean
-}
-
-interface CoherencePayload {
-  rows: CoherenceRow[]
-  expiredList?: ExpiredLotRow[]
-  expiredListError?: string | null
-  summary: { unlocatedFormats: number; unlocatedUnits: number; uncoveredFormats: number; uncoveredUnits: number; globalGapFormats: number; excessFormats: number; excessUnits: number; expiredFormats: number; expiredUnits: number; fixable: number }
 }
 
 interface PointOfSaleOption {
@@ -128,6 +94,15 @@ function todayInput() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
+/** Date proposée pour prolonger un lot : N jours après son expiration (ou après aujourd'hui s'il n'en a pas). */
+function proposedExpiry(lot: Lot, days: number) {
+  const today = new Date(`${todayInput()}T00:00:00`)
+  const base = lot.expiryDate ? new Date(lot.expiryDate) : today
+  const from = base > today ? base : today
+  from.setDate(from.getDate() + days)
+  return `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`
+}
+
 /** Saisie d'une quantité : toujours un entier, jamais sous le minimum. */
 function wholeQuantity(value: string, min: number) {
   const n = Math.floor(Number(value))
@@ -153,10 +128,6 @@ export default function ProductionPage() {
   const [reports, setReports] = useState<ReportPayload | null>(null)
   const [stockVariants, setStockVariants] = useState<StockVariant[]>([])
   const [points, setPoints] = useState<PointOfSaleOption[]>([])
-  const [coherence, setCoherence] = useState<CoherencePayload | null>(null)
-  const [regularising, setRegularising] = useState(false)
-  const [checkedExpired, setCheckedExpired] = useState<Record<string, boolean>>({})
-  const [coherenceError, setCoherenceError] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
@@ -174,7 +145,10 @@ export default function ProductionPage() {
   const [filterPointOfSaleId, setFilterPointOfSaleId] = useState<string>("")
   const [searchLot, setSearchLot] = useState("")
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null)
-  const [tab, setTab] = useState<"lots" | "alerts" | "coherence">("lots")
+  const [extendingLot, setExtendingLot] = useState<Lot | null>(null)
+  const [extendDate, setExtendDate] = useState("")
+  const [extendDays, setExtendDays] = useState(30)
+  const [extending, setExtending] = useState(false)
   const [formMode, setFormMode] = useState<"single" | "batch">("single")
   const [batchMode, setBatchMode] = useState<"uniform" | "custom">("uniform")
   const [batchQty, setBatchQty] = useState(1)
@@ -204,30 +178,12 @@ export default function ProductionPage() {
           return null
         }
       }
-      // la cohérence garde le message du serveur en cas d'échec, pour l'afficher dans l'onglet
-      const getCoherence = async (): Promise<CoherencePayload | null> => {
-        try {
-          const res = await fetch("/api/lots/coherence", { signal })
-          const body = await res.json().catch(() => null)
-          if (res.ok && body) {
-            setCoherenceError("")
-            return body as CoherencePayload
-          }
-          setCoherenceError(`${res.status === 403 ? "Accès refusé" : body?.error ?? "Erreur serveur"} (code ${res.status})`)
-          return null
-        } catch (err) {
-          if (err instanceof DOMException && err.name === "AbortError") throw err
-          setCoherenceError(err instanceof Error ? err.message : "Connexion impossible")
-          return null
-        }
-      }
       try {
-        const [lotsJson, reportJson, stockJson, pointsJson, coherenceJson] = await Promise.all([
+        const [lotsJson, reportJson, stockJson, pointsJson] = await Promise.all([
           get<LotsPayload>("/api/lots" + (filterStatus ? `?status=${filterStatus}` : "")),
           get<ReportPayload>("/api/reports"),
           get<{ variants?: StockVariant[] }>("/api/stock"),
           get<PointOfSaleOption[]>("/api/points-de-vente/list"),
-          getCoherence(),
         ])
         if (signal?.aborted) return
 
@@ -244,7 +200,6 @@ export default function ProductionPage() {
           setLotsData(lotsJson)
         }
         setReports(reportJson)
-        setCoherence(coherenceJson)
         const variants = stockJson?.variants ?? []
         const activePoints = (pointsJson ?? []).filter((p) => p.isActive)
         setStockVariants(variants)
@@ -418,101 +373,6 @@ export default function ProductionPage() {
     succeed(`Lot ${lot.lotNumber} supprimé`)
   }
 
-  const regularise = async () => {
-    const sum = coherence?.summary
-    if (!sum || sum.fixable === 0) return
-    const lines = [
-      sum.uncoveredFormats > 0 ? `- créer ${sum.uncoveredFormats} lot(s) pour couvrir ${sum.uncoveredUnits} unité(s) présentes sans lot` : "",
-      sum.globalGapFormats > 0 ? `- réaligner l'ancien stock global de ${sum.globalGapFormats} format(s) sur le stock des points de vente` : "",
-    ].filter(Boolean)
-    if (!confirm(`Régulariser le stock ?\n${lines.join("\n")}\n\nAucune quantité ne change dans les points de vente.`)) return
-    setError("")
-    setSuccess("")
-    setRegularising(true)
-    try {
-      const res = await fetch("/api/lots/coherence", { method: "POST" })
-      const body = await res.json().catch(() => null)
-      if (!res.ok) {
-        fail(res.status === 403 ? "La régularisation est réservée à l'administrateur" : body?.error ?? "Régularisation impossible")
-        return
-      }
-      await load()
-      succeed(`Régularisation faite : ${body.createdLots.length} lot(s) créé(s), stock global réaligné sur ${body.syncedFormats} format(s)`)
-    } finally {
-      setRegularising(false)
-    }
-  }
-
-  // Stock hors point de vente d'un format : le placer au Comptoir LCG, ou le retirer s'il n'existe pas.
-  const handleUnlocated = async (row: CoherenceRow, action: "placer" | "retirer") => {
-    const question = action === "placer"
-      ? `Placer ${row.unlocated} unité(s) de « ${row.productName} · ${row.format} » au Comptoir LCG ?\nElles deviennent vendables en caisse.`
-      : `Retirer ${row.unlocated} unité(s) de « ${row.productName} · ${row.format} » du stock ?\nÀ faire seulement si ce stock n'existe pas réellement.`
-    if (!confirm(question)) return
-    setError("")
-    setSuccess("")
-    setRegularising(true)
-    try {
-      const res = await fetch("/api/stock/hors-point-de-vente", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variantId: row.variantId, action }),
-      })
-      const body = await res.json().catch(() => null)
-      if (!res.ok) {
-        fail(res.status === 403 ? "Action réservée à l'administrateur" : body?.error ?? "Action impossible")
-        return
-      }
-      await load()
-      succeed(action === "placer" ? `${body.placed} unité(s) placée(s) au ${body.pointOfSale}` : `${body.dropped} unité(s) retirée(s) du stock`)
-    } finally {
-      setRegularising(false)
-    }
-  }
-
-  // Lots périmés d'un ou plusieurs formats : leur reste sort du stock, les lots sont retirés (archivés s'ils ont un historique).
-  const retirePerimes = async (rows: CoherenceRow[]) => {
-    const targets = rows.filter((r) => r.expiredLots > 0)
-    if (targets.length === 0) return
-    const units = targets.reduce((s, r) => s + r.expiredLots, 0)
-    const what = targets.length === 1 ? `de « ${targets[0].productName} · ${targets[0].format} »` : `de ${targets.length} formats`
-    await writeOffExpired({ variantIds: targets.map((r) => r.variantId) }, `Retirer les lots périmés ${what} (${units} unité(s) restantes) ?`)
-  }
-
-  // Lots périmés cochés un par un dans la liste de l'onglet Cohérence (même ceux dont le reste est nul).
-  const retireExpiredLots = async (lots: ExpiredLotRow[]) => {
-    if (lots.length === 0) return
-    const units = lots.reduce((s, l) => s + Math.max(0, l.remainingQuantity), 0)
-    const what = lots.length === 1 ? `le lot périmé ${lots[0].lotNumber}` : `${lots.length} lots périmés`
-    await writeOffExpired({ lotIds: lots.map((l) => l.id) }, `Supprimer ${what} (${units} unité(s) restantes) ?`)
-  }
-
-  const writeOffExpired = async (payload: { variantIds?: string[]; lotIds?: string[] }, question: string) => {
-    if (!confirm(`${question}\n\nLe reste de ces lots sort du stock des points de vente et du stock global (mouvement conservé). Les lots périmés sont archivés s'ils ont servi à des ventes, effacés sinon. Les lots actifs ne changent pas.`)) return
-    setError("")
-    setSuccess("")
-    setRegularising(true)
-    try {
-      const res = await fetch("/api/lots/expired-writeoff", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const body = await res.json().catch(() => null)
-      if (!res.ok) {
-        fail(res.status === 403 ? "Action réservée aux profils autorisés à supprimer des lots" : body?.error ?? "Suppression impossible")
-        return
-      }
-      setCheckedExpired({})
-      await load()
-      succeed(`${body.lots} lot(s) périmé(s) retiré(s)${body.archived ? ` (dont ${body.archived} archivé(s))` : ""}, ${body.units} unité(s) sortie(s) du stock`)
-    } catch (e) {
-      fail(e instanceof Error ? e.message : "Erreur")
-    } finally {
-      setRegularising(false)
-    }
-  }
-
   const viewLot = async (lot: Lot) => {
     try {
       const res = await fetch(`/api/lots/${lot.id}`)
@@ -526,19 +386,17 @@ export default function ProductionPage() {
   }
 
   const inputClass = "mt-1 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:py-2 sm:text-sm"
-  const destinationSelect = (
-    <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+  // Version resserrée utilisée par « Nouveau lot » : les champs doivent tenir sur une seule ligne avec le bouton.
+  const lotInputClass = "mt-1 w-full rounded-lg border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:px-2.5 sm:py-1.5"
+  const destinationField = (compact = false) => (
+    <label className={`block text-xs font-medium text-gray-700 ${compact ? "" : "sm:text-sm"}`}>
       Point de vente de destination
-      <select value={destinationPointOfSaleId} onChange={(e) => setDestinationPointOfSaleId(e.target.value)} className={`${inputClass} bg-white`}>
+      <select value={destinationPointOfSaleId} onChange={(e) => setDestinationPointOfSaleId(e.target.value)} className={`${compact ? lotInputClass : inputClass} bg-white`}>
         {activePoints.length === 0 && <option value="">Aucun point de vente actif</option>}
         {activePoints.map((point) => <option key={point.id} value={point.id}>{point.name} ({point.code})</option>)}
       </select>
     </label>
   )
-
-  const expiredList = coherence?.expiredList ?? []
-  const checkedLots = expiredList.filter((l) => checkedExpired[l.id])
-  const allExpiredChecked = expiredList.length > 0 && checkedLots.length === expiredList.length
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -562,16 +420,6 @@ export default function ProductionPage() {
       {warnings.map((w) => (
         <div key={w} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:px-4 sm:py-3 sm:text-sm">{w}</div>
       ))}
-      {coherence && (coherence.summary.uncoveredFormats > 0 || coherence.summary.expiredFormats > 0) && tab !== "coherence" && (
-        <div className="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-3 sm:text-sm">
-          <span>
-            {coherence.summary.uncoveredFormats > 0 && <>{coherence.summary.uncoveredFormats} format(s) ont du stock sans lot ({coherence.summary.uncoveredUnits} unités) : leur vente est refusée tant que ce stock n&apos;est pas couvert. </>}
-            {coherence.summary.expiredFormats > 0 && <>{coherence.summary.expiredUnits} unité(s) restent dans des lots expirés : elles ne sont plus vendables.</>}
-          </span>
-          <button onClick={() => setTab("coherence")} className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1.5 font-semibold text-red-700 hover:bg-red-100">Voir le détail</button>
-        </div>
-      )}
-
       <div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4">
           <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
@@ -594,7 +442,7 @@ export default function ProductionPage() {
         <p className="mt-1.5 text-xs text-gray-400">Ces chiffres portent sur l&apos;ensemble des lots ; ils ne changent pas avec les filtres de la liste.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
         <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4">
             <h2 className="flex items-center gap-2 text-xs font-semibold text-gray-900 sm:text-sm">{formMode === "single" ? <Factory className="h-4 w-4" /> : <Boxes className="h-4 w-4" />} {formMode === "single" ? "Nouveau lot" : "Production groupée"}</h2>
@@ -605,35 +453,35 @@ export default function ProductionPage() {
           </div>
 
           {formMode === "single" && (
-          <form onSubmit={submitProduction} className="space-y-3 sm:space-y-4">
-            <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+          <form onSubmit={submitProduction} className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end">
+            <label className="block text-xs font-medium text-gray-700 sm:min-w-[110px] sm:flex-1">
               Produit / format
-              <select value={variantId} onChange={(e) => setVariantId(e.target.value)} className={`${inputClass} bg-white`}>
+              <select value={variantId} onChange={(e) => setVariantId(e.target.value)} className={`${lotInputClass} bg-white`}>
                 {stockVariants.length === 0 && <option value="">Aucun produit disponible</option>}
                 {stockVariants.map((v) => <option key={v.variantId} value={v.variantId}>{v.productName} - {v.format}</option>)}
               </select>
             </label>
-            {destinationSelect}
-            <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+            <div className="sm:min-w-[120px] sm:flex-1">{destinationField(true)}</div>
+            <label className="block text-xs font-medium text-gray-700 sm:min-w-[64px] sm:flex-1">
               Quantité à produire
-              <input type="number" min={1} step={1} inputMode="numeric" value={quantity} onChange={(e) => setQuantity(wholeQuantity(e.target.value, 1))} className={inputClass} />
+              <input type="number" min={1} step={1} inputMode="numeric" value={quantity} onChange={(e) => setQuantity(wholeQuantity(e.target.value, 1))} className={lotInputClass} />
             </label>
-            <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+            <label className="block text-xs font-medium text-gray-700 sm:min-w-[110px] sm:flex-1">
               Date d&apos;expiration (optionnel)
-              <input type="date" min={todayInput()} value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={inputClass} />
+              <input type="date" min={todayInput()} value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={lotInputClass} />
             </label>
-            <label className="block text-xs font-medium text-gray-700 sm:text-sm">
+            <label className="block text-xs font-medium text-gray-700 sm:min-w-[90px] sm:flex-1">
               Note
-              <input value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} placeholder="Production glaçon..." />
+              <input value={note} onChange={(e) => setNote(e.target.value)} className={lotInputClass} placeholder="Production glaçon..." />
             </label>
             {selectedVariant && (
-              <div className="rounded-lg bg-gray-50 p-2.5 text-xs text-gray-600 sm:p-3 sm:text-sm">
+              <div className="rounded-lg bg-gray-50 p-2.5 text-xs text-gray-600 sm:order-last sm:basis-full sm:p-3">
                 Stock total : <span className="font-semibold text-gray-900">{totalStock(selectedVariant)} {selectedVariant.unit ?? ""}</span>
                 <span className="mx-1.5 text-gray-300">|</span>
                 {selectedPoint?.name ?? "Destination"} : <span className="font-semibold text-gray-900">{stockAt(selectedVariant, destinationPointOfSaleId)} {selectedVariant.unit ?? ""}</span>
               </div>
             )}
-            <button disabled={!canProduce || !variantId || submitting} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:py-2.5 sm:text-sm">
+            <button disabled={!canProduce || !variantId || submitting} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:w-auto sm:shrink-0">
               <PackagePlus className="h-4 w-4" /> {submitting ? "Création en cours..." : "Créer le lot"}
             </button>
           </form>
@@ -641,7 +489,7 @@ export default function ProductionPage() {
 
           {formMode === "batch" && (
             <form onSubmit={submitBatchProduction} className="space-y-3 sm:space-y-4">
-              {destinationSelect}
+              {destinationField()}
 
               <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1">
                 <button type="button" onClick={() => setBatchMode("uniform")} className={`flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${batchMode === "uniform" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Quantité unique</button>
@@ -727,35 +575,6 @@ export default function ProductionPage() {
           )}
         </section>
 
-        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 lg:col-span-2">
-          <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold text-gray-900 sm:mb-4 sm:text-sm"><TrendingUp className="h-4 w-4" /> Production / jour (30 j)</h2>
-          <div className="h-48 sm:h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={reports?.productionByDay ?? []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" allowDecimals={false} />
-                <Tooltip contentStyle={{ borderRadius: "8px", border: "1px solid #e5e7eb" }} />
-                <Bar dataKey="quantity" fill="#1f4fa3" radius={[4, 4, 0, 0]} name="Quantité" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      </div>
-
-      <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-100 p-1 w-full sm:w-fit">
-        <button onClick={() => setTab("lots")} className={`flex-1 sm:flex-none rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:py-2 sm:text-sm ${tab === "lots" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-          <Factory className="inline h-4 w-4 mr-1" /> Lots
-        </button>
-        <button onClick={() => setTab("alerts")} className={`flex-1 sm:flex-none rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:py-2 sm:text-sm ${tab === "alerts" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-          <AlertCircle className="inline h-4 w-4 mr-1" /> Alertes
-        </button>
-        <button onClick={() => setTab("coherence")} className={`flex-1 sm:flex-none rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:py-2 sm:text-sm ${tab === "coherence" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-          <CheckCircle2 className="inline h-4 w-4 mr-1" /> Cohérence{coherence && coherence.summary.fixable > 0 ? ` (${coherence.summary.fixable})` : ""}
-        </button>
-      </div>
-
-      {tab === "lots" && (
         <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <h2 className="text-xs font-semibold text-gray-900 sm:text-sm">{hasFilter ? "Lots filtrés" : "Tous les lots"} ({filteredLots.length})</h2>
@@ -847,241 +666,7 @@ export default function ProductionPage() {
             </table>
           </div>
         </section>
-      )}
-
-      {tab === "alerts" && (
-        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <h2 className="mb-1 text-xs font-semibold text-gray-900 sm:text-sm">Alertes à produire</h2>
-          <p className="mb-3 text-xs text-gray-500 sm:mb-4">Formats dont le stock total, tous points de vente confondus, est de 20 unités ou moins.</p>
-          <div className="space-y-2">
-            {(reports?.stockAlerts ?? []).map((alert) => (
-              <div key={alert.variantId} className="flex items-center justify-between rounded-lg bg-yellow-50 p-2.5 text-xs sm:p-3 sm:text-sm">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-yellow-600" />
-                  <div>
-                    <p className="font-medium text-gray-800">{alert.productName}</p>
-                    <p className=" text-gray-500 ">{alert.format} - {alert.categoryName}</p>
-                  </div>
-                </div>
-                <span className="font-semibold text-yellow-800">{alert.stock}</span>
-              </div>
-            ))}
-            {!reports && <p className="text-xs text-gray-500 sm:text-sm">Les alertes de stock n&apos;ont pas pu être chargées.</p>}
-            {reports && reports.stockAlerts.length === 0 && <p className="text-xs text-gray-500 sm:text-sm">Aucune alerte stock.</p>}
-          </div>
-        </section>
-      )}
-
-      {tab === "coherence" && (
-        <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <div className="mb-3 flex flex-col gap-3 sm:mb-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-xs font-semibold text-gray-900 sm:text-sm">Cohérence du stock</h2>
-              <p className="mt-1 max-w-2xl text-xs text-gray-500">Le stock des points de vente fait foi. Chaque unité doit être couverte par un lot : sans lot, la vente est refusée. Un lot expiré n&apos;est plus vendable ; son reste se sort du stock par une perte.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={async () => {
-                  if (!coherence) return
-                  const rows = coherence.rows.filter((r) => r.activeLots === 0 && r.uncovered > 0)
-                  if (rows.length === 0) {
-                    fail("Aucun stock sans lot à supprimer pour les lignes dont 'Lots actifs' est nul")
-                    return
-                  }
-                  const units = rows.reduce((s, r) => s + r.uncovered, 0)
-                  if (!confirm(`Supprimer ${units} unité(s) de stock sans lot pour ${rows.length} format(s) dont 'Lots actifs' est nul ?\n\nLes unités sont retirées des points de vente (mouvement de stock conservé). Les ventes et les lots valides ne changent pas.`)) return
-                  setError("")
-                  setSuccess("")
-                  setRegularising(true)
-                  try {
-                    const res = await fetch("/api/lots/expired-cleanup", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ variantIds: rows.map((r) => r.variantId) }),
-                    })
-                    const body = await res.json().catch(() => null)
-                    if (!res.ok) {
-                      fail(body?.error ?? "Suppression impossible")
-                      return
-                    }
-                    await load()
-                    succeed(`${body.removedUnits || 0} unité(s) de stock sans lot supprimée(s)${body.deleted ? ` et ${body.deleted} lot(s) périmé(s)` : ""}`)
-                  } catch (e) {
-                    fail(e instanceof Error ? e.message : "Erreur")
-                  } finally {
-                    setRegularising(false)
-                  }
-                }}
-                disabled={regularising || !coherence || coherence.rows.filter((r) => r.activeLots === 0 && r.uncovered > 0).length === 0}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50 sm:text-sm"
-              >
-                <Trash2 className="h-4 w-4" /> Supprimer lots périmés (SANS LOT)
-              </button>
-              <button
-                onClick={() => retireExpiredLots(expiredList)}
-                disabled={regularising || expiredList.length === 0}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 sm:text-sm"
-              >
-                <Trash2 className="h-4 w-4" /> Retirer tous les lots périmés{expiredList.length > 0 ? ` (${expiredList.length})` : ""}
-              </button>
-              <button onClick={regularise} disabled={regularising || !coherence || coherence.summary.fixable === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:text-sm">
-                <CheckCircle2 className="h-4 w-4" /> {regularising ? "Régularisation..." : "Régulariser"}
-              </button>
-            </div>
-          </div>
-
-          {!coherence && <p className="text-xs text-gray-500 sm:text-sm">L&apos;état de cohérence n&apos;a pas pu être chargé{coherenceError ? ` : ${coherenceError}` : ""}.</p>}
-          {coherence?.expiredListError && (
-            <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">La liste des lots périmés n&apos;a pas pu être chargée : {coherence.expiredListError}</p>
-          )}
-          {coherence && coherence.summary.fixable === 0 && coherence.summary.excessFormats === 0 && coherence.summary.expiredFormats === 0 && !coherence.expiredList?.length && (
-            <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700 sm:text-sm">Tout est cohérent : chaque unité en stock est couverte par un lot.</p>
-          )}
-          {coherence && coherence.summary.unlocatedFormats > 0 && (
-            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:text-sm">{coherence.summary.unlocatedFormats} format(s) ont du stock hors point de vente ({coherence.summary.unlocatedUnits} unités) : invisible en caisse. Placez-le au Comptoir LCG, ou retirez-le s&apos;il n&apos;existe pas (colonne « Hors point de vente »).</p>
-          )}
-          {coherence && coherence.summary.excessFormats > 0 && (
-            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 sm:text-sm">{coherence.summary.excessFormats} format(s) ont plus de reste dans leurs lots que de stock présent ({coherence.summary.excessUnits} unités) : à vérifier par un inventaire, la régularisation n&apos;y touche pas.</p>
-          )}
-
-          {expiredList.length > 0 && (
-              <div className="mb-4 rounded-lg border border-red-200">
-                <div className="flex flex-col gap-2 border-b border-red-200 bg-red-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                  <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold text-red-800">
-                    <input
-                      type="checkbox"
-                      className="h-5 w-5 accent-red-600"
-                      checked={allExpiredChecked}
-                      onChange={() => setCheckedExpired(allExpiredChecked ? {} : Object.fromEntries(expiredList.map((l) => [l.id, true])))}
-                    />
-                    Lots périmés ({expiredList.length}) : cochez ceux à supprimer
-                  </label>
-                  <button
-                    onClick={() => retireExpiredLots(checkedLots)}
-                    disabled={regularising || checkedLots.length === 0}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-                  >
-                    <Trash2 className="h-4 w-4" /> Supprimer la sélection ({checkedLots.length})
-                  </button>
-                </div>
-                <ul className="max-h-80 divide-y divide-red-100 overflow-y-auto">
-                  {expiredList.map((l) => (
-                    <li key={l.id}>
-                      <label className="flex min-h-12 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-red-50/50">
-                        <input
-                          type="checkbox"
-                          className="h-5 w-5 shrink-0 accent-red-600"
-                          checked={!!checkedExpired[l.id]}
-                          onChange={(e) => setCheckedExpired((prev) => ({ ...prev, [l.id]: e.target.checked }))}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="font-semibold text-gray-900">{l.lotNumber}</span>
-                          <span className="text-gray-600"> · {l.productName} · {l.format}</span>
-                          <span className="block text-xs text-gray-500">
-                            {l.expiryDate ? `Expiré le ${fmtDate(l.expiryDate)}` : "Expiré"} · reste {l.remainingQuantity} / {l.initialQuantity}
-                            {l.hasHistory ? " · sera archivé (historique de ventes)" : ""}
-                          </span>
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-          )}
-
-          {coherence && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-xs sm:text-sm">
-                <thead className="bg-gray-50/80">
-                  <tr>
-                    <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Produit</th>
-                    <th className="px-2 py-1.5 text-left  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Format</th>
-                    <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Stock points de vente</th>
-                    <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Lots actifs</th>
-                    <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Lots expirés</th>
-                    <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Sans lot</th>
-                    <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Ancien stock global</th>
-                    <th className="px-2 py-1.5 text-right  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Hors point de vente</th>
-                    <th className="px-2 py-1.5 text-center  font-semibold uppercase text-gray-500 sm:px-4 sm:py-2 ">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {coherence.rows.map((r) => (
-                    <tr key={r.variantId} className="hover:bg-gray-50/50">
-                      <td className="px-2 py-2 sm:px-4 sm:py-2.5">{r.productName}</td>
-                      <td className="px-2 py-2 text-gray-600 sm:px-4 sm:py-2.5">{r.format}</td>
-                      <td className="px-2 py-2 text-right font-semibold sm:px-4 sm:py-2.5">{r.locationStock}</td>
-                      <td className="px-2 py-2 text-right sm:px-4 sm:py-2.5">{r.activeLots}{r.excess > 0 ? <span className="ml-1 text-amber-700" title="Reste des lots supérieur au stock présent">(+{r.excess})</span> : null}</td>
-                      <td className={`px-2 py-2 text-right sm:px-4 sm:py-2.5 ${r.expiredLots > 0 ? "font-semibold text-red-700" : "text-gray-400"}`}>{r.expiredLots}</td>
-                      <td className={`px-2 py-2 text-right sm:px-4 sm:py-2.5 ${r.uncovered > 0 ? "font-bold text-red-700" : "text-gray-400"}`}>{r.uncovered}</td>
-                      <td className={`px-2 py-2 text-right sm:px-4 sm:py-2.5 ${r.globalGap !== 0 ? "font-semibold text-amber-700" : "text-gray-600"}`}>{r.globalStock}{r.globalGap !== 0 ? ` (${r.globalGap > 0 ? "+" : ""}${r.globalGap})` : ""}</td>
-                      <td className="px-2 py-2 text-right sm:px-4 sm:py-2.5">
-                        {r.unlocated > 0 ? (
-                          <div className="flex flex-wrap items-center justify-end gap-1.5">
-                            <span className="font-bold text-amber-700">{r.unlocated}</span>
-                            <button onClick={() => handleUnlocated(r, "placer")} disabled={regularising} className="rounded-md bg-green-600 px-2 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">Placer au Comptoir</button>
-                            <button onClick={() => handleUnlocated(r, "retirer")} disabled={regularising} className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">Retirer</button>
-                          </div>
-                        ) : <span className="text-gray-400">0</span>}
-                      </td>
-                      <td className="px-2 py-2 text-center sm:px-4 sm:py-2.5">
-                        {r.activeLots === 0 && r.uncovered > 0 ? (
-                          <button
-                            onClick={async () => {
-                              if (!coherence) return
-                              if (!confirm(`Supprimer ${r.uncovered} unité(s) de stock sans lot de « ${r.productName} · ${r.format} » ?\n\nLes unités sont retirées des points de vente (mouvement de stock conservé). Les ventes et les lots valides ne changent pas.`)) return
-                              setError("")
-                              setSuccess("")
-                              setRegularising(true)
-                              try {
-                                const res = await fetch("/api/lots/expired-cleanup", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ variantIds: [r.variantId] }),
-                                })
-                                const body = await res.json().catch(() => null)
-                                if (!res.ok) {
-                                  fail(body?.error ?? "Suppression impossible")
-                                  return
-                                }
-                                await load()
-                                succeed(`${body.removedUnits || 0} unité(s) de stock sans lot supprimée(s)`)
-                              } catch (e) {
-                                fail(e instanceof Error ? e.message : "Erreur")
-                              } finally {
-                                setRegularising(false)
-                              }
-                            }}
-                            disabled={regularising}
-                            className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
-                            title="Supprimer le stock sans lot de ce format"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Supprimer
-                          </button>
-                        ) : r.expiredLots > 0 ? (
-                          <button
-                            onClick={() => retirePerimes([r])}
-                            disabled={regularising}
-                            className="inline-flex min-h-9 items-center gap-1 rounded-md bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-                            title="Sortir du stock le reste des lots périmés de ce format et retirer ces lots"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Retirer les périmés
-                          </button>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {coherence.rows.length === 0 && (
-                    <tr><td colSpan={9} className="px-2 py-6 text-center text-xs text-gray-500 sm:px-4 sm:py-8 sm:text-sm">Aucun produit.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
+      </div>
 
       {selectedLot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={() => setSelectedLot(null)}>
