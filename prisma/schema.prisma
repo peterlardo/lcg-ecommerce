@@ -73,6 +73,7 @@ model User {
   managedPointOfSales  PointOfSale[]        @relation("PointOfSaleManager")
   permissions          UserPermission[]
   producedLots         ProductionLot[]
+  productionSheets     ProductionSheet[]
   stockMovements       StockMovement[]
   openedCashSessions   CashSession[]
   passwordResetTokens  PasswordResetToken[]
@@ -514,6 +515,61 @@ model LotAllocation {
   createdAt DateTime @default(now())
 
   lot ProductionLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+}
+
+model ProductionParam {
+  id             String @id @default(cuid())
+  name           String @unique
+  code           String @unique
+  unit           String @default("Kg")
+  weightKg       Float  @default(0)
+  dailyObjective Int    @default(0)
+  sortOrder      Int    @default(0)
+}
+
+model ProductionSheet {
+  id                       String   @id @default(cuid())
+  date                     DateTime @unique
+  sheetNumber              String   @unique
+  manager                  String?
+  qualityControl           String?
+  shifts                   String?
+  emptyPackaging           Int?
+  waterM3                  Float?
+  electricityKwh           Float?
+  generatorLiters          Float?
+  outageMinutes            Int?
+  machineDowntimeMinutes   Int?
+  incidents                String?
+  status                   String   @default("DRAFT")
+  createdById              String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  createdBy User?                  @relation(fields: [createdById], references: [id])
+  lines     ProductionSheetLine[]
+}
+
+model ProductionSheetLine {
+  id             String  @id @default(cuid())
+  sheetId        String
+  productName    String
+  productCode    String
+  shift          String?
+  machine        String?
+  startTime      String?
+  endTime        String?
+  producedQty    Int     @default(0)
+  rejectedQty    Int     @default(0)
+  conformQty     Int     @default(0)
+  unit           String  @default("Kg")
+  operator       String?
+  qualityStatus  String?
+  notes          String?
+
+  sheet ProductionSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+
+  @@index([sheetId])
 }
 
 model Message {

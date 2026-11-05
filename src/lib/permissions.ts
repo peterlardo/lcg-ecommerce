@@ -52,7 +52,7 @@ export const MODULE_ROLES: Record<string, string[]> = {
 }
 
 /** Écrans pilotés par le droit d'un module voisin. */
-export const MODULE_ALIASES: Record<string, string> = { livreurs: "livraisons", archives: "commandes", "devis-b2b": "b2b", "bons-b2b": "b2b", "contrats-b2b": "contrats", "tarifs-b2b": "contrats" }
+export const MODULE_ALIASES: Record<string, string> = { livreurs: "livraisons", archives: "commandes", "devis-b2b": "b2b", "bons-b2b": "b2b", "contrats-b2b": "contrats", "tarifs-b2b": "contrats", "fiches-production": "production" }
 
 /** Rôles historiques de l'administration : sans aucun droit défini, ils voient tout le menu. */
 export const LEGACY_ADMIN_ROLES = ["ADMIN", "STOCK_MANAGER", "DELIVERY_AGENT", "COMMERCIAL", "COMPTABLE"]
