@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma";
-import { requireManagementAccess } from "@/lib/api-auth"
+import { MANAGEMENT_ROLES, requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 
 export async function GET(request: Request) {
-  const forbidden = await requireManagementAccess()
+  // Lecture ouverte aux gestionnaires ET aux profils disposant du module « caisse »
+  // (l'écran /admin/caisse leur est visible : même règle que rapports/etat-stock).
+  const forbidden = await requireManagementAccess(MANAGEMENT_ROLES, [["caisse"]])
   if (forbidden) return forbidden
   const { searchParams } = new URL(request.url)
   const pointOfSaleId = searchParams.get("pointOfSaleId")

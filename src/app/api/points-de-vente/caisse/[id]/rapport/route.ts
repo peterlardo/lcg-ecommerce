@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getPrisma } from "@/lib/prisma"
-import { requireManagementAccess } from "@/lib/api-auth"
+import { MANAGEMENT_ROLES, requireManagementAccess } from "@/lib/api-auth"
 
 // GET  : apercu des donnees du rapport de cloture (ne marque rien).
 // POST : genere officiellement le rapport : horodate la session et lui attribue
@@ -168,7 +168,8 @@ async function buildReport(sessionId: string) {
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const forbidden = await requireManagementAccess()
+  // Lecture alignée sur l'écran /admin/caisse (gestionnaires + module « caisse »).
+  const forbidden = await requireManagementAccess(MANAGEMENT_ROLES, [["caisse"]])
   if (forbidden) return forbidden
 
   const { id } = await params
