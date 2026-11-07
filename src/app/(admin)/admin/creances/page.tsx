@@ -6,16 +6,23 @@ import { formatPrice } from "@/lib/utils"
 import { InvoicePaymentDialog } from "@/components/admin/invoice-payment-dialog"
 import type { AgingBucket, ClientCreance, CreanceSummary } from "@/lib/commercial"
 
+type CreanceKind = "b2b" | "order"
+type CreanceClientType = "B2B" | "B2C" | "ORDINAIRE"
+
 interface Creance {
   id: string
+  kind: CreanceKind
+  clientType: CreanceClientType
   reference: string
   clientId: string | null
   clientName: string
+  commercialName: string | null
   total: number
   credited: number
   paid: number
   pendingAmount: number
   promisePending: number
+  promisePendingCount: number
   balance: number
   creditLimit: number | null
   paymentTermsDays: number
@@ -38,6 +45,7 @@ export default function CreancesPage() {
   const [message, setMessage] = useState("")
   const [search, setSearch] = useState("")
   const [onlyOverdue, setOnlyOverdue] = useState(false)
+  const [kindFilter, setKindFilter] = useState<"all" | CreanceKind>("all")
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
   const [paying, setPaying] = useState<Creance | null>(null)
@@ -46,6 +54,7 @@ export default function CreancesPage() {
   const [aging, setAging] = useState<AgingBucket[]>([])
   const [byClient, setByClient] = useState<ClientCreance[]>([])
   const [clientFilter, setClientFilter] = useState<string | null>(null)
+  const [kindCounts, setKindCounts] = useState({ b2b: 0, order: 0 })
 
   // arrivée depuis une facture (« Encaisser ») : ?q=<référence> pré-remplit la recherche
   useEffect(() => {
@@ -70,6 +79,7 @@ export default function CreancesPage() {
         setSummary(data.summary ?? null)
         setAging(Array.isArray(data.aging) ? data.aging : [])
         setByClient(Array.isArray(data.byClient) ? data.byClient : [])
+        setKindCounts(data.kindCounts ?? { b2b: 0, order: 0 })
       } catch (e) {
         if (!(e instanceof DOMException && e.name === "AbortError")) setError("Connexion au serveur impossible")
       } finally {
@@ -85,10 +95,11 @@ export default function CreancesPage() {
     return creances.filter(
       (c) =>
         (!clientFilter || c.clientId === clientFilter) &&
+        (kindFilter === "all" || c.kind === kindFilter) &&
         (!term || c.clientName.toLowerCase().includes(term) || c.reference.toLowerCase().includes(term)) &&
         (!onlyOverdue || c.overdue),
     )
-  }, [creances, search, onlyOverdue, clientFilter])
+  }, [creances, search, onlyOverdue, clientFilter, kindFilter])
 
   // encours par client : sert à signaler le dépassement du plafond de crédit
   const exposure = useMemo(() => {
@@ -103,7 +114,7 @@ export default function CreancesPage() {
   const openPayment = (c: Creance) => setPaying(c)
 
   const act = async (c: Creance, action: "reminder" | "validate") => {
-    if (busy) return
+    if (busy || c.kind !== "b2b") return
     setBusy(`${action}-${c.id}`)
     setError("")
     setMessage("")
@@ -137,15 +148,33 @@ export default function CreancesPage() {
           </h1>
           <p className="mt-1 text-sm text-gray-500">
             {tab === "factures"
-              ? `Factures B2B émises et pas encore soldées · ${filtered.length} facture${filtered.length > 1 ? "s" : ""} · reste à recouvrer ${formatPrice(totalBalance)}`
+              ? `Impayés à recouvrer · ${filtered.length} ligne${filtered.length > 1 ? "s" : ""} · reste ${formatPrice(totalBalance)}${kindCounts.order ? ` · ${kindCounts.b2b} facture(s) B2B, ${kindCounts.order} vente(s) ordinaire(s)` : ""}`
               : tab === "aging"
-                ? `Balance âgée par échéance · ${aging.reduce((n, b) => n + b.count, 0)} facture(s) ouverte(s)`
-                : `Encours par client · ${byClient.length} client(s) débiteur(s)`}
+                ? `Balance âgée par échéance (factures B2B) · ${aging.reduce((n, b) => n + b.count, 0)} facture(s) ouverte(s)`
+                : `Encours par client B2B · ${byClient.length} client(s) débiteur(s)`}
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {tab === "factures" && (
             <>
+              <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
+                {(
+                  [
+                    { key: "all", label: "Tous" },
+                    { key: "b2b", label: `Clients B2B${kindCounts.b2b ? ` (${kindCounts.b2b})` : ""}` },
+                    { key: "order", label: `Ordinaires${kindCounts.order ? ` (${kindCounts.order})` : ""}` },
+                  ] as { key: "all" | CreanceKind; label: string }[]
+                ).map((k) => (
+                  <button
+                    key={k.key}
+                    type="button"
+                    onClick={() => setKindFilter(k.key)}
+                    className={`rounded-md px-3 py-2 text-sm font-semibold ${kindFilter === k.key ? "bg-primary text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                  >
+                    {k.label}
+                  </button>
+                ))}
+              </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
@@ -244,7 +273,8 @@ export default function CreancesPage() {
               <thead>
                 <tr className="border-b border-gray-100 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <th className="px-3 py-2.5 sm:px-4">Client</th>
-                  <th className="px-3 py-2.5">Facture</th>
+                  <th className="px-3 py-2.5">Type</th>
+                  <th className="px-3 py-2.5">Référence</th>
                   <th className="px-3 py-2.5 text-right">Montant</th>
                   <th className="px-3 py-2.5 text-right">Réglé</th>
                   <th className="px-3 py-2.5 text-right">En attente</th>
@@ -266,8 +296,15 @@ export default function CreancesPage() {
                       )}
                     </td>
                     <td className="px-3 py-2.5">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.kind === "b2b" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-700"}`}
+                      >
+                        {c.clientType === "ORDINAIRE" ? "Ordinaire" : c.clientType}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
                       <p className="font-mono text-xs text-gray-700">{c.reference}</p>
-                      <p className="text-xs text-gray-500">du {formatDate(c.createdAt)}</p>
+                      <p className="text-xs text-gray-500">{c.kind === "b2b" ? "Facture du" : "Vente du"} {formatDate(c.createdAt)}</p>
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right text-gray-700">
                       {formatPrice(c.total)}
@@ -296,32 +333,43 @@ export default function CreancesPage() {
                     </td>
                     <td className="px-3 py-2.5 sm:px-4">
                       <div className="flex items-center justify-end gap-2">
-                        {canValidate && c.pendingAmount > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => act(c, "validate")}
-                            disabled={busy !== null}
-                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-green-300 bg-white px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50"
+                        {c.kind === "b2b" ? (
+                          <>
+                            {canValidate && c.pendingAmount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => act(c, "validate")}
+                                disabled={busy !== null}
+                                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-green-300 bg-white px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50"
+                              >
+                                <Check className="h-4 w-4" /> Valider
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => act(c, "reminder")}
+                              disabled={busy !== null}
+                              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            >
+                              <BellRing className="h-4 w-4" /> {busy === `reminder-${c.id}` ? "Relance…" : "Relancer"}
+                            </button>
+                            {c.balance > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => openPayment(c)}
+                                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
+                              >
+                                <HandCoins className="h-4 w-4" /> Encaisser
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <a
+                            href={`/admin/commandes/${c.id}`}
+                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                           >
-                            <Check className="h-4 w-4" /> Valider
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => act(c, "reminder")}
-                          disabled={busy !== null}
-                          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          <BellRing className="h-4 w-4" /> {busy === `reminder-${c.id}` ? "Relance…" : "Relancer"}
-                        </button>
-                        {c.balance > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => openPayment(c)}
-                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
-                          >
-                            <HandCoins className="h-4 w-4" /> Encaisser
-                          </button>
+                            Voir commande
+                          </a>
                         )}
                       </div>
                     </td>

@@ -3,13 +3,14 @@ import { requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { isCashierRole } from "@/lib/permissions"
 import { creanceAging, creanceByClient, creanceLines, creanceSummary, type SessionUser } from "@/lib/commercial"
+import { seesAllOrders } from "@/lib/api-auth"
 
 export const dynamic = "force-dynamic"
 
 /** Lecture : gestionnaires + responsable comptable (gestion des factures B2B). */
 const READ_ALLOWED = ["ADMIN", "COMMERCIAL", "COMPTABLE"]
 
-/** Créances B2B : factures émises non soldées de la portée (tout le portefeuille, ou les clients du commercial). */
+/** Créances B2B + clients ordinaires : factures émises non soldées (portée) et commandes impayées. */
 export async function GET() {
   const forbidden = await requireManagementAccess(READ_ALLOWED)
   if (forbidden) return forbidden
@@ -18,7 +19,9 @@ export async function GET() {
     const session = await auth()
     const user = session?.user as SessionUser
     const now = new Date()
-    const creances = await creanceLines(user, now)
+    const all = await creanceLines(user, now)
+    const showOrdinary = seesAllOrders(user?.role)
+    const creances = showOrdinary ? all : all.filter((c) => c.kind === "b2b")
     return NextResponse.json({
       creances,
       count: creances.length,
@@ -30,6 +33,10 @@ export async function GET() {
       summary: creanceSummary(creances, now),
       aging: creanceAging(creances, now),
       byClient: creanceByClient(creances, now),
+      kindCounts: {
+        b2b: all.filter((c) => c.kind === "b2b").length,
+        order: showOrdinary ? all.filter((c) => c.kind === "order").length : 0,
+      },
     })
   } catch (error) {
     console.error("GET commercial/creances error:", error)

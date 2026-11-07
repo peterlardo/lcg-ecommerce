@@ -77,8 +77,15 @@ export function invoiceSituation(total: number, payments: { amount: number; vali
   return { credited, paid, pending, due, balance: round2(Math.max(0, due - paid)), open: round2(Math.max(0, due - paid - pending)) }
 }
 
+/** Source : facture B2B émise (B2bDocument) ou vente comptoir/commande non soldée (Order). */
+export type CreanceKind = "b2b" | "order"
+/** Catégorie de client : B2B/B2C = issu du fichier Client (factures) ; ORDINAIRE = vente/commande sans facture B2B. */
+export type CreanceClientType = "B2B" | "B2C" | "ORDINAIRE"
+
 export interface CreanceLine {
   id: string
+  kind: CreanceKind
+  clientType: CreanceClientType
   reference: string
   clientId: string | null
   clientName: string
@@ -107,34 +114,48 @@ export interface CreanceLine {
 }
 
 /**
- * Créances de la portée : factures B2B émises (FACTURE, INVOICED) qui ne sont pas soldées,
- * ou qui ont encore un règlement à valider. De la plus ancienne à la plus récente.
+ * Créances de la portée (factures B2B + ventes/commandes ordinaires impayées).
+ * B2B : factures émises (FACTURE, INVOICED) non soldées / règlement à valider.
+ * Ordinaires : commandes `paymentStatus=PENDING`, `status!=CANCELLED`, reste dû > 0
+ * (total − paiements VALIDATED liés par `orderId`, hors facture B2B), échéance = J+0 (createdAt).
+ * Tri de la plus ancienne à la plus récente. Lecture seule.
  */
 export async function creanceLines(user: SessionUser, now: Date = new Date()): Promise<CreanceLine[]> {
-  const docs = await getPrisma().b2bDocument.findMany({
-    where: { type: "FACTURE", status: "INVOICED", clientId: { not: null }, client: { is: b2bClientScope(user) } },
-    orderBy: { createdAt: "asc" },
-    select: {
-      id: true,
-      reference: true,
-      clientId: true,
-      total: true,
-      createdAt: true,
-      client: {
-        select: {
-          companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true, creditLimit: true,
-          commercial: { select: { name: true } },
-          b2bContracts: { where: { status: "ACTIVE" }, orderBy: { startsAt: "desc" }, take: 1, select: { paymentTermsDays: true } },
+  const [docs, orders] = await Promise.all([
+    getPrisma().b2bDocument.findMany({
+      where: { type: "FACTURE", status: "INVOICED", clientId: { not: null }, client: { is: b2bClientScope(user) } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        reference: true,
+        clientId: true,
+        total: true,
+        createdAt: true,
+        client: {
+          select: {
+            companyName: true, tradeName: true, contactName: true, firstName: true, lastName: true, creditLimit: true,
+            type: true,
+            commercial: { select: { name: true } },
+            b2bContracts: { where: { status: "ACTIVE" }, orderBy: { startsAt: "desc" }, take: 1, select: { paymentTermsDays: true } },
+          },
         },
+        payments: { select: { amount: true, validationStatus: true } },
+        promises: { select: { amount: true, status: true } },
+        reminders: { select: { createdAt: true } },
+        children: INVOICE_CREDITS,
       },
-      payments: { select: { amount: true, validationStatus: true } },
-      promises: { select: { amount: true, status: true } },
-      reminders: { select: { createdAt: true } },
-      children: INVOICE_CREDITS,
-    },
-  })
+    }),
+    getPrisma().order.findMany({
+      where: { paymentStatus: "PENDING", status: { not: "CANCELLED" } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true, orderNumber: true, customerName: true, customerPhone: true, customerEmail: true,
+        total: true, createdAt: true, b2bClientId: true,
+      },
+    }),
+  ])
 
-  return docs
+  const b2b: CreanceLine[] = docs
     .map((d) => {
       const situation = invoiceSituation(d.total, d.payments, d.children)
       const promisePending = d.promises.filter((p) => p.status === "PENDING").reduce((s, p) => s + p.amount, 0)
@@ -145,6 +166,8 @@ export async function creanceLines(user: SessionUser, now: Date = new Date()): P
       const lastReminder = d.reminders.reduce<Date | null>((max, r) => (!max || r.createdAt > max ? r.createdAt : max), null)
       return {
         id: d.id,
+        kind: "b2b" as const,
+        clientType: (d.client?.type === "B2C" ? "B2C" : "B2B") as CreanceClientType,
         reference: d.reference,
         clientId: d.clientId,
         clientName: clientDisplayName(d.client),
@@ -166,6 +189,56 @@ export async function creanceLines(user: SessionUser, now: Date = new Date()): P
       }
     })
     .filter((line) => line.balance > 0.005 || line.pendingAmount > 0)
+
+  const orderIds = orders.map((o) => o.id)
+  const orderPayments = orderIds.length
+    ? await getPrisma().customerPayment.findMany({
+        where: { orderId: { in: orderIds }, b2bDocumentId: null },
+        select: { orderId: true, amount: true, validationStatus: true },
+      })
+    : []
+  const paymentsByOrder = new Map<string, { paid: number; pending: number }>()
+  for (const p of orderPayments) {
+    if (!p.orderId) continue
+    const cur = paymentsByOrder.get(p.orderId) ?? { paid: 0, pending: 0 }
+    if (p.validationStatus === "VALIDATED") cur.paid += p.amount
+    else if (p.validationStatus === "PENDING") cur.pending += p.amount
+    paymentsByOrder.set(p.orderId, cur)
+  }
+
+  const ordinary: CreanceLine[] = orders
+    .map((o) => {
+      const sums = paymentsByOrder.get(o.id) ?? { paid: 0, pending: 0 }
+      const paid = round2(sums.paid)
+      const pending = round2(sums.pending)
+      const balance = round2(Math.max(0, o.total - paid - pending))
+      return {
+        id: o.id,
+        kind: "order" as const,
+        clientType: "ORDINAIRE" as CreanceClientType,
+        reference: o.orderNumber,
+        clientId: o.b2bClientId ?? null,
+        clientName: o.customerName || o.customerPhone || o.customerEmail || "Client comptoir",
+        total: o.total,
+        credited: 0,
+        paid,
+        pendingAmount: pending,
+        promisePending: 0,
+        promisePendingCount: 0,
+        balance,
+        creditLimit: null,
+        commercialName: null,
+        paymentTermsDays: 0,
+        dueDate: o.createdAt.toISOString(),
+        overdue: balance > 0 && o.createdAt < now,
+        createdAt: o.createdAt.toISOString(),
+        reminderCount: 0,
+        lastReminderAt: null,
+      }
+    })
+    .filter((line) => line.balance > 0.005 || line.pendingAmount > 0)
+
+  return [...b2b, ...ordinary].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 }
 
 // ─── AGRÉGATS DE RECOUVREMENT (sous-projet A) ─────────────────

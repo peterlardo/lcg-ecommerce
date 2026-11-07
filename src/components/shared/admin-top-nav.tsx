@@ -69,6 +69,8 @@ const navGroups = [
       { href: "/admin/reservations", label: "Pré-commandes", icon: CalendarRange },
       { href: "/admin/archives", label: "Archives", icon: Archive },
       { href: "/admin/caisse", label: "Caisse", icon: CircleDollarSign },
+      { href: "/admin/creances", label: "Créances", icon: HandCoins },
+      { href: "/admin/encaissements", label: "Encaissements", icon: Banknote },
       { href: "/admin/clients-b2b", label: "Clients B2B", icon: Building2 },
     ],
   },
@@ -80,8 +82,6 @@ const navGroups = [
       { href: "/admin/nouveau-client", label: "Nouveau client", icon: UserPlus },
       { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
       { href: "/admin/bons-b2b", label: "Factures et livraisons", icon: ReceiptText },
-      { href: "/admin/creances", label: "Créances", icon: HandCoins },
-      { href: "/admin/encaissements", label: "Encaissements", icon: Banknote },
       { href: "/admin/contrats-b2b", label: "Contrats B2B", icon: FileSignature },
       { href: "/admin/tarifs-b2b", label: "Tarifs B2B", icon: Tags },
     ],
@@ -150,15 +150,6 @@ const commercialLinks: NavLink[] = [
   },
   { href: "/admin/devis-b2b", label: "Devis", icon: FileText },
   { href: "/admin/bons-b2b", label: "Factures et livraisons", icon: ReceiptText },
-  {
-    href: "/admin/creances",
-    label: "Créances",
-    icon: HandCoins,
-    children: [
-      { href: "/admin/creances", label: "Créances", icon: HandCoins },
-      { href: "/admin/encaissements", label: "Encaissements", icon: Banknote },
-    ],
-  },
   {
     href: "/admin/contrats-b2b",
     label: "Contrats et tarifs",
