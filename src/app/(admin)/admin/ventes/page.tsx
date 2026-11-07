@@ -1,12 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Banknote, ChevronDown, CreditCard, Minus, Plus, Printer, ReceiptText, RefreshCw, Search, Smartphone, Trash2 } from "lucide-react"
+import { Banknote, ChevronDown, CreditCard, HandCoins, Minus, Plus, Printer, ReceiptText, RefreshCw, Search, Smartphone, Trash2 } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml, printTicketWindow } from "@/lib/ticket-template"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
 import { repriceCart, applyPartnerDiscount, preferredPriceOf } from "@/lib/partner-cart"
 import { OrderPaymentDialog } from "@/components/admin/order-payment-dialog"
+import { CreancesPanel } from "@/components/admin/creances-panel"
 
 interface ProductVariant {
   id: string
@@ -144,8 +145,14 @@ const mobileProviders: Record<string, "MTN_MOMO" | "AIRTEL_MONEY"> = {
   MOBILE_MONEY_AIRTEL: "AIRTEL_MONEY",
 }
 
+type SalesTab = "nouvelle" | "historique" | "creances" | "partenaires"
+
 export default function VentesPage() {
-  const [tab, setTab] = useState<"nouvelle" | "historique" | "partenaires">("nouvelle")
+  const [tab, setTab] = useState<SalesTab>(() => {
+    if (typeof window === "undefined") return "nouvelle"
+    const t = new URLSearchParams(window.location.search).get("tab")
+    return t === "nouvelle" || t === "historique" || t === "creances" || t === "partenaires" ? t : "nouvelle"
+  })
   const [products, setProducts] = useState<Product[]>([])
   const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([])
   const [loading, setLoading] = useState(true)
@@ -918,6 +925,17 @@ export default function VentesPage() {
           )}
         </button>
         <button
+          onClick={() => setTab("creances")}
+          className={`shrink-0 px-5 sm:px-6 py-3 text-base sm:text-lg font-semibold border-b-2 transition-colors whitespace-nowrap ${
+            tab === "creances"
+              ? "border-primary text-primary"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <HandCoins className="inline h-5 w-5 mr-1.5 -mt-0.5" />
+          Créances
+        </button>
+        <button
           onClick={() => setTab("partenaires")}
           className={`shrink-0 px-5 sm:px-6 py-3 text-base sm:text-lg font-semibold border-b-2 transition-colors whitespace-nowrap ${
             tab === "partenaires"
@@ -1480,6 +1498,8 @@ export default function VentesPage() {
           )}
         </div>
       )}
+
+      {tab === "creances" && <CreancesPanel />}
 
       {tab === "partenaires" && (
         <div className="space-y-4">

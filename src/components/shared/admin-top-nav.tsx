@@ -69,7 +69,7 @@ const navGroups = [
       { href: "/admin/reservations", label: "Pré-commandes", icon: CalendarRange },
       { href: "/admin/archives", label: "Archives", icon: Archive },
       { href: "/admin/caisse", label: "Caisse", icon: CircleDollarSign },
-      { href: "/admin/creances", label: "Créances", icon: HandCoins },
+      { href: "/admin/ventes?tab=creances", label: "Créances", icon: HandCoins },
       { href: "/admin/encaissements", label: "Encaissements", icon: Banknote },
       { href: "/admin/clients-b2b", label: "Clients B2B", icon: Building2 },
     ],
