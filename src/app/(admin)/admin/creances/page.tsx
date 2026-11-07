@@ -139,11 +139,11 @@ export default function CreancesPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900 sm:text-2xl">
-            <HandCoins className="h-6 w-6 text-primary" />
+    <div className="mx-auto max-w-[1600px] space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+            <HandCoins className="h-6 w-6 shrink-0 text-primary" />
             Créances
           </h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -153,44 +153,6 @@ export default function CreancesPage() {
                 ? `Balance âgée par échéance (factures B2B) · ${aging.reduce((n, b) => n + b.count, 0)} facture(s) ouverte(s)`
                 : `Encours par client B2B · ${byClient.length} client(s) débiteur(s)`}
           </p>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {tab === "factures" && (
-            <>
-              <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
-                {(
-                  [
-                    { key: "all", label: "Tous" },
-                    { key: "b2b", label: `Clients B2B${kindCounts.b2b ? ` (${kindCounts.b2b})` : ""}` },
-                    { key: "order", label: `Ordinaires${kindCounts.order ? ` (${kindCounts.order})` : ""}` },
-                  ] as { key: "all" | CreanceKind; label: string }[]
-                ).map((k) => (
-                  <button
-                    key={k.key}
-                    type="button"
-                    onClick={() => setKindFilter(k.key)}
-                    className={`rounded-md px-3 py-2 text-sm font-semibold ${kindFilter === k.key ? "bg-primary text-white" : "text-gray-700 hover:bg-gray-50"}`}
-                  >
-                    {k.label}
-                  </button>
-                ))}
-              </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Client ou référence..."
-                  className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 sm:w-64"
-                />
-              </div>
-              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
-                <input type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
-                À relancer (échéance dépassée)
-              </label>
-            </>
-          )}
         </div>
       </div>
 
@@ -232,8 +194,8 @@ export default function CreancesPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-2 pt-2 sm:px-3">
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-0 border-b border-gray-200 px-3 pt-1 sm:px-4">
           <div className="-mb-px flex gap-1 overflow-x-auto">
             {(
               [
@@ -246,15 +208,15 @@ export default function CreancesPage() {
                 key={t.key}
                 type="button"
                 onClick={() => setTab(t.key)}
-                className={`inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3.5 text-sm font-semibold transition-colors ${
+                className={`inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition-colors sm:px-4 ${
                   tab === t.key
-                    ? "border-primary bg-primary/[0.03] text-primary"
-                    : "border-transparent text-gray-500 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-800"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
                 }`}
               >
                 <t.Icon className="h-4 w-4 shrink-0" aria-hidden />
                 {t.label}
-                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${tab === t.key ? "bg-primary text-white" : "bg-gray-100 text-gray-600"}`}>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${tab === t.key ? "bg-primary/10 text-primary" : "bg-gray-100 text-gray-600"}`}>
                   {t.count}
                 </span>
               </button>
@@ -271,15 +233,48 @@ export default function CreancesPage() {
             </button>
           )}
         </div>
-      </div>
 
-      {tab === "factures" && (
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        {loading && <p className="p-4 text-sm text-gray-500">Chargement des créances...</p>}
-        {!loading && filtered.length === 0 && (
-          <p className="p-8 text-center text-sm text-gray-500">{creances.length === 0 ? "Aucune créance : toutes les factures émises sont soldées." : "Aucune créance pour ces critères."}</p>
-        )}
-        {!loading && filtered.length > 0 && (
+        {tab === "factures" && (
+          <>
+            <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50/60 p-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
+                {(
+                  [
+                    { key: "all", label: "Tous" },
+                    { key: "b2b", label: `Clients B2B${kindCounts.b2b ? ` (${kindCounts.b2b})` : ""}` },
+                    { key: "order", label: `Ordinaires${kindCounts.order ? ` (${kindCounts.order})` : ""}` },
+                  ] as { key: "all" | CreanceKind; label: string }[]
+                ).map((k) => (
+                  <button
+                    key={k.key}
+                    type="button"
+                    onClick={() => setKindFilter(k.key)}
+                    className={`rounded-md px-3 py-1.5 text-sm font-semibold ${kindFilter === k.key ? "bg-primary text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                  >
+                    {k.label}
+                  </button>
+                ))}
+              </div>
+              <div className="relative min-w-0 sm:w-64">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Client ou référence…"
+                  className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                />
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+                <input type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
+                À relancer (échéance dépassée)
+              </label>
+            </div>
+            {loading && <p className="p-4 text-sm text-gray-500">Chargement des créances...</p>}
+            {!loading && filtered.length === 0 && (
+              <p className="p-8 text-center text-sm text-gray-500">{creances.length === 0 ? "Aucune créance : toutes les factures émises sont soldées." : "Aucune créance pour ces critères."}</p>
+            )}
+            {!loading && filtered.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead>
@@ -390,12 +385,12 @@ export default function CreancesPage() {
               </tbody>
             </table>
           </div>
+            )}
+          </>
         )}
-      </div>
-      )}
 
       {tab === "aging" && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <div className="overflow-x-auto">
           <div className="grid min-w-[900px] grid-cols-5 divide-x divide-gray-100">
             {aging.map((bucket) => (
               <div key={bucket.key} className="p-3">
@@ -420,11 +415,11 @@ export default function CreancesPage() {
               </div>
             ))}
           </div>
-        </div>
+          </div>
       )}
 
       {tab === "clients" && (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+          <>
           {byClient.length === 0 ? (
             <p className="p-8 text-center text-sm text-gray-500">Aucun client débiteur.</p>
           ) : (
@@ -481,8 +476,9 @@ export default function CreancesPage() {
               </table>
             </div>
           )}
-        </div>
+          </>
       )}
+      </div>
 
       {paying && (
         <InvoicePaymentDialog
