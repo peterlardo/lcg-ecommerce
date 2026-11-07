@@ -169,6 +169,15 @@ export default function VentesPage() {
   const [partnerPrices, setPartnerPrices] = useState<Record<string, number>>({})
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [amountReceivedInput, setAmountReceivedInput] = useState("")
+  const [amountTouched, setAmountTouched] = useState(false)
+  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const amountReceived = (() => {
+    if (!amountTouched || amountReceivedInput.trim() === "") return total
+    const n = Number(amountReceivedInput)
+    return Number.isFinite(n) ? Math.min(total, Math.max(0, Math.round(n * 100) / 100)) : total
+  })()
+  const balanceDue = Math.max(0, Math.round((total - amountReceived) * 100) / 100)
   const [pricePartner, setPricePartner] = useState<Partner | null>(null)
   const [pricePartnerSearch, setPricePartnerSearch] = useState("")
   const [showPricePartnerDropdown, setShowPricePartnerDropdown] = useState(false)
@@ -189,7 +198,7 @@ export default function VentesPage() {
   const [expandedSale, setExpandedSale] = useState<string | null>(null)
   const [historyPage, setHistoryPage] = useState(1)
   const HISTORY_PER_PAGE = 15
-  const [pendingPayment, setPendingPayment] = useState<{ transactionId: string; reference: string; provider: string; paymentMethod: string; items: SaleCartItem[]; customerName: string; customerPhone: string; pointOfSaleId: string; notes: string; partnerId?: string | null } | null>(null)
+  const [pendingPayment, setPendingPayment] = useState<{ transactionId: string; reference: string; provider: string; paymentMethod: string; amountReceived: number; items: SaleCartItem[]; customerName: string; customerPhone: string; pointOfSaleId: string; notes: string; partnerId?: string | null } | null>(null)
   const [pollingStatus, setPollingStatus] = useState<string | null>(null)
   const [todayStr] = useState(() => new Date().toISOString().slice(0, 10))
 
@@ -393,7 +402,7 @@ export default function VentesPage() {
     } finally {
       setCatalogLoading(false)
     }
-  }, [])
+  }, [setCatalog, setCatalogLoading, setRetiredPrices])
 
   const selectPricePartner = (partner: Partner) => {
     setPricePartner(partner)
@@ -562,6 +571,7 @@ export default function VentesPage() {
                 customerName: pendingPayment.customerName,
                 customerPhone: pendingPayment.customerPhone,
                 paymentMethod: paymentMethodToApi[pendingPayment.paymentMethod] || "CASH_ON_DELIVERY",
+                amountReceived: pendingPayment.amountReceived,
                 pointOfSaleId: pendingPayment.pointOfSaleId,
                 notes: `Paiement ${pendingPayment.provider} - ${pendingPayment.transactionId}`,
                 partnerId: pendingPayment.partnerId || undefined,
@@ -570,7 +580,8 @@ export default function VentesPage() {
             })
             if (saleRes.ok) {
               const saleData = await saleRes.json()
-              setSuccess(`Paiement confirmé et vente ${saleData.orderNumber} enregistrée - ${formatPrice(saleData.total)}`)
+              const due = Number(saleData.balance ?? 0)
+              setSuccess(`Paiement confirmé et vente ${saleData.orderNumber} enregistrée - ${formatPrice(saleData.total)}${due > 0.005 ? ` (encaissé ${formatPrice(saleData.amountReceived ?? saleData.total)}, créance ${formatPrice(due)})` : ""}`)
               setReceipt(saleData)
               await loadProducts()
               await loadPosStock(pendingPayment.pointOfSaleId)
@@ -629,8 +640,6 @@ export default function VentesPage() {
     const term = search.toLowerCase()
     return `${variant.productName} ${variant.format} ${variant.categoryName}`.toLowerCase().includes(term)
   })
-
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
   const addToCart = (variant: (typeof variants)[number]) => {
     setSuccess("")
@@ -706,10 +715,10 @@ export default function VentesPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             provider,
-            amount: total,
+            amount: amountReceived,
             phone: customerPhone,
             reference: orderNumber,
-            description: `Vente LCG - ${cart.map((c) => c.productName).join(", ")}`,
+            description: `Vente LCG - ${cart.map((c) => c.productName).join(", ")}${balanceDue > 0.005 ? " (acompte)" : ""}`,
             origin,
           }),
         })
@@ -728,6 +737,7 @@ export default function VentesPage() {
           reference: orderNumber,
           provider: isMobile ? mobileProviders[paymentMethod] : "VISA_CARD",
           paymentMethod: paymentMethod,
+          amountReceived,
           items: [...cart],
           customerName,
           customerPhone,
@@ -735,7 +745,8 @@ export default function VentesPage() {
           notes,
           partnerId: selectedPartner?.id || null,
         })
-        setSuccess(`Paiement initié ${isMobile ? `- En attente de confirmation (${provider === "MTN_MOMO" ? "MTN MoMo" : "Airtel Money"})` : "- Veuillez compléter le paiement par carte"}`)
+        const reste = Math.max(0, Math.round((total - amountReceived) * 100) / 100)
+        setSuccess(`Paiement initié ${isMobile ? `- En attente de confirmation (${provider === "MTN_MOMO" ? "MTN MoMo" : "Airtel Money"})` : "- Veuillez compléter le paiement par carte"}${reste > 0.005 ? ` (acompte ${formatPrice(amountReceived)}, créance ${formatPrice(reste)})` : ""}`)
         setCart([])
         setCustomerName("")
         setCustomerPhone("")
@@ -744,6 +755,8 @@ export default function VentesPage() {
         setSelectedPartner(null)
         setPartnerSearch("")
         setNotes("")
+        setAmountReceivedInput("")
+        setAmountTouched(false)
         return
       }
 
@@ -756,6 +769,7 @@ export default function VentesPage() {
           b2bClientId: selectedB2bClient?.id || undefined,
           partnerId: selectedPartner?.id || undefined,
           paymentMethod: paymentMethodToApi[paymentMethod] || "CASH_ON_DELIVERY",
+          amountReceived,
           pointOfSaleId,
           notes,
           items: cart.map((item) => (selectedPartner ? { variantId: item.variantId, quantity: item.quantity, unitPrice: item.price } : { variantId: item.variantId, quantity: item.quantity })),
@@ -765,7 +779,8 @@ export default function VentesPage() {
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error(body?.error || "Vente refusée")
 
-      setSuccess(`Vente ${body.orderNumber} enregistrée - ${formatPrice(body.total)}`)
+      const due = Number(body.balance ?? 0)
+      setSuccess(`Vente ${body.orderNumber} enregistrée - ${formatPrice(body.total)}${due > 0.005 ? ` (encaissé ${formatPrice(body.amountReceived ?? body.total)}, créance ${formatPrice(due)})` : ""}`)
       setReceipt(body as SaleReceipt)
       setCart([])
       setCustomerName("")
@@ -776,6 +791,8 @@ export default function VentesPage() {
       setPartnerSearch("")
       setPriceDraft({})
       setNotes("")
+      setAmountReceivedInput("")
+      setAmountTouched(false)
       await loadProducts()
       await loadPosStock(pointOfSaleId)
     } catch (err) {
@@ -1211,9 +1228,26 @@ export default function VentesPage() {
                   </div>
                 )}
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-xs sm:text-sm" placeholder="Note optionnelle" />
-                <div className="border-t border-gray-200 pt-4">
+                <div className="space-y-2 border-t border-gray-200 pt-4">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700">
+                    Montant encaissé (FCFA)
+                    <input
+                      type="number"
+                      min={0}
+                      max={Math.ceil(total)}
+                      step="1"
+                      value={amountTouched ? amountReceivedInput : (total > 0 ? String(Math.round(total)) : "")}
+                      onChange={(e) => { setAmountTouched(true); setAmountReceivedInput(e.target.value) }}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                    />
+                  </label>
+                  {balanceDue > 0.005 && total > 0 && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                      Reste à payer (créance) : {formatPrice(balanceDue)}
+                    </p>
+                  )}
                   <button type="button" onClick={submitSale} disabled={submitting || cart.length === 0 || !!pendingPayment} aria-label="Valider la vente" className="flex min-h-10 sm:min-h-12 w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-                    {submitting ? "Validation..." : paymentMethod !== "CASH_ON_DELIVERY" ? "Initier le paiement" : "Valider la vente"}
+                    {submitting ? "Validation..." : paymentMethod !== "CASH_ON_DELIVERY" ? (balanceDue > 0.005 ? "Initier le paiement (acompte)" : "Initier le paiement") : (balanceDue > 0.005 ? "Valider (vente à crédit partiel)" : "Valider la vente")}
                   </button>
                   {cart.length === 0 && <p className="mt-2 text-center text-xs text-gray-500">Ajoutez un produit pour activer la validation.</p>}
                 </div>

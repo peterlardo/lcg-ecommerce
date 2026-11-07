@@ -104,10 +104,10 @@ export function InvoicePaymentDialog({ invoice, onClose, onDone }: { invoice: Pa
         </div>
         <div className="space-y-3">
           <label className="block text-sm font-medium text-gray-700">
-            Montant reçu (FCFA)
+            Montant encaissé (FCFA)
             <input type="number" min={1} max={Math.ceil(invoice.balance)} step="1" required value={amount} onChange={(e) => setAmount(e.target.value)} className={`${field} text-lg font-bold`} />
             {Number(amount) > 0 && Number(amount) < invoice.balance - 0.005 && (
-              <span className="mt-1 block text-xs font-normal text-gray-500">Règlement partiel : il restera {formatPrice(invoice.balance - Number(amount))} à encaisser.</span>
+              <span className="mt-1 block text-xs font-normal text-amber-700">Règlement partiel : il restera {formatPrice(invoice.balance - Number(amount))} (créance).</span>
             )}
           </label>
           <label className="block text-sm font-medium text-gray-700">

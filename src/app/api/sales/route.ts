@@ -31,6 +31,8 @@ interface SaleRequestBody {
   pointOfSaleId?: string
   b2bClientId?: string
   partnerId?: string
+  /** Montant encaissé maintenant (FCFA). Défaut = total (vente soldée). < total => créance ordinaire. */
+  amountReceived?: number
   items?: SaleItemInput[]
 }
 
@@ -193,6 +195,16 @@ export async function POST(request: Request) {
 
     const order = await getPrisma().$transaction(async (tx) => {
       const subtotal = pricedItems.reduce((sum, it) => sum + it.applied * it.quantity, 0)
+      const total = subtotal
+      const rawReceived = Number(body.amountReceived)
+      const amountReceived = Number.isFinite(rawReceived)
+        ? Math.min(total, Math.max(0, Math.round(rawReceived * 100) / 100))
+        : total
+      if (Number.isFinite(rawReceived) && rawReceived > total + 0.01) {
+        throw new Error("Le montant encaissé dépasse le total de la vente")
+      }
+      const isPaid = amountReceived >= total - 0.005
+      const method = normalizePaymentMethod(body.paymentMethod)
 
       const createdOrder = await tx.order.create({
         data: {
@@ -203,12 +215,12 @@ export async function POST(request: Request) {
           customerPhone: body.customerPhone?.trim() || "",
           b2bClientId: body.b2bClientId || null,
           partnerId: partner?.id || null,
-          paymentMethod: normalizePaymentMethod(body.paymentMethod),
-          paymentStatus: "PAID",
+          paymentMethod: method,
+          paymentStatus: isPaid ? "PAID" : "PENDING",
           status: "DELIVERED",
           subtotal,
           deliveryFee: 0,
-          total: subtotal,
+          total,
           notes: ["Vente comptoir", body.notes?.trim()].filter(Boolean).join(" - "),
           pointOfSaleId,
           source: "CAISSE",
@@ -224,6 +236,22 @@ export async function POST(request: Request) {
         },
         include: { items: { include: { variant: { include: { product: true } } } } },
       })
+
+      if (amountReceived > 0.005) {
+        const now = new Date()
+        await tx.customerPayment.create({
+          data: {
+            orderId: createdOrder.id,
+            amount: amountReceived,
+            method,
+            notes: isPaid ? "Encaissement vente comptoir" : "Acompte vente comptoir (créance)",
+            receivedById: sellerId,
+            validationStatus: "VALIDATED",
+            validatedById: sellerId,
+            validatedAt: now,
+          },
+        })
+      }
 
       for (const item of items) {
         // Stock physiquement au point de vente : c'est la seule source. Le
@@ -262,6 +290,13 @@ export async function POST(request: Request) {
       })
     }
 
+    // Renvoyer aussi le montant reçu et le solde (créance si partiel)
+    const rawReceivedResp = Number(body.amountReceived)
+    const amountReceivedResp = Number.isFinite(rawReceivedResp)
+      ? Math.min(order.total, Math.max(0, Math.round(rawReceivedResp * 100) / 100))
+      : order.total
+    const balanceResp = Math.max(0, Math.round((order.total - amountReceivedResp) * 100) / 100)
+
     return NextResponse.json(
       {
         id: order.id,
@@ -274,6 +309,8 @@ export async function POST(request: Request) {
         status: order.status,
         subtotal: order.subtotal,
         total: order.total,
+        amountReceived: amountReceivedResp,
+        balance: balanceResp,
         createdAt: order.createdAt.toISOString(),
         items: order.items.map((item) => ({
           id: item.id,
