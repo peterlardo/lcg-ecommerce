@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { AlertCircle, BellRing, Check, Clock3, FileText, HandCoins, Search, Users, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { InvoicePaymentDialog } from "@/components/admin/invoice-payment-dialog"
+import { OrderPaymentDialog } from "@/components/admin/order-payment-dialog"
 import type { AgingBucket, ClientCreance, CreanceSummary } from "@/lib/commercial"
 
 type CreanceKind = "b2b" | "order"
@@ -49,6 +50,7 @@ export default function CreancesPage() {
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
   const [paying, setPaying] = useState<Creance | null>(null)
+  const [payingOrder, setPayingOrder] = useState<Creance | null>(null)
   const [tab, setTab] = useState<"factures" | "aging" | "clients">("factures")
   const [summary, setSummary] = useState<CreanceSummary | null>(null)
   const [aging, setAging] = useState<AgingBucket[]>([])
@@ -371,12 +373,16 @@ export default function CreancesPage() {
                             )}
                           </>
                         ) : (
-                          <a
-                            href={`/admin/commandes/${c.id}`}
-                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                          >
-                            Voir commande
-                          </a>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            {c.balance > 0 && (
+                              <button type="button" onClick={() => setPayingOrder(c)} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90">
+                                <HandCoins className="h-4 w-4" /> Encaisser
+                              </button>
+                            )}
+                            <a href={`/admin/commandes/${c.id}`} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                              Voir commande
+                            </a>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -486,6 +492,13 @@ export default function CreancesPage() {
           invoice={{ id: paying.id, reference: paying.reference, clientName: paying.clientName, balance: Math.max(0, paying.balance + paying.promisePending) }}
           onClose={() => setPaying(null)}
           onDone={(text) => { setMessage(text); setPaying(null); setReload((n) => n + 1) }}
+        />
+      )}
+      {payingOrder && (
+        <OrderPaymentDialog
+          order={{ id: payingOrder.id, orderNumber: payingOrder.reference, clientName: payingOrder.clientName, balance: payingOrder.balance }}
+          onClose={() => setPayingOrder(null)}
+          onDone={(text) => { setMessage(text); setPayingOrder(null); setReload((n) => n + 1) }}
         />
       )}
     </div>

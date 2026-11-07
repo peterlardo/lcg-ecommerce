@@ -95,8 +95,28 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   })
 
+  const pendingIds = sales.filter((s) => s.paymentStatus === "PENDING").map((s) => s.id)
+  const payments = pendingIds.length
+    ? await getPrisma().customerPayment.findMany({
+        where: { orderId: { in: pendingIds }, b2bDocumentId: null },
+        select: { orderId: true, amount: true, validationStatus: true },
+      })
+    : []
+  const paidByOrder = new Map<string, number>()
+  for (const p of payments) {
+    if (p.validationStatus === "VALIDATED" && p.orderId) paidByOrder.set(p.orderId, (paidByOrder.get(p.orderId) ?? 0) + p.amount)
+  }
+  const pendingByOrder = new Map<string, number>()
+  for (const p of payments) {
+    if (p.validationStatus === "PENDING" && p.orderId) pendingByOrder.set(p.orderId, (pendingByOrder.get(p.orderId) ?? 0) + p.amount)
+  }
+
   return NextResponse.json(
-    sales.map((sale) => ({
+    sales.map((sale) => {
+      const paid = paidByOrder.get(sale.id) ?? 0
+      const pendingPay = pendingByOrder.get(sale.id) ?? 0
+      const balance = Math.max(0, Math.round((sale.total - paid - pendingPay) * 100) / 100)
+      return {
       id: sale.id,
       orderNumber: sale.orderNumber,
       customerName: sale.customerName || "Client comptoir",
@@ -105,6 +125,7 @@ export async function GET() {
       paymentStatus: sale.paymentStatus,
       status: sale.status,
       total: sale.total,
+      balance,
       notes: sale.notes,
       createdAt: sale.createdAt.toISOString(),
       seller: sale.user ? { id: sale.user.id, name: sale.user.name } : null,
@@ -120,7 +141,7 @@ export async function GET() {
         price: item.price,
         total: item.total,
       })),
-    }))
+    }})
   )
 }
 

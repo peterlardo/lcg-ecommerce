@@ -6,6 +6,7 @@ import { formatPrice } from "@/lib/utils"
 import { buildTicketHtml, printTicketWindow } from "@/lib/ticket-template"
 import { LOW_STOCK_THRESHOLD } from "@/lib/stock-threshold"
 import { repriceCart, applyPartnerDiscount, preferredPriceOf } from "@/lib/partner-cart"
+import { OrderPaymentDialog } from "@/components/admin/order-payment-dialog"
 
 interface ProductVariant {
   id: string
@@ -95,6 +96,7 @@ interface SaleHistoryItem {
   paymentStatus: string
   status: string
   total: number
+  balance?: number
   notes: string | null
   createdAt: string
   pointOfSale: { id: string; name: string; code: string } | null
@@ -171,6 +173,7 @@ export default function VentesPage() {
   const [submitting, setSubmitting] = useState(false)
   const [amountReceivedInput, setAmountReceivedInput] = useState("")
   const [amountTouched, setAmountTouched] = useState(false)
+  const [collectingSale, setCollectingSale] = useState<SaleHistoryItem | null>(null)
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const amountReceived = (() => {
     if (!amountTouched || amountReceivedInput.trim() === "") return total
@@ -1445,9 +1448,12 @@ export default function VentesPage() {
                       {sale.seller?.name && <p><span className="text-gray-500">Vendeur :</span> <span className="font-medium">{sale.seller.name}</span></p>}
                       {sale.cashier?.name && <p><span className="text-gray-500">Encaissée par :</span> <span className="font-medium">{sale.cashier.name}</span></p>}
                       <p><span className="text-gray-500">Paiement :</span> <span className="font-medium">{paymentLabels[sale.paymentMethod] || sale.paymentMethod}</span></p>
-                      <p><span className="text-gray-500">Statut :</span> <span className="font-medium text-green-600">Payé</span></p>
+                      <p><span className="text-gray-500">Statut :</span> {sale.paymentStatus === "PAID" ? <span className="font-medium text-green-600">Payé</span> : <span className="font-medium text-amber-700">En attente (solde {formatPrice(Number(sale.balance ?? 0))})</span>}</p>
                       {sale.pointOfSale && <p><span className="text-gray-500">Point de vente :</span> <span className="font-medium">{sale.pointOfSale.name} ({sale.pointOfSale.code})</span></p>}
                       {sale.notes && <p><span className="text-gray-500">Notes :</span> <span className="font-medium">{sale.notes}</span></p>}
+                      {sale.paymentStatus !== "PAID" && Number(sale.balance ?? 0) > 0.005 && (
+                        <button type="button" onClick={() => setCollectingSale(sale)} className="mt-2 inline-flex min-h-9 items-center rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">Encaisser le reste</button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1626,6 +1632,14 @@ export default function VentesPage() {
             </div>
           )}
         </div>
+      )}
+
+      {collectingSale && (
+        <OrderPaymentDialog
+          order={{ id: collectingSale.id, orderNumber: collectingSale.orderNumber, clientName: collectingSale.customerName || "Client comptoir", balance: Number(collectingSale.balance ?? 0) }}
+          onClose={() => setCollectingSale(null)}
+          onDone={(msg) => { setSuccess(msg); setCollectingSale(null); void loadSalesHistory() }}
+        />
       )}
     </div>
   )
