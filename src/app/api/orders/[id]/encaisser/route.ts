@@ -6,6 +6,7 @@ import { CASHIER_ROLES } from "@/lib/permissions"
 import { logActivity } from "@/lib/activity"
 
 const METHODS = ["CASH_ON_DELIVERY","MOBILE_MONEY","CARD","BANK_TRANSFER","CHEQUE"] as const
+type PaymentMethod = (typeof METHODS)[number]
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const forbidden = await requireManagementAccess(["ADMIN","STOCK_MANAGER","COMPTABLE","OPERATEUR_ACCUEIL", ...CASHIER_ROLES])
@@ -28,7 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
     const raw = Number(body.amount)
-    const method = typeof body.method === "string" && METHODS.includes(body.method as (typeof METHODS)[number]) ? body.method : "CASH_ON_DELIVERY"
+    const method: PaymentMethod = typeof body.method === "string" && METHODS.includes(body.method as PaymentMethod) ? (body.method as PaymentMethod) : "CASH_ON_DELIVERY"
     const notes = String(body.notes || "").trim().slice(0, 500)
     const result = await getPrisma().$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id }, select: { id: true, total: true, paymentStatus: true, orderNumber: true } })
