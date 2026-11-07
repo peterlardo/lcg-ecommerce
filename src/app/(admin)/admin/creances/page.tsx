@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, BellRing, Check, HandCoins, Search, X } from "lucide-react"
+import { AlertCircle, BellRing, Check, Clock3, FileText, HandCoins, Search, Users, X } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { InvoicePaymentDialog } from "@/components/admin/invoice-payment-dialog"
 import type { AgingBucket, ClientCreance, CreanceSummary } from "@/lib/commercial"
@@ -232,33 +232,45 @@ export default function CreancesPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {(
-          [
-            { key: "factures", label: "Factures ouvertes" },
-            { key: "aging", label: "Balance âgée" },
-            { key: "clients", label: "Par client" },
-          ] as { key: "factures" | "aging" | "clients"; label: string }[]
-        ).map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${tab === t.key ? "bg-primary text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
-          >
-            {t.label}
-          </button>
-        ))}
-        {tab === "factures" && clientFilter && (
-          <button
-            type="button"
-            onClick={() => setClientFilter(null)}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Client : {byClient.find((c) => c.clientId === clientFilter)?.clientName ?? "sélectionné"}
-            <X className="h-4 w-4" />
-          </button>
-        )}
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-2 pt-2 sm:px-3">
+          <div className="-mb-px flex gap-1 overflow-x-auto">
+            {(
+              [
+                { key: "factures", label: "Factures ouvertes", count: kindCounts.b2b + kindCounts.order, Icon: FileText },
+                { key: "aging", label: "Balance âgée", count: aging.reduce((n, b) => n + b.count, 0), Icon: Clock3 },
+                { key: "clients", label: "Par client", count: byClient.length, Icon: Users },
+              ] as { key: "factures" | "aging" | "clients"; label: string; count: number; Icon: typeof FileText }[]
+            ).map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={`inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3.5 text-sm font-semibold transition-colors ${
+                  tab === t.key
+                    ? "border-primary bg-primary/[0.03] text-primary"
+                    : "border-transparent text-gray-500 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-800"
+                }`}
+              >
+                <t.Icon className="h-4 w-4 shrink-0" aria-hidden />
+                {t.label}
+                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${tab === t.key ? "bg-primary text-white" : "bg-gray-100 text-gray-600"}`}>
+                  {t.count}
+                </span>
+              </button>
+            ))}
+          </div>
+          {tab === "factures" && clientFilter && (
+            <button
+              type="button"
+              onClick={() => setClientFilter(null)}
+              className="mb-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 text-sm font-medium text-primary hover:bg-primary/10"
+            >
+              Client : {byClient.find((c) => c.clientId === clientFilter)?.clientName ?? "sélectionné"}
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {tab === "factures" && (
