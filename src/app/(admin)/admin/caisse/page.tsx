@@ -6,6 +6,7 @@ import {
   Banknote,
   ChevronDown,
   CreditCard,
+  Download,
   FileText,
   Lock,
   Printer,
@@ -975,127 +976,89 @@ export default function CaissePage() {
                               </p>
                             ) : rowReport ? (
                               <div className="space-y-3">
-                                <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5 sm:text-sm">
-                                  <div className="rounded-lg border border-gray-200 bg-white p-2">
-                                    <p className="text-gray-500">Fond</p>
-                                    <p className="mt-0.5 font-semibold text-gray-900">
-                                      {formatPrice(rowReport.reconciliation.openingBalance)}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-lg border border-gray-200 bg-white p-2">
-                                    <p className="text-gray-500">Ventes</p>
-                                    <p className="mt-0.5 font-semibold text-gray-900">
-                                      {formatPrice(rowReport.reconciliation.revenue)}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-lg border border-gray-200 bg-white p-2">
-                                    <p className="text-gray-500">Attendu</p>
-                                    <p className="mt-0.5 font-semibold text-gray-900">
-                                      {formatPrice(rowReport.reconciliation.expected)}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-lg border border-gray-200 bg-white p-2">
-                                    <p className="text-gray-500">Compté</p>
-                                    <p className="mt-0.5 font-semibold text-gray-900">
-                                      {rowReport.reconciliation.closingBalance === null
-                                        ? "—"
-                                        : formatPrice(rowReport.reconciliation.closingBalance)}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-lg border border-gray-200 bg-white p-2">
-                                    <p className="text-gray-500">Écart</p>
-                                    <p
-                                      className={`mt-0.5 font-semibold ${
-                                        rowReport.reconciliation.gap === null
-                                          ? "text-gray-900"
-                                          : rowReport.reconciliation.gap === 0
-                                            ? "text-gray-900"
-                                            : rowReport.reconciliation.gap > 0
-                                              ? "text-green-700"
-                                              : "text-red-700"
-                                      }`}
-                                    >
-                                      {rowReport.reconciliation.gap === null
-                                        ? "—"
-                                        : formatPrice(rowReport.reconciliation.gap)}
-                                    </p>
+                                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-[11px] text-gray-500">
+                                    {rowReport.session.reportReference
+                                      ? `Réf. ${rowReport.session.reportReference}`
+                                      : "Rapport non généré"}
+                                  </p>
+                                  <div className="flex gap-1.5">
+                                    <button onClick={() => exportClotureCaissePDF(rowReport)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50"><Printer className="h-3.5 w-3.5" /> PDF</button>
+                                    <button onClick={() => exportClotureCaisseExcel(rowReport)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50"><Download className="h-3.5 w-3.5" /> Excel</button>
                                   </div>
                                 </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7 sm:text-sm">
+                                  <div className="rounded-lg border border-gray-200 bg-white p-2"><p className="text-gray-500">Fond</p><p className="mt-0.5 font-semibold text-gray-900">{formatPrice(rowReport.reconciliation.openingBalance)}</p></div>
+                                  <div className="rounded-lg border border-gray-200 bg-white p-2"><p className="text-gray-500">Ventes</p><p className="mt-0.5 font-semibold text-gray-900">{formatPrice(rowReport.reconciliation.revenue)}</p></div>
+                                  <div className="rounded-lg border border-gray-200 bg-white p-2"><p className="text-gray-500">+ Encaissements</p><p className="mt-0.5 font-semibold text-green-700">{formatPrice(rowReport.reconciliation.cashIn ?? 0)}</p></div>
+                                  <div className="rounded-lg border border-gray-200 bg-white p-2"><p className="text-gray-500">- Décaissements</p><p className="mt-0.5 font-semibold text-red-700">{formatPrice(rowReport.reconciliation.cashOut ?? 0)}</p></div>
+                                  <div className="rounded-lg border border-gray-200 bg-white p-2"><p className="text-gray-500">Attendu</p><p className="mt-0.5 font-semibold text-gray-900">{formatPrice(rowReport.reconciliation.expected)}</p></div>
+                                  <div className="rounded-lg border border-gray-200 bg-white p-2"><p className="text-gray-500">Compté</p><p className="mt-0.5 font-semibold text-gray-900">{rowReport.reconciliation.closingBalance === null ? "-" : formatPrice(rowReport.reconciliation.closingBalance)}</p></div>
+                                  <div className="rounded-lg border border-gray-200 bg-white p-2"><p className="text-gray-500">Écart</p><p className={`mt-0.5 font-semibold ${rowReport.reconciliation.gap === null ? "text-gray-900" : rowReport.reconciliation.gap === 0 ? "text-gray-900" : rowReport.reconciliation.gap > 0 ? "text-green-700" : "text-red-700"}`}>{rowReport.reconciliation.gap === null ? "-" : formatPrice(rowReport.reconciliation.gap)}</p></div>
+                                </div>
 
-                                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                                                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                                   <div className="rounded-lg border border-gray-200 bg-white p-3">
                                     <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                      Encaissements ({rowReport.totals.orders} commande
-                                      {rowReport.totals.orders > 1 ? "s" : ""})
+                                      Encaissements ventes ({rowReport.totals.orders} commande{rowReport.totals.orders > 1 ? "s" : ""})
                                     </p>
                                     <table className="w-full">
                                       <tbody className="divide-y divide-gray-100">
                                         {rowReport.paymentBreakdown.map((item) => (
                                           <tr key={item.method}>
-                                            <td className="py-1.5 text-xs text-gray-700 sm:text-sm">
-                                              {paymentLabels[item.method] ?? item.method}
-                                            </td>
-                                            <td className="py-1.5 text-right text-xs text-gray-500 sm:text-sm">
-                                              {item.count} tx
-                                            </td>
-                                            <td className="py-1.5 text-right text-xs font-semibold text-gray-900 sm:text-sm">
-                                              {formatPrice(item.amount)}
-                                            </td>
+                                            <td className="py-1.5 text-xs text-gray-700 sm:text-sm">{paymentLabels[item.method] ?? item.method}</td>
+                                            <td className="py-1.5 text-right text-xs text-gray-500 sm:text-sm">{item.count} tx</td>
+                                            <td className="py-1.5 text-right text-xs font-semibold text-gray-900 sm:text-sm">{formatPrice(item.amount)}</td>
                                           </tr>
                                         ))}
                                         {rowReport.paymentBreakdown.length === 0 && (
-                                          <tr>
-                                            <td
-                                              colSpan={3}
-                                              className="py-2 text-xs text-gray-500 sm:text-sm"
-                                            >
-                                              Aucune vente sur cette session.
-                                            </td>
-                                          </tr>
+                                          <tr><td colSpan={3} className="py-2 text-xs text-gray-500 sm:text-sm">Aucune vente sur cette session.</td></tr>
                                         )}
                                       </tbody>
                                     </table>
                                   </div>
 
                                   <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                      Produits vendus
-                                    </p>
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Produits vendus</p>
                                     <div className="max-h-48 overflow-y-auto">
                                       <table className="w-full">
                                         <tbody className="divide-y divide-gray-100">
                                           {rowReport.soldByProduct.map((item) => (
                                             <tr key={item.variantId}>
-                                              <td className="py-1.5 text-xs text-gray-700 sm:text-sm">
-                                                {item.productName}
-                                                {item.format && (
-                                                  <span className="ml-1 text-gray-400">
-                                                    {item.format}
-                                                  </span>
-                                                )}
-                                              </td>
-                                              <td className="py-1.5 text-right text-xs text-gray-500 sm:text-sm">
-                                                ×{item.quantity}
-                                              </td>
-                                              <td className="py-1.5 text-right text-xs font-semibold text-gray-900 sm:text-sm">
-                                                {formatPrice(item.amount)}
-                                              </td>
+                                              <td className="py-1.5 text-xs text-gray-700 sm:text-sm">{item.productName}{item.format && (<span className="ml-1 text-gray-400">{item.format}</span>)}</td>
+                                              <td className="py-1.5 text-right text-xs text-gray-500 sm:text-sm">×{item.quantity}</td>
+                                              <td className="py-1.5 text-right text-xs font-semibold text-gray-900 sm:text-sm">{formatPrice(item.amount)}</td>
                                             </tr>
                                           ))}
                                           {rowReport.soldByProduct.length === 0 && (
-                                            <tr>
-                                              <td
-                                                colSpan={3}
-                                                className="py-2 text-xs text-gray-500 sm:text-sm"
-                                              >
-                                                Aucun produit vendu.
-                                              </td>
-                                            </tr>
+                                            <tr><td colSpan={3} className="py-2 text-xs text-gray-500 sm:text-sm">Aucun produit vendu.</td></tr>
                                           )}
                                         </tbody>
                                       </table>
                                     </div>
                                   </div>
+                                </div>
+
+                                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Mouvements manuels de caisse ({(rowReport.cashMovements ?? []).length})</p>
+                                  {(rowReport.cashMovements ?? []).length === 0 ? (
+                                    <p className="text-xs text-gray-500 sm:text-sm">Aucun mouvement manuel.</p>
+                                  ) : (
+                                    <div className="max-h-48 overflow-y-auto">
+                                      <table className="w-full">
+                                        <tbody className="divide-y divide-gray-100">
+                                          {(rowReport.cashMovements ?? []).map((m) => (
+                                            <tr key={m.id}>
+                                              <td className="py-1.5 text-xs sm:text-sm"><span className={m.type==="IN" ? "font-semibold text-green-700" : "font-semibold text-red-700"}>{m.type==="IN" ? "Encaissement" : "Décaissement"}</span></td>
+                                              <td className="py-1.5 text-xs text-gray-700 sm:text-sm">{m.reason}{m.reference ? " ("+m.reference+")" : ""}</td>
+                                              <td className="py-1.5 text-right text-xs text-gray-500 sm:text-sm">{m.author ?? ""}</td>
+                                              <td className="py-1.5 text-right text-xs font-semibold text-gray-900 sm:text-sm">{formatPrice(m.amount)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="rounded-lg border border-gray-200 bg-white p-3">
