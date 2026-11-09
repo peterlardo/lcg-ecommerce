@@ -3,7 +3,8 @@ import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
 import { LOGO_BADGE_BASE64 } from "./logo-badge-base64"
 import { drawCoverPage } from "./pdf-cover"
-import type { ReportPayload, JourneeReport, GlobalReport, GlobalDetails } from "./report-types"
+import type { ReportPayload, JourneeReport, GlobalReport, GlobalDetails, OrdersReport, OrdersReportLine } from "./report-types"
+import { orderItemsText, type OrdersBreakdownRow, type OrdersDayRow, type OrdersSummary } from "./orders-report"
 import {
   B2B_DOC_LBL,
   B2B_STATUS_LBL,
@@ -12,6 +13,7 @@ import {
   DELIVERY_STATUS_LBL,
   LOT_STATUS_LBL,
   MOVEMENT_LBL,
+  ORDER_STATUS_LBL,
   PAYMENT_METHOD_LBL,
   PAYMENT_STATUS_LBL,
   RESERVATION_STATUS_LBL,
@@ -22,7 +24,14 @@ import {
 type VentesData = Pick<ReportPayload, "summary" | "topProducts" | "paymentBreakdown30" | "daily7">
 type StocksData = Pick<ReportPayload, "summary" | "stockByCategory" | "allStockVariants" | "stockAlerts">
 type ApproData = Pick<ReportPayload, "supplyByType" | "supplyMovements">
-type CommandesData = Pick<ReportPayload, "summary" | "ordersByStatus" | "ordersByDay">
+/** Ce que l'écran affiche : les exports suivent les filtres appliqués. */
+interface CommandesData {
+  report: OrdersReport
+  lines: OrdersReportLine[]
+  summary: OrdersSummary
+  days: OrdersDayRow[]
+  filtered: boolean
+}
 type ReservationsData = Pick<ReportPayload, "reservationsByStatus" | "reservations" | "reservationsByDay">
 type ProductionData = Pick<ReportPayload, "productionSummary" | "productionByDay" | "productionMovements">
 type CaisseData = Pick<ReportPayload, "cashSessionsSummary" | "cashSessionsByDay">
@@ -339,60 +348,159 @@ export function exportApproExcel(data: ApproData) {
 
 // ─── COMMANDES ────────────────────────────────────────────────
 
+const PAYMENT_LBL_ALL: Record<string, string> = { ...PAYMENT_METHOD_LBL, NONE: "Non renseigné" }
+const breakdownRows = (rows: OrdersBreakdownRow[], labels?: Record<string, string>) =>
+  rows.map((row) => [labels?.[row.key] ?? row.key, row.count, row.total] as const)
+const commandesFile = (report: OrdersReport, ext: string) =>
+  "rapport-commandes-" + report.from.replace(/-/g, "") + "-" + report.to.replace(/-/g, "") + "." + ext
+
 export function exportCommandesPDF(data: CommandesData) {
+  const { report, lines, summary, days, filtered } = data
+  const title = "Rapport complet des commandes"
   const doc = createDoc()
-  addCoverPage(doc, "Rapport Commandes", REPORT_VERSION)
+  addCoverPage(doc, title, REPORT_VERSION, report.label)
   doc.addPage()
-  addPageHeader(doc, "Rapport Commandes")
+  addPageHeader(doc, title)
   let y = 30
+  const tableStyle = {
+    styles: { fontSize: 9, textColor: [40, 40, 40] as [number, number, number] },
+    headStyles: { fillColor: [31, 79, 163] as [number, number, number], textColor: [255, 255, 255] as [number, number, number], fontStyle: "bold" as const },
+    margin: { top: 26, bottom: 20 },
+    didDrawPage: (hook: { pageNumber: number }) => { if (hook.pageNumber > 1) addPageHeader(doc, title) },
+  }
+  const newPageIfNeeded = (needed: number) => {
+    if (y + needed > doc.internal.pageSize.height - 22) {
+      doc.addPage()
+      addPageHeader(doc, title)
+      y = 30
+    }
+  }
 
-  doc.setFontSize(13)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(31, 79, 163)
-  doc.text("Resume", 14, y); y += 8
-  doc.setFontSize(10)
-  doc.setFont("helvetica", "normal")
-  doc.setTextColor(60, 60, 60)
-  doc.text("Commandes 30j: " + data.summary.orders30, 14, y); y += 6
-  doc.text("CA commandes: " + fmt(data.summary.revenue30), 14, y); y += 6
-  doc.text("Aujourd'hui: " + data.summary.todayOrders, 14, y); y += 6
-  doc.text("En livraison: " + data.summary.deliveriesInProgress, 14, y); y += 12
+  y = sectionTitle(doc, y, "Synthèse")
+  y = kv(doc, y, "Période", report.label)
+  y = kv(doc, y, "Point de vente", report.selectedPos?.name ?? "Tous")
+  if (filtered) y = kv(doc, y, "Sélection", "Liste filtrée à l'écran")
+  y = kv(doc, y, "Commandes émises", String(summary.orders))
+  y = kv(doc, y, "Commandes annulées", summary.cancelled + " (" + fmt(summary.cancelledAmount) + ")")
+  y = kv(doc, y, "Montant commandé", fmt(summary.amount) + " (hors annulées)")
+  y = kv(doc, y, "Chiffre d'affaires", fmt(summary.revenue))
+  y = kv(doc, y, "Non payé", fmt(summary.unpaid))
+  y = kv(doc, y, "Articles commandés", String(summary.items))
+  y = kv(doc, y, "Panier moyen", fmt(summary.avgOrder))
+  y = kv(doc, y, "Frais de livraison", fmt(summary.deliveryFees))
+  y = kv(doc, y, "Remises", fmt(summary.discounts)) + 6
 
-  doc.setFontSize(13)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(31, 79, 163)
-  doc.text("Par statut", 14, y); y += 2
+  const sections: [string, OrdersBreakdownRow[], Record<string, string>?][] = [
+    ["Par statut", summary.byStatus, ORDER_STATUS_LBL],
+    ["Par mode de paiement (hors annulées)", summary.byPayment, PAYMENT_LBL_ALL],
+    ["Par origine (hors annulées)", summary.bySource, SOURCE_LBL],
+    ["Par point de vente (hors annulées)", summary.byPointOfSale],
+  ]
+  for (const [heading, rows, labels] of sections) {
+    newPageIfNeeded(30)
+    y = sectionTitle(doc, y, heading)
+    autoTable(doc, {
+      ...tableStyle,
+      startY: y,
+      head: [["", "Commandes", "Montant"]],
+      body: breakdownRows(rows, labels).map(([label, count, total]) => [label, String(count), fmt(total)]),
+    })
+    y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
+  }
+
+  const activeDays = days.filter((d) => d.count > 0)
+  if (activeDays.length > 0) {
+    newPageIfNeeded(30)
+    y = sectionTitle(doc, y, "Par jour (hors annulées)")
+    autoTable(doc, {
+      ...tableStyle,
+      startY: y,
+      head: [["Jour", "Commandes", "Montant"]],
+      body: activeDays.map((d) => [d.day.split("-").reverse().join("/"), String(d.count), fmt(d.total)]),
+    })
+  }
+
+  doc.addPage()
+  addPageHeader(doc, title)
+  y = sectionTitle(doc, 30, "Toutes les commandes (" + lines.length + ")")
   autoTable(doc, {
+    ...tableStyle,
     startY: y,
-    head: [["Statut", "Commandes", "Total"]],
-    body: data.ordersByStatus.map((s) => [STATUS_LBL[s.status] ?? s.status, String(s.count), fmt(s.total)]),
-    styles: { fontSize: 9, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
+    styles: { fontSize: 7, textColor: [40, 40, 40], cellPadding: 1.2 },
+    head: [["Date", "N° commande", "Client", "Origine", "Articles", "Paiement", "Statut", "Montant"]],
+    body: lines.map((o) => [
+      dt(o.createdAt),
+      o.orderNumber,
+      [o.customerName, o.customerPhone].filter(Boolean).join("\n"),
+      [SOURCE_LBL[o.source] ?? o.source, o.pointOfSale, o.cashier].filter(Boolean).join("\n"),
+      orderItemsText(o).replace(/×/g, "x"),
+      [PAYMENT_METHOD_LBL[o.paymentMethod ?? ""], PAYMENT_STATUS_LBL[o.paymentStatus] ?? o.paymentStatus].filter(Boolean).join("\n"),
+      ORDER_STATUS_LBL[o.status] ?? o.status,
+      fmt(o.total),
+    ]),
+    columnStyles: {
+      0: { cellWidth: 16 }, 1: { cellWidth: 25 }, 2: { cellWidth: 25 }, 3: { cellWidth: 20 },
+      5: { cellWidth: 18 }, 6: { cellWidth: 15 }, 7: { cellWidth: 19, halign: "right" },
+    },
   })
-  y = (doc as AutoTableDoc).lastAutoTable.finalY + 10
 
-  doc.setFontSize(13)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(31, 79, 163)
-  doc.text("Commandes / jour", 14, y); y += 2
-  autoTable(doc, {
-    startY: y,
-    head: [["Jour", "Commandes", "Revenu"]],
-    body: data.ordersByDay.map((d) => [d.name, String(d.commandes), fmt(d.revenu)]),
-    styles: { fontSize: 8, textColor: [40, 40, 40] },
-    headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
-  })
-
-  finalizePDF(doc, "Rapport Commandes", "rapport-commandes-" + todayShort() + ".pdf")
+  finalizePDF(doc, title, commandesFile(report, "pdf"))
 }
 
 export function exportCommandesExcel(data: CommandesData) {
+  const { report, lines, summary, days, filtered } = data
   const wb = XLSX.utils.book_new()
-  const summary: (string | number)[][] = [["Statut", "Commandes", "Total"], ...data.ordersByStatus.map((s) => [STATUS_LBL[s.status] ?? s.status, s.count, s.total])]
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Par statut")
-  const daily: (string | number)[][] = [["Jour", "Commandes", "Revenu"], ...data.ordersByDay.map((d) => [d.name, d.commandes, d.revenu])]
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), "Par jour")
-  XLSX.writeFile(wb, "rapport-commandes-" + todayShort() + ".xlsx")
+  const sheet = (name: string, rows: (string | number)[][], widths: number[]) => {
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws["!cols"] = widths.map((wch) => ({ wch }))
+    XLSX.utils.book_append_sheet(wb, ws, name)
+  }
+
+  sheet("Resume", [
+    ["Indicateur", "Valeur"],
+    ["Période", report.label],
+    ["Point de vente", report.selectedPos?.name ?? "Tous"],
+    ...(filtered ? [["Sélection", "Liste filtrée à l'écran"]] : []),
+    ["Commandes émises", summary.orders],
+    ["Commandes annulées", summary.cancelled],
+    ["Montant annulé", summary.cancelledAmount],
+    ["Montant commandé (hors annulées)", summary.amount],
+    ["Chiffre d'affaires", summary.revenue],
+    ["Non payé", summary.unpaid],
+    ["Articles commandés", summary.items],
+    ["Panier moyen", summary.avgOrder],
+    ["Frais de livraison", summary.deliveryFees],
+    ["Remises", summary.discounts],
+  ], [34, 28])
+
+  sheet("Commandes", [
+    ["Date", "Numéro", "Client", "Téléphone", "Origine", "Point de vente", "Saisie par", "Caissière", "Statut", "Paiement", "État paiement", "Articles", "Sous-total", "Frais livraison", "Remise", "Total", "Mode remise", "État livraison", "Livreur", "Date prévue"],
+    ...lines.map((o) => [
+      dt(o.createdAt), o.orderNumber, o.customerName ?? "", o.customerPhone ?? "",
+      SOURCE_LBL[o.source] ?? o.source, o.pointOfSale ?? "", o.operator ?? "", o.cashier ?? "",
+      ORDER_STATUS_LBL[o.status] ?? o.status, PAYMENT_METHOD_LBL[o.paymentMethod ?? ""] ?? "", PAYMENT_STATUS_LBL[o.paymentStatus] ?? o.paymentStatus,
+      orderItemsText(o), o.subtotal, o.deliveryFee, o.discountAmount, o.total,
+      DELIVERY_MODE_LBL[o.deliveryMode ?? ""] ?? "", DELIVERY_STATUS_LBL[o.deliveryStatus ?? ""] ?? "", o.deliveryAgent ?? "", dt(o.scheduledDate),
+    ]),
+  ], [16, 22, 24, 15, 12, 16, 18, 18, 16, 14, 12, 44, 11, 11, 9, 11, 18, 14, 16, 16])
+
+  sheet("Articles", [
+    ["Date", "Numéro", "Client", "Statut commande", "Produit", "Format", "Quantité", "Prix unitaire", "Montant"],
+    ...lines.flatMap((o) => o.items.map((i) => [
+      dt(o.createdAt), o.orderNumber, o.customerName ?? "", ORDER_STATUS_LBL[o.status] ?? o.status,
+      i.productName, i.format, i.quantity, i.unitPrice, i.amount,
+    ])),
+  ], [16, 22, 24, 16, 24, 10, 9, 11, 11])
+
+  const breakdownSheet = (name: string, rows: OrdersBreakdownRow[], labels?: Record<string, string>) =>
+    sheet(name, [["", "Commandes", "Montant"], ...breakdownRows(rows, labels).map(([label, count, total]) => [label, count, total])], [24, 11, 13])
+  breakdownSheet("Par statut", summary.byStatus, ORDER_STATUS_LBL)
+  breakdownSheet("Par paiement", summary.byPayment, PAYMENT_LBL_ALL)
+  breakdownSheet("Par origine", summary.bySource, SOURCE_LBL)
+  breakdownSheet("Par PDV", summary.byPointOfSale)
+  sheet("Par jour", [["Jour", "Commandes", "Montant"], ...days.map((d) => [d.day.split("-").reverse().join("/"), d.count, d.total])], [12, 11, 13])
+
+  XLSX.writeFile(wb, commandesFile(report, "xlsx"))
 }
 
 // ─── RESERVATIONS ─────────────────────────────────────────────
@@ -608,6 +716,17 @@ export function exportLotsExcel(data: LotsData) {
 
 // ─── CLOTURE DE CAISSE (une session) ──────────────────────────
 
+export interface CashMovementRow {
+  id: string
+  type: string
+  amount: number
+  reason: string
+  reference: string | null
+  createdById: string
+  author: string | null
+  createdAt: string
+}
+
 export interface ClotureReport {
   session: {
     id: string
@@ -624,11 +743,13 @@ export interface ClotureReport {
   reconciliation: {
     openingBalance: number
     revenue: number
+    cashIn?: number
+    cashOut?: number
     expected: number
     closingBalance: number | null
     gap: number | null
   }
-  totals: { orders: number; items: number; products: number; movements: number }
+  totals: { orders: number; items: number; products: number; movements: number; cashMovements?: number }
   orders: {
     id: string
     orderNumber: string
@@ -642,6 +763,7 @@ export interface ClotureReport {
   }[]
   soldByProduct: { variantId: string; productName: string; format: string | null; quantity: number; amount: number }[]
   paymentBreakdown: { method: string; count: number; amount: number }[]
+  cashMovements?: CashMovementRow[]
   movements: {
     id: string
     createdAt: string
@@ -789,15 +911,27 @@ startY: y,
   })
   y = (doc as AutoTableDoc).lastAutoTable.finalY + 8
 
-  // ── 3. Sorties de caisse ──
+    // -- 3. Mouvements manuels de caisse --
+  const cashInRows = (data.cashMovements ?? []).filter((m) => m.type === "IN")
+  const cashOutRows = (data.cashMovements ?? []).filter((m) => m.type === "OUT")
+  const cashInTotal = data.reconciliation.cashIn ?? cashInRows.reduce((s, m) => s + m.amount, 0)
+  const cashOutTotal = data.reconciliation.cashOut ?? cashOutRows.reduce((s, m) => s + m.amount, 0)
   spaceFor(34)
-  y = sectionTitle(doc, y, "3. SORTIES DE CAISSE (dépenses payées en espèces)")
+  y = sectionTitle(doc, y, "3. MOUVEMENTS MANUELS DE CAISSE")
   autoTable(doc, {
-startY: y,
-      pageBreak: "avoid",
-      head: [["N°", "Motif de la dépense", "N° de justificatif", "Montant (FCFA)"]],
-    body: [["1", "", "", ""], ["2", "", "", ""], ["3", "", "", ""]],
-    foot: [["", "", "TOTAL DES SORTIES", ""]],
+    startY: y,
+    pageBreak: "avoid",
+    head: [["Type", "Motif", "Référence", "Auteur", "Montant (FCFA)"]],
+    body: (data.cashMovements ?? []).length > 0
+      ? (data.cashMovements ?? []).map((m) => [
+          m.type === "IN" ? "Encaissement" : "Décaissement",
+          m.reason,
+          m.reference ?? "-",
+          m.author ?? "-",
+          fmt(m.amount),
+        ])
+      : [["-", "Aucun mouvement manuel", "-", "-", "0"]],
+    foot: [["", "", "", "Encaissements / Décaissements", `${fmt(cashInTotal)} / ${fmt(cashOutTotal)}`]],
     styles: { fontSize: 8.5, textColor: [40, 40, 40] },
     headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
     footStyles: { fillColor: [235, 240, 250], fontStyle: "bold", textColor: [31, 79, 163] },
@@ -839,8 +973,10 @@ startY: y,
   doc.text("Total des espèces comptées : ........................................ FCFA", 14, y + 3)
   y += 10
 
-  // ── 5. Rapprochement de caisse ──
+    // -- 5. Rapprochement de caisse --
   const cashAmount = data.paymentBreakdown.find((row) => row.method === "CASH_ON_DELIVERY")?.amount ?? 0
+  const mIn = data.reconciliation.cashIn ?? (data.cashMovements ?? []).filter((m) => m.type === "IN").reduce((s, m) => s + m.amount, 0)
+  const mOut = data.reconciliation.cashOut ?? (data.cashMovements ?? []).filter((m) => m.type === "OUT").reduce((s, m) => s + m.amount, 0)
   spaceFor(52)
   y = sectionTitle(doc, y, "5. RAPPROCHEMENT DE CAISSE")
   autoTable(doc, {
@@ -849,13 +985,13 @@ startY: y,
     head: [["Calcul", "Montant (FCFA)"]],
     body: [
       ["A. Fonds de caisse à l'ouverture", fmt(data.reconciliation.openingBalance)],
-      ["B. Encaissements en espèces (ligne « Espèces » du tableau 2)", fmt(cashAmount)],
-      ["C. Sorties de caisse (total du tableau 3)", ""],
-      ["D. Solde théorique (A + B - C)", ""],
-      ["E. Espèces réellement comptées (billetage)", ""],
-      ["F. Écart (E - D)   [ ] Excédent   /   [ ] Manquant", ""],
-      ["G. Montant versé ou remis au responsable", ""],
-      ["H. Fonds de caisse laissé pour le service suivant", ""],
+      ["B. Encaissements ventes (tous modes, payés)", fmt(data.reconciliation.revenue)],
+      ["B'. Encaissements manuels (tableau 3)", fmt(mIn)],
+      ["C. Décaissements manuels (tableau 3)", fmt(mOut)],
+      ["D. Solde théorique (A + B + B' - C)", fmt(data.reconciliation.expected)],
+      ["E. Espèces réellement comptées (billetage)", data.reconciliation.closingBalance === null ? "" : fmt(data.reconciliation.closingBalance)],
+      ["F. Écart (E - D)", data.reconciliation.gap === null ? "" : fmt(data.reconciliation.gap)],
+      ["Espèces ventes (info)", fmt(cashAmount)],
     ],
     styles: { fontSize: 8.5, textColor: [40, 40, 40], cellPadding: 1.4 },
     headStyles: { fillColor: [31, 79, 163], textColor: [255, 255, 255], fontStyle: "bold" },
@@ -912,16 +1048,26 @@ export function exportClotureCaisseExcel(data: ClotureReport) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resume), "Resume")
 
   const arrears: (string | number | null)[][] = [
-    ["Fond de caisse", "Chiffre d'affaires", "Attendu", "Compte reel", "Ecart"],
+    ["Fond de caisse", "Chiffre d'affaires", "Encaissements manuels", "Décaissements manuels", "Attendu", "Compté réel", "Écart"],
     [
       data.reconciliation.openingBalance,
       data.reconciliation.revenue,
+      data.reconciliation.cashIn ?? 0,
+      data.reconciliation.cashOut ?? 0,
       data.reconciliation.expected,
       data.reconciliation.closingBalance,
       data.reconciliation.gap,
     ],
   ]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(arrears), "Arras")
+
+  const cashMvs: (string | number)[][] = [
+    ["Date", "Type", "Motif", "Référence", "Auteur", "Montant"],
+    ...(data.cashMovements ?? []).map((m) => [
+      m.createdAt, m.type === "IN" ? "Encaissement" : "Décaissement", m.reason, m.reference ?? "", m.author ?? "", m.amount,
+    ]),
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cashMvs), "Mouvements caisse")
 
   const ventes: (string | number)[][] = [
     ["Quantite vendue", "Montant", "Produit", "Format", "Variante"],

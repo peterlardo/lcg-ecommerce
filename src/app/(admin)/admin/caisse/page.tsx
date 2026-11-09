@@ -16,7 +16,7 @@ import {
 } from "lucide-react"
 import { formatPrice } from "@/lib/utils"
 import { PAYMENT_STATUS_LBL } from "@/lib/report-labels"
-import type { ClotureReport } from "@/lib/report-export"
+import { exportClotureCaisseExcel, exportClotureCaissePDF, type ClotureReport } from "@/lib/report-export"
 
 interface PaymentBreakdown {
   method: string
@@ -77,6 +77,7 @@ export default function CaissePage() {
   const { data: auth } = useSession()
   const role = auth?.user?.role as string | undefined
   const canManage = role === "ADMIN" || role === "STOCK_MANAGER"
+  const isAdmin = role === "ADMIN"
 
   const [tab, setTab] = useState<Tab>("jour")
 
@@ -96,6 +97,9 @@ export default function CaissePage() {
   const [cashSaving, setCashSaving] = useState(false)
   const [report, setReport] = useState<ClotureReport | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
+  const [cashMv, setCashMv] = useState<{ type: "IN" | "OUT"; amount: string; reason: string; reference: string }>({ type: "IN", amount: "", reason: "", reference: "" })
+  const [cashMvSaving, setCashMvSaving] = useState(false)
+  const [cashMvEdit, setCashMvEdit] = useState<{ id: string; type: "IN" | "OUT"; amount: string; reason: string; reference: string } | null>(null)
 
   // Journal de caisse
   const [sessions, setSessions] = useState<CashSessionRow[] | null>(null)
@@ -292,19 +296,85 @@ export default function CaissePage() {
         setFeedback({ tone: "error", message: body.error || "Rapport indisponible" })
         return
       }
-      setReport(body as ClotureReport)
+      const reportData = body as ClotureReport
+      setReport(reportData)
       if (stamp) {
+        exportClotureCaissePDF(reportData)
         setFeedback({
           tone: "success",
-          message: `Rapport de clôture généré (${body.session.reportReference}). Vous pouvez fermer la caisse.`,
+          message: `Rapport de clôture généré et téléchargé (${reportData.session.reportReference}). Vous pouvez fermer la caisse.`,
         })
         setSessionKey((key) => key + 1)
+        setJournalKey((key) => key + 1)
       }
     } catch {
       setFeedback({ tone: "error", message: "Erreur réseau" })
     } finally {
       setReportLoading(false)
     }
+  }
+
+
+  const reloadReport = async () => {
+    if (!mySession) return
+    try {
+      const res = await fetch(`/api/points-de-vente/caisse/${mySession.id}/rapport`)
+      if (res.ok) setReport((await res.json()) as ClotureReport)
+    } catch {}
+  }
+
+  const submitCashMovement = async () => {
+    if (!mySession) return
+    const amount = Number(cashMv.amount)
+    if (!Number.isFinite(amount) || amount <= 0 || !cashMv.reason.trim()) {
+      setFeedback({ tone: "error", message: "Montant et motif obligatoires" })
+      return
+    }
+    setCashMvSaving(true)
+    setFeedback(null)
+    try {
+      const res = await fetch(`/api/points-de-vente/caisse/${mySession.id}/mouvements`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: cashMv.type, amount, reason: cashMv.reason.trim(), reference: cashMv.reference.trim() || null }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) { setFeedback({ tone: "error", message: body.error || "Impossible d'ajouter le mouvement" }) }
+      else {
+        setCashMv({ type: "IN", amount: "", reason: "", reference: "" })
+        setFeedback({ tone: "success", message: cashMv.type === "IN" ? "Encaissement ajouté" : "Décaissement ajouté" })
+        await reloadReport()
+      }
+    } catch { setFeedback({ tone: "error", message: "Erreur réseau" }) }
+    finally { setCashMvSaving(false) }
+  }
+
+  const saveCashMovementEdit = async () => {
+    if (!mySession || !cashMvEdit) return
+    const amount = Number(cashMvEdit.amount)
+    if (!Number.isFinite(amount) || amount <= 0 || !cashMvEdit.reason.trim()) return
+    setCashMvSaving(true)
+    try {
+      const res = await fetch(`/api/points-de-vente/caisse/${mySession.id}/mouvements/${cashMvEdit.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: cashMvEdit.type, amount, reason: cashMvEdit.reason.trim(), reference: cashMvEdit.reference.trim() || null }),
+      })
+      if (!res.ok) { const b = await res.json().catch(() => ({})); setFeedback({ tone: "error", message: b.error || "Modification impossible" }) }
+      else { setCashMvEdit(null); setFeedback({ tone: "success", message: "Mouvement modifié" }); await reloadReport() }
+    } catch { setFeedback({ tone: "error", message: "Erreur réseau" }) }
+    finally { setCashMvSaving(false) }
+  }
+
+  const deleteCashMovement = async (mid: string) => {
+    if (!mySession) return
+    setCashMvSaving(true)
+    try {
+      const res = await fetch(`/api/points-de-vente/caisse/${mySession.id}/mouvements/${mid}`, { method: "DELETE" })
+      if (!res.ok) { const b = await res.json().catch(() => ({})); setFeedback({ tone: "error", message: b.error || "Suppression impossible" }) }
+      else { setFeedback({ tone: "success", message: "Mouvement supprimé" }); await reloadReport() }
+    } catch { setFeedback({ tone: "error", message: "Erreur réseau" }) }
+    finally { setCashMvSaving(false) }
   }
 
   const toggleRow = async (id: string) => {
@@ -604,7 +674,61 @@ export default function CaissePage() {
                   </div>
                 )}
 
-                {canManage ? (
+                
+                {mySession?.status === "OPEN" && (
+                  <div className="rounded-lg border border-gray-200 p-3">
+                    <p className="text-xs font-semibold text-gray-900">Mouvements de caisse</p>
+                    <p className="mt-0.5 text-[11px] text-gray-500">Encaissements (+) et décaissements (-) hors ventes. Motif obligatoire.</p>
+                    {canManage && (
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <select value={cashMv.type} onChange={(e)=>setCashMv(v=>({...v,type:e.target.value as "IN"|"OUT"}))} className="rounded-lg border border-gray-300 px-2 py-2 text-xs">
+                          <option value="IN">Encaissement</option>
+                          <option value="OUT">Décaissement</option>
+                        </select>
+                        <input type="number" min={0} value={cashMv.amount} onChange={(e)=>setCashMv(v=>({...v,amount:e.target.value}))} placeholder="Montant" className="rounded-lg border border-gray-300 px-2 py-2 text-xs" />
+                        <input value={cashMv.reason} onChange={(e)=>setCashMv(v=>({...v,reason:e.target.value}))} placeholder="Motif *" className="col-span-2 rounded-lg border border-gray-300 px-2 py-2 text-xs" />
+                        <input value={cashMv.reference} onChange={(e)=>setCashMv(v=>({...v,reference:e.target.value}))} placeholder="Référence (optionnel)" className="rounded-lg border border-gray-300 px-2 py-2 text-xs" />
+                        <button onClick={()=>void submitCashMovement()} disabled={cashMvSaving} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{cashMvSaving?"...":"Ajouter"}</button>
+                      </div>
+                    )}
+                    <div className="mt-2 max-h-40 overflow-y-auto">
+                      {(report?.cashMovements ?? []).length === 0 ? (
+                        <p className="text-[11px] text-gray-500">Aucun mouvement.</p>
+                      ) : (
+                        <table className="w-full text-[11px]">
+                          <tbody className="divide-y divide-gray-100">
+                            {(report?.cashMovements ?? []).map((m)=>(
+                              <tr key={m.id}>
+                                <td className="py-1"><span className={m.type==="IN"?"font-semibold text-green-700":"font-semibold text-red-700"}>{m.type==="IN"?"+":"-"}</span> {formatPrice(m.amount)}</td>
+                                <td className="py-1 text-gray-700">{m.reason}{m.reference ? " ("+m.reference+")" : ""}</td>
+                                <td className="py-1 text-right text-gray-400">{m.author??""}</td>
+                                {isAdmin && mySession.status==="OPEN" && (
+                                  <td className="py-1 text-right whitespace-nowrap">
+                                    <button onClick={()=>setCashMvEdit({id:m.id,type:m.type as "IN"|"OUT",amount:String(m.amount),reason:m.reason,reference:m.reference??""})} className="mr-1 text-gray-500 hover:text-gray-800">Mod.</button>
+                                    <button onClick={()=>void deleteCashMovement(m.id)} className="text-red-500 hover:text-red-700">Suppr.</button>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                    {cashMvEdit && isAdmin && (
+                      <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2">
+                        <p className="text-[11px] font-semibold text-amber-900">Modifier le mouvement (admin)</p>
+                        <div className="mt-1 grid grid-cols-2 gap-1.5">
+                          <select value={cashMvEdit.type} onChange={(e)=>setCashMvEdit(v=>v?{...v,type:e.target.value as "IN"|"OUT"}:v)} className="rounded border border-gray-300 px-2 py-1 text-[11px]"><option value="IN">Encaissement</option><option value="OUT">Décaissement</option></select>
+                          <input type="number" min={0} value={cashMvEdit.amount} onChange={(e)=>setCashMvEdit(v=>v?{...v,amount:e.target.value}:v)} className="rounded border border-gray-300 px-2 py-1 text-[11px]" />
+                          <input value={cashMvEdit.reason} onChange={(e)=>setCashMvEdit(v=>v?{...v,reason:e.target.value}:v)} className="col-span-2 rounded border border-gray-300 px-2 py-1 text-[11px]" />
+                          <input value={cashMvEdit.reference} onChange={(e)=>setCashMvEdit(v=>v?{...v,reference:e.target.value}:v)} className="rounded border border-gray-300 px-2 py-1 text-[11px]" placeholder="Réf." />
+                          <div className="flex gap-1"><button onClick={()=>void saveCashMovementEdit()} disabled={cashMvSaving} className="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white">OK</button><button onClick={()=>setCashMvEdit(null)} className="rounded border px-2 py-1 text-[11px]">Annuler</button></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+{canManage ? (
                   mySession?.status === "OPEN" ? (
                     <div className="space-y-3">
                       <label className="block text-xs font-medium text-gray-700 sm:text-sm">

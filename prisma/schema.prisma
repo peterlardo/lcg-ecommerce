@@ -76,6 +76,7 @@ model User {
   productionSheets     ProductionSheet[]
   stockMovements       StockMovement[]
   openedCashSessions   CashSession[]
+  cashMovements        CashMovement[]      @relation("CashMovementCreator")
   passwordResetTokens  PasswordResetToken[]
   sentMessages         ChatMessage[]        @relation("ChatSender")
   receivedMessages     ChatMessage[]        @relation("ChatReceiver")
@@ -739,12 +740,31 @@ model CashSession {
   reportGeneratedAt DateTime?
   reportReference   String?
 
-  pointOfSale PointOfSale @relation(fields: [pointOfSaleId], references: [id], onDelete: Cascade)
-  openedBy    User?       @relation(fields: [openedById], references: [id], onDelete: SetNull)
+  pointOfSale PointOfSale    @relation(fields: [pointOfSaleId], references: [id], onDelete: Cascade)
+  openedBy    User?          @relation(fields: [openedById], references: [id], onDelete: SetNull)
+  movements   CashMovement[]
 
   @@index([pointOfSaleId, status])
   @@index([pointOfSaleId, openedAt])
   @@index([openedById, status])
+}
+
+model CashMovement {
+  id            String   @id @default(cuid())
+  cashSessionId String
+  type          String   // IN = encaissement, OUT = decaissement
+  amount        Float
+  reason        String
+  reference     String?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cashSession CashSession @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation("CashMovementCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([cashSessionId, createdAt])
+  @@index([createdById])
 }
 
 model ChatMessage {

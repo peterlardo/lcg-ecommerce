@@ -47,7 +47,7 @@ async function buildReport(sessionId: string) {
   const sellerId = session.openedById
   const pointOfSaleId = session.pointOfSaleId
 
-  const [orders, movements] = await Promise.all([
+  const [orders, movements, cashMovements] = await Promise.all([
     getPrisma().order.findMany({
       where: {
         pointOfSaleId,
@@ -73,6 +73,11 @@ async function buildReport(sessionId: string) {
       },
       orderBy: { createdAt: "asc" },
       include: { variant: { include: { product: { select: { name: true } } } } },
+    }),
+    getPrisma().cashMovement.findMany({
+      where: { cashSessionId: sessionId },
+      orderBy: { createdAt: "asc" },
+      include: { createdBy: { select: { id: true, name: true, email: true } } },
     }),
   ])
 
@@ -101,7 +106,9 @@ async function buildReport(sessionId: string) {
 
   const revenue = orders.reduce((sum, order) => sum + order.total, 0)
   const paidOrders = orders.filter((order) => order.paymentStatus === "PAID")
-  const expected = session.openingBalance + paidOrders.reduce((sum, order) => sum + order.total, 0)
+  const cashIn = cashMovements.filter((m) => m.type === "IN").reduce((s, m) => s + m.amount, 0)
+  const cashOut = cashMovements.filter((m) => m.type === "OUT").reduce((s, m) => s + m.amount, 0)
+  const expected = session.openingBalance + paidOrders.reduce((sum, order) => sum + order.total, 0) + cashIn - cashOut
   const gap = session.closingBalance === null ? null : session.closingBalance - expected
 
   const paymentBreakdown = new Map<string, { method: string; count: number; amount: number }>()
@@ -129,6 +136,8 @@ async function buildReport(sessionId: string) {
     reconciliation: {
       openingBalance: session.openingBalance,
       revenue,
+      cashIn,
+      cashOut,
       expected,
       closingBalance: session.closingBalance,
       gap,
@@ -138,6 +147,7 @@ async function buildReport(sessionId: string) {
       items: totalItems,
       products: soldByProduct.size,
       movements: movements.length,
+      cashMovements: cashMovements.length,
     },
     orders: orders.map((order) => ({
       id: order.id,
@@ -152,6 +162,16 @@ async function buildReport(sessionId: string) {
     })),
     soldByProduct: [...soldByProduct.values()].sort((a, b) => b.quantity - a.quantity),
     paymentBreakdown: [...paymentBreakdown.values()].sort((a, b) => b.amount - a.amount),
+    cashMovements: cashMovements.map((m) => ({
+      id: m.id,
+      type: m.type,
+      amount: m.amount,
+      reason: m.reason,
+      reference: m.reference,
+      createdById: m.createdById,
+      author: m.createdBy?.name || m.createdBy?.email || null,
+      createdAt: m.createdAt,
+    })),
     movements: movements.map((movement) => ({
       id: movement.id,
       createdAt: movement.createdAt,
