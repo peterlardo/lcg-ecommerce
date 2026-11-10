@@ -210,6 +210,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [paying, setPaying] = useState<PayableInvoice | null>(null)
   const [loadedAt, setLoadedAt] = useState(0)
   const canWrite = session?.user?.role !== "COMPTABLE"
+  const isAdmin = session?.user?.role === "ADMIN"
 
   // formulaire de création (ou de modification d'un brouillon : `editing`)
   const [creating, setCreating] = useState(false)
@@ -229,6 +230,7 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [today, setToday] = useState("")
   const [formError, setFormError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
   // lu par l'effet du contrat : les prix d'un brouillon rouvert ne sont pas recalculés
   const quoteRef = useRef("")
 
@@ -770,8 +772,13 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
                       </button>
                     )}
                     {canWrite && open && !next && (
-                      <button type="button" onClick={() => act(doc, "cancel")} disabled={busy !== null} className={`${actionButton} border-red-200 bg-white text-red-600 hover:bg-red-50`}>
+                      <button type="button" onClick={() => act(doc, "cancel")} disabled={busy !== null || deleting !== null} className={`${actionButton} border-red-200 bg-white text-red-600 hover:bg-red-50`}>
                         <X className="h-4 w-4" /> Annuler
+                      </button>
+                    )}
+                    {isAdmin && ["DEVIS", "FACTURE", "COMMANDE"].includes(doc.type) && (
+                      <button type="button" onClick={() => removeDoc(doc)} disabled={busy !== null || deleting !== null} className={`${actionButton} border-red-200 bg-white text-red-600 hover:bg-red-50`}>
+                        <Trash2 className="h-4 w-4" /> {deleting === doc.id ? "Suppression…" : "Supprimer"}
                       </button>
                     )}
                   </div>

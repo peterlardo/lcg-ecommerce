@@ -384,3 +384,38 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   return NextResponse.json({ error: "Action inconnue" }, { status: 400 })
 }
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const forbidden = await requireManagementAccess(["ADMIN"])
+  if (forbidden) return forbidden
+
+  const session = await auth()
+  const selfId = session?.user?.id
+  if (!selfId) return NextResponse.json({ error: "Non authentifie" }, { status: 401 })
+
+  const { id } = await params
+  const doc = await getPrisma().b2bDocument.findUnique({
+    where: { id },
+    select: { id: true, type: true, reference: true },
+  })
+  if (!doc) return NextResponse.json({ error: "Introuvable" }, { status: 404 })
+
+  if (!["DEVIS", "FACTURE", "COMMANDE"].includes(doc.type)) {
+    return NextResponse.json({ error: "Ce type de document ne peut pas être supprimé" }, { status: 400 })
+  }
+
+  try {
+    await getPrisma().b2bDocument.delete({ where: { id } })
+    await logActivity({
+      module: "b2b",
+      action: "delete",
+      entity: "B2bDocument",
+      entityId: id,
+      summary: `Suppression ${doc.reference}`,
+    })
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error("delete b2b-document error:", error)
+    return NextResponse.json({ error: "Erreur interne du serveur" }, { status: 500 })
+  }
+}
