@@ -91,6 +91,8 @@ export async function GET(request: Request) {
         cashierId: true,
         sentToCashierAt: true,
         cashier: { select: { id: true, name: true } },
+        partnerId: true,
+        partner: { select: { name: true } },
         createdAt: true,
         items: {
           select: {
@@ -175,6 +177,8 @@ export async function GET(request: Request) {
         pointOfSale: o.pointOfSale ?? null,
         cashierId: o.cashierId ?? null,
         cashierName: o.cashier?.name ?? null,
+        partnerId: o.partnerId ?? null,
+        partnerName: o.partner?.name ?? null,
       }))
     )
   } catch (error) {

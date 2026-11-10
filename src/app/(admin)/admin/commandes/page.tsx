@@ -65,6 +65,8 @@ interface Order {
   pointOfSale?: { name: string } | null
   cashierId?: string | null
   cashierName?: string | null
+  partnerId?: string | null
+  partnerName?: string | null
 }
 
 const orderStatusLabel = (order: Order): string =>
@@ -610,7 +612,17 @@ export default function CommandesPage() {
                       </span>
                     )}
                   </div>
-                  <p className="break-words text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="break-words text-xs sm:text-sm font-medium text-gray-700">{order.customerName}</p>
+                    {order.partnerName && (
+                      <span
+                        title="Partenaire lié à cette commande"
+                        className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800"
+                      >
+                        Partenaire : {order.partnerName}
+                      </span>
+                    )}
+                  </div>
                   {/* qui a créé la commande, et qui l'a encaissée (caissière à qui elle a été transmise, ou vente faite en caisse) */}
                   {(() => {
                     const cashier = order.cashierName ?? (order.source === "CAISSE" ? order.userName ?? null : null)
