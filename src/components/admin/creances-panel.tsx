@@ -46,7 +46,7 @@ export function CreancesPanel() {
   const [message, setMessage] = useState("")
   const [search, setSearch] = useState("")
   const [onlyOverdue, setOnlyOverdue] = useState(false)
-  const [typeFilter, setTypeFilter] = useState<"all" | CreanceClientType>("all")
+  const [typeFilter, setTypeFilter] = useState<"all" | "ORDINAIRES" | "B2B" | "PARTENAIRE">("all")
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
   const [paying, setPaying] = useState<Creance | null>(null)
@@ -97,7 +97,8 @@ export function CreancesPanel() {
     return creances.filter(
       (c) =>
         (!clientFilter || c.clientId === clientFilter) &&
-        (typeFilter === "all" || c.clientType === typeFilter) &&
+        (typeFilter === "all" ||
+          (typeFilter === "ORDINAIRES" ? c.clientType === "B2C" || c.clientType === "ORDINAIRE" : c.clientType === typeFilter)) &&
         (!term || c.clientName.toLowerCase().includes(term) || c.reference.toLowerCase().includes(term)) &&
         (!onlyOverdue || c.overdue),
     )
@@ -241,17 +242,20 @@ export function CreancesPanel() {
             <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50/60 p-3 sm:flex-row sm:flex-wrap sm:items-center">
               <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
                 {(() => {
-                  const labels: Record<CreanceClientType, string> = { B2B: "Clients B2B", B2C: "Clients B2C", PARTENAIRE: "Partenaires", ORDINAIRE: "Ordinaires" }
-                  const present = (Object.keys(labels) as CreanceClientType[]).filter((t) => (typeCounts[t] ?? 0) > 0)
-                  const keys: ("all" | CreanceClientType)[] = ["all", ...present]
-                  return keys.map((k) => (
+                  const tabs: { key: "all" | "ORDINAIRES" | "B2B" | "PARTENAIRE"; label: string; count?: number }[] = [
+                    { key: "all", label: "Tous" },
+                    { key: "ORDINAIRES", label: "Clients ordinaires", count: (typeCounts.B2C ?? 0) + (typeCounts.ORDINAIRE ?? 0) },
+                    { key: "B2B", label: "Clients B2B", count: typeCounts.B2B ?? 0 },
+                    { key: "PARTENAIRE", label: "Clients B2B partenaires", count: typeCounts.PARTENAIRE ?? 0 },
+                  ]
+                  return tabs.map((t) => (
                     <button
-                      key={k}
+                      key={t.key}
                       type="button"
-                      onClick={() => setTypeFilter(k)}
-                      className={`rounded-md px-3 py-1.5 text-sm font-semibold ${typeFilter === k ? "bg-primary text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                      onClick={() => setTypeFilter(t.key)}
+                      className={`rounded-md px-3 py-1.5 text-sm font-semibold ${typeFilter === t.key ? "bg-primary text-white" : "text-gray-700 hover:bg-gray-50"}`}
                     >
-                      {k === "all" ? "Tous" : `${labels[k]}${typeCounts[k] ? ` (${typeCounts[k]})` : ""}`}
+                      {t.count === undefined ? t.label : `${t.label} (${t.count})`}
                     </button>
                   ))
                 })()}
