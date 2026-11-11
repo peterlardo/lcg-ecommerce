@@ -125,6 +125,7 @@ export async function GET() {
       paymentStatus: sale.paymentStatus,
       status: sale.status,
       total: sale.total,
+      amountReceived: paid,
       balance,
       notes: sale.notes,
       createdAt: sale.createdAt.toISOString(),

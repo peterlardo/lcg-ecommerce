@@ -79,8 +79,8 @@ export function invoiceSituation(total: number, payments: { amount: number; vali
 
 /** Source : facture B2B émise (B2bDocument) ou vente comptoir/commande non soldée (Order). */
 export type CreanceKind = "b2b" | "order"
-/** Catégorie de client : B2B/B2C = issu du fichier Client (factures) ; ORDINAIRE = vente/commande sans facture B2B. */
-export type CreanceClientType = "B2B" | "B2C" | "ORDINAIRE"
+/** Catégorie de client : B2B/B2C = fichier Client (factures) ; PARTENAIRE = vente partenaire ; ORDINAIRE = comptoir/commande sans facture B2B ni partenaire. */
+export type CreanceClientType = "B2B" | "B2C" | "PARTENAIRE" | "ORDINAIRE"
 
 export interface CreanceLine {
   id: string
@@ -150,7 +150,8 @@ export async function creanceLines(user: SessionUser, now: Date = new Date()): P
       orderBy: { createdAt: "asc" },
       select: {
         id: true, orderNumber: true, customerName: true, customerPhone: true, customerEmail: true,
-        total: true, createdAt: true, b2bClientId: true,
+        total: true, createdAt: true, b2bClientId: true, partnerId: true,
+        partner: { select: { id: true, name: true, companyName: true } },
       },
     }),
   ])
@@ -212,13 +213,15 @@ export async function creanceLines(user: SessionUser, now: Date = new Date()): P
       const paid = round2(sums.paid)
       const pending = round2(sums.pending)
       const balance = round2(Math.max(0, o.total - paid - pending))
+      const isPartner = Boolean(o.partnerId || o.partner)
+      const partnerName = o.partner?.name || o.partner?.companyName || o.customerName || "Partenaire"
       return {
         id: o.id,
         kind: "order" as const,
-        clientType: "ORDINAIRE" as CreanceClientType,
+        clientType: (isPartner ? "PARTENAIRE" : "ORDINAIRE") as CreanceClientType,
         reference: o.orderNumber,
-        clientId: o.b2bClientId ?? null,
-        clientName: o.customerName || o.customerPhone || o.customerEmail || "Client comptoir",
+        clientId: isPartner ? (o.partnerId ?? o.partner?.id ?? null) : (o.b2bClientId ?? null),
+        clientName: isPartner ? partnerName : (o.customerName || o.customerPhone || o.customerEmail || "Client comptoir"),
         total: o.total,
         credited: 0,
         paid,

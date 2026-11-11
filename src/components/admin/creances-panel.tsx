@@ -8,7 +8,7 @@ import { OrderPaymentDialog } from "@/components/admin/order-payment-dialog"
 import type { AgingBucket, ClientCreance, CreanceSummary } from "@/lib/commercial"
 
 type CreanceKind = "b2b" | "order"
-type CreanceClientType = "B2B" | "B2C" | "ORDINAIRE"
+type CreanceClientType = "B2B" | "B2C" | "PARTENAIRE" | "ORDINAIRE"
 
 interface Creance {
   id: string
@@ -46,7 +46,7 @@ export function CreancesPanel() {
   const [message, setMessage] = useState("")
   const [search, setSearch] = useState("")
   const [onlyOverdue, setOnlyOverdue] = useState(false)
-  const [kindFilter, setKindFilter] = useState<"all" | CreanceKind>("all")
+  const [typeFilter, setTypeFilter] = useState<"all" | CreanceClientType>("all")
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
   const [paying, setPaying] = useState<Creance | null>(null)
@@ -56,7 +56,7 @@ export function CreancesPanel() {
   const [aging, setAging] = useState<AgingBucket[]>([])
   const [byClient, setByClient] = useState<ClientCreance[]>([])
   const [clientFilter, setClientFilter] = useState<string | null>(null)
-  const [kindCounts, setKindCounts] = useState({ b2b: 0, order: 0 })
+  const [typeCounts, setTypeCounts] = useState<Partial<Record<CreanceClientType, number>>>({})
 
   // arrivée depuis une facture (« Encaisser ») : ?q=<référence> pré-remplit la recherche
   useEffect(() => {
@@ -81,7 +81,7 @@ export function CreancesPanel() {
         setSummary(data.summary ?? null)
         setAging(Array.isArray(data.aging) ? data.aging : [])
         setByClient(Array.isArray(data.byClient) ? data.byClient : [])
-        setKindCounts(data.kindCounts ?? { b2b: 0, order: 0 })
+        setTypeCounts(data.typeCounts ?? {})
       } catch (e) {
         if (!(e instanceof DOMException && e.name === "AbortError")) setError("Connexion au serveur impossible")
       } finally {
@@ -97,11 +97,11 @@ export function CreancesPanel() {
     return creances.filter(
       (c) =>
         (!clientFilter || c.clientId === clientFilter) &&
-        (kindFilter === "all" || c.kind === kindFilter) &&
+        (typeFilter === "all" || c.clientType === typeFilter) &&
         (!term || c.clientName.toLowerCase().includes(term) || c.reference.toLowerCase().includes(term)) &&
         (!onlyOverdue || c.overdue),
     )
-  }, [creances, search, onlyOverdue, clientFilter, kindFilter])
+  }, [creances, search, onlyOverdue, clientFilter, typeFilter])
 
   // encours par client : sert à signaler le dépassement du plafond de crédit
   const exposure = useMemo(() => {
@@ -150,10 +150,10 @@ export function CreancesPanel() {
           </h1>
           <p className="mt-1 text-sm text-gray-500">
             {tab === "factures"
-              ? `Impayés à recouvrer · ${filtered.length} ligne${filtered.length > 1 ? "s" : ""} · reste ${formatPrice(totalBalance)}${kindCounts.order ? ` · ${kindCounts.b2b} facture(s) B2B, ${kindCounts.order} vente(s) ordinaire(s)` : ""}`
+              ? `Impayés à recouvrer — ${filtered.length} ligne${filtered.length > 1 ? "s" : ""} — reste ${formatPrice(totalBalance)}`
               : tab === "aging"
-                ? `Balance âgée par échéance (factures B2B) · ${aging.reduce((n, b) => n + b.count, 0)} facture(s) ouverte(s)`
-                : `Encours par client B2B · ${byClient.length} client(s) débiteur(s)`}
+                ? `Balance âgée par échéance — ${aging.reduce((n, b) => n + b.count, 0)} ligne(s) ouverte(s)`
+                : `Encours par client — ${byClient.length} client(s) débiteur(s)`}
           </p>
         </div>
       </div>
@@ -201,7 +201,7 @@ export function CreancesPanel() {
           <div className="-mb-px flex gap-1 overflow-x-auto">
             {(
               [
-                { key: "factures", label: "Factures ouvertes", count: kindCounts.b2b + kindCounts.order, Icon: FileText },
+                { key: "factures", label: "Factures ouvertes", count: creances.length, Icon: FileText },
                 { key: "aging", label: "Balance âgée", count: aging.reduce((n, b) => n + b.count, 0), Icon: Clock3 },
                 { key: "clients", label: "Par client", count: byClient.length, Icon: Users },
               ] as { key: "factures" | "aging" | "clients"; label: string; count: number; Icon: typeof FileText }[]
@@ -240,22 +240,21 @@ export function CreancesPanel() {
           <>
             <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50/60 p-3 sm:flex-row sm:flex-wrap sm:items-center">
               <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
-                {(
-                  [
-                    { key: "all", label: "Tous" },
-                    { key: "b2b", label: `Clients B2B${kindCounts.b2b ? ` (${kindCounts.b2b})` : ""}` },
-                    { key: "order", label: `Ordinaires${kindCounts.order ? ` (${kindCounts.order})` : ""}` },
-                  ] as { key: "all" | CreanceKind; label: string }[]
-                ).map((k) => (
-                  <button
-                    key={k.key}
-                    type="button"
-                    onClick={() => setKindFilter(k.key)}
-                    className={`rounded-md px-3 py-1.5 text-sm font-semibold ${kindFilter === k.key ? "bg-primary text-white" : "text-gray-700 hover:bg-gray-50"}`}
-                  >
-                    {k.label}
-                  </button>
-                ))}
+                {(() => {
+                  const labels: Record<CreanceClientType, string> = { B2B: "Clients B2B", B2C: "Clients B2C", PARTENAIRE: "Partenaires", ORDINAIRE: "Ordinaires" }
+                  const present = (Object.keys(labels) as CreanceClientType[]).filter((t) => (typeCounts[t] ?? 0) > 0)
+                  const keys: ("all" | CreanceClientType)[] = ["all", ...present]
+                  return keys.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setTypeFilter(k)}
+                      className={`rounded-md px-3 py-1.5 text-sm font-semibold ${typeFilter === k ? "bg-primary text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                    >
+                      {k === "all" ? "Tous" : `${labels[k]}${typeCounts[k] ? ` (${typeCounts[k]})` : ""}`}
+                    </button>
+                  ))
+                })()}
               </div>
               <div className="relative min-w-0 sm:w-64">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -306,9 +305,9 @@ export function CreancesPanel() {
                     </td>
                     <td className="px-3 py-2.5">
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.kind === "b2b" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-700"}`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${c.clientType === "PARTENAIRE" ? "bg-amber-100 text-amber-700" : c.kind === "b2b" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-700"}`}
                       >
-                        {c.clientType === "ORDINAIRE" ? "Ordinaire" : c.clientType}
+                        {c.clientType === "ORDINAIRE" ? "Ordinaire" : c.clientType === "PARTENAIRE" ? "Partenaire" : c.clientType}
                       </span>
                     </td>
                     <td className="px-3 py-2.5">

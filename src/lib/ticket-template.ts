@@ -19,6 +19,10 @@ export interface TicketData {
   paymentMethod: string | null
   paymentStatus?: string | null
   total: number
+  /** Montant encaissé par la caisse (validé). */
+  amountReceived?: number
+  /** Reste à payer (créance). */
+  balanceDue?: number
   createdAt: string
   pointOfSale?: { name: string; code: string } | null
   items: TicketItem[]
@@ -27,7 +31,7 @@ export interface TicketData {
 
 const COMPANY = {
   legal: "LCG-SARL",
-  address: "97 Rue EWO, Ouenzé — Brazzaville",
+  address: "97 Rue EWO, Ouenzé - Brazzaville",
   phones: "+242 06 739 49 49 · +242 05 607 91 91",
   website: siteConfig.url.replace(/^https?:\/\//, ""),
 }
@@ -95,7 +99,10 @@ export function printTicketWindow(win: Window): void {
 
 export function buildTicketHtml(ticket: TicketData): string {
   const paymentLabel = PAYMENT_LABELS[ticket.paymentMethod || ""] || ticket.paymentMethod || "-"
-  const stamp = PAYMENT_STAMPS[ticket.paymentStatus || "PAID"] || "PAYÉ"
+  const balanceDue = Math.max(0, Number(ticket.balanceDue ?? 0))
+  const amountReceived = Math.max(0, Number(ticket.amountReceived ?? (ticket.total - balanceDue)))
+  const hasBalance = balanceDue > 0.005
+  const stamp = hasBalance ? "RESTE À PAYER" : (PAYMENT_STAMPS[ticket.paymentStatus || "PAID"] || "PAYÉ")
   const pos = ticket.pointOfSale ? ticket.pointOfSale.name : "Comptoir"
   const logoUrl = ticket.logo || TICKET_LOGO
 
@@ -118,6 +125,14 @@ export function buildTicketHtml(ticket: TicketData): string {
 </tr>`
     })
     .join("\n")
+
+  const paymentBlock = hasBalance
+    ? `<div class="totals">
+  <div class="row"><span>Montant reçu</span><b>${formatPrice(amountReceived)}</b></div>
+  <div class="row due"><span>Reste à payer</span><b>${formatPrice(balanceDue)}</b></div>
+</div>
+<div class="stamp due-stamp">RESTE À PAYER<small>${formatPrice(balanceDue)}</small></div>`
+    : `<div class="stamp">${stamp}<small>${escapeHtml(paymentLabel)}</small></div>`
 
   return `<!DOCTYPE html>
 <html>
@@ -166,8 +181,12 @@ export function buildTicketHtml(ticket: TicketData): string {
   .band span, .band b { position: relative; }
   .band span { font-size: 12px; letter-spacing: 1.5px; padding-top: 3px; }
   .band b { font-size: 20px; white-space: nowrap; }
+  .totals { margin: 4px 0 6px; font-size: 12px; }
+  .totals .row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; }
+  .totals .due b { font-size: 14px; }
   .stamp { border: 2px solid #000; border-radius: 4px; text-align: center; padding: 3px 0; letter-spacing: 3px; font-size: 16px; margin: 0 7mm; }
   .stamp small { display: block; letter-spacing: .5px; font-size: 11px; }
+  .due-stamp { letter-spacing: 1px; font-size: 13px; }
   .foot { text-align: center; font-size: 11px; }
   .foot b { display: block; font-size: 13px; margin-bottom: 1px; }
 </style>
@@ -196,13 +215,13 @@ ${rows}
 </table>
 
 <div class="band"><span>TOTAL</span><b>${formatPrice(ticket.total)}</b></div>
-<div class="stamp">${stamp}<small>${escapeHtml(paymentLabel)}</small></div>
+${paymentBlock}
 
 <div class="rule"></div>
 <div class="foot">
   <b>Merci pour votre confiance !</b>
   <div>Commandez en ligne sur ${escapeHtml(COMPANY.website)}</div>
-  <div>Livraison à domicile · Brazzaville</div>
+  <div>Livraison à domicile à Brazzaville</div>
 </div>
 
 </body>

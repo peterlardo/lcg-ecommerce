@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireManagementAccess } from "@/lib/api-auth"
 import { auth } from "@/lib/auth"
 import { isCashierRole } from "@/lib/permissions"
-import { creanceAging, creanceByClient, creanceLines, creanceSummary, type SessionUser } from "@/lib/commercial"
+import { creanceAging, creanceByClient, creanceLines, creanceSummary, type CreanceClientType, type SessionUser } from "@/lib/commercial"
 import { seesAllOrders } from "@/lib/api-auth"
 
 export const dynamic = "force-dynamic"
@@ -22,14 +22,18 @@ export async function GET() {
     const all = await creanceLines(user, now)
     const showOrdinary = seesAllOrders(user?.role)
     const creances = showOrdinary ? all : all.filter((c) => c.kind === "b2b")
+    const typeCounts = creances.reduce((acc, c) => {
+      acc[c.clientType] = (acc[c.clientType] || 0) + 1
+      return acc
+    }, {} as Record<CreanceClientType, number>)
     return NextResponse.json({
       creances,
       count: creances.length,
-      // total à recouvrer : identique à summary.totalBalance (mêmes arrondis)
+      // total � recouvrer : identique � summary.totalBalance (m�mes arrondis)
       total: Math.round(creances.reduce((s, c) => s + Math.max(0, c.balance), 0) * 100) / 100,
-      // seuls l'administrateur et la caisse valident un règlement saisi par un commercial
+      // seuls l'administrateur et la caisse valident un r�glement saisi par un commercial
       canValidate: user?.role === "ADMIN" || isCashierRole(user?.role),
-      // vue de recouvrement (sous-projet A) : calculée sur les mêmes lignes, jamais en SQL
+      // vue de recouvrement (sous-projet A) : calcul�e sur les m�mes lignes, jamais en SQL
       summary: creanceSummary(creances, now),
       aging: creanceAging(creances, now),
       byClient: creanceByClient(creances, now),
@@ -37,6 +41,7 @@ export async function GET() {
         b2b: all.filter((c) => c.kind === "b2b").length,
         order: showOrdinary ? all.filter((c) => c.kind === "order").length : 0,
       },
+      typeCounts,
     })
   } catch (error) {
     console.error("GET commercial/creances error:", error)

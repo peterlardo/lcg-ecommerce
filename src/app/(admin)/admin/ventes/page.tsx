@@ -72,7 +72,10 @@ interface SaleReceipt {
   customerPhone?: string
   seller?: string | null
   paymentMethod?: string
+  paymentStatus?: string
   total: number
+  amountReceived?: number
+  balance?: number
   createdAt: string
   items: { name: string; format: string; quantity: number; price: number; total: number }[]
 }
@@ -97,6 +100,7 @@ interface SaleHistoryItem {
   paymentStatus: string
   status: string
   total: number
+  amountReceived?: number
   balance?: number
   notes: string | null
   createdAt: string
@@ -223,8 +227,10 @@ export default function VentesPage() {
         customerPhone: ticket.customerPhone,
         sellerName: ticket.seller || null,
         paymentMethod: ticket.paymentMethod || "CASH_ON_DELIVERY",
-        paymentStatus: "PAID",
+        paymentStatus: ticket.paymentStatus || "PAID",
         total: ticket.total,
+        amountReceived: ticket.amountReceived,
+        balanceDue: ticket.balance,
         createdAt: ticket.createdAt,
         pointOfSale: pointOfSale ? { name: pointOfSale.name, code: pointOfSale.code } : null,
         items: ticket.items,
@@ -246,6 +252,8 @@ export default function VentesPage() {
         paymentMethod: sale.paymentMethod || "CASH_ON_DELIVERY",
         paymentStatus: sale.paymentStatus || "PAID",
         total: sale.total,
+        amountReceived: sale.amountReceived ?? Math.max(0, sale.total - Number(sale.balance ?? 0)),
+        balanceDue: sale.balance,
         createdAt: sale.createdAt,
         pointOfSale: sale.pointOfSale ? { name: sale.pointOfSale.name, code: sale.pointOfSale.code } : null,
         items: sale.items,
@@ -971,7 +979,8 @@ export default function VentesPage() {
                       <div className="space-y-1 text-xs sm:text-sm">
                     <p><span className="text-gray-500">Client :</span> {receipt.customerName || "Client comptoir"}</p>
                     <p><span className="text-gray-500">Paiement :</span> {receipt.paymentMethod === "MOBILE_MONEY" ? "Mobile Money" : receipt.paymentMethod === "CARD" ? "Carte" : "Espèces"}</p>
-                    <p><span className="text-gray-500">Statut :</span> <span className="text-green-600 font-medium">Payé</span></p>
+                    <p><span className="text-gray-500">Montant reçu :</span> <span className="font-medium">{formatPrice(Number(receipt.amountReceived ?? receipt.total))}</span></p>
+                    <p><span className="text-gray-500">Statut :</span> {Number(receipt.balance ?? 0) > 0.005 ? <span className="font-medium text-amber-700">Reste à payer {formatPrice(Number(receipt.balance ?? 0))}</span> : <span className="font-medium text-green-600">Payé</span>}</p>
                   </div>
                   <div className="mt-3 border-t border-gray-100 pt-3 space-y-1">
                     {receipt.items.map((item, i) => (
@@ -988,8 +997,8 @@ export default function VentesPage() {
                 <div className="rounded-lg border border-gray-200 bg-white p-3">
                   <p className="mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Aperçu du ticket</p>
                   <iframe
-                    ref={(el) => { if (el) { try { el.contentDocument?.open(); el.contentDocument?.write(buildTicketHtml({ orderNumber: receipt.orderNumber, customerName: receipt.customerName || "Client comptoir", customerPhone: receipt.customerPhone, sellerName: receipt.seller || null, paymentMethod: receipt.paymentMethod || "CASH_ON_DELIVERY", paymentStatus: "PAID", total: receipt.total, createdAt: receipt.createdAt, pointOfSale: (() => { const point = pointsOfSale.find((p) => p.id === pointOfSaleId); return point ? { name: point.name, code: point.code } : null })(), items: receipt.items })); el.contentDocument?.close(); } catch {} } }}
-                    title="Aperçu ticket"
+                    ref={(el) => { if (el) { try { el.contentDocument?.open(); el.contentDocument?.write(buildTicketHtml({ orderNumber: receipt.orderNumber, customerName: receipt.customerName || "Client comptoir", customerPhone: receipt.customerPhone, sellerName: receipt.seller || null, paymentMethod: receipt.paymentMethod || "CASH_ON_DELIVERY", paymentStatus: receipt.paymentStatus || "PAID", total: receipt.total, amountReceived: receipt.amountReceived, balanceDue: receipt.balance, createdAt: receipt.createdAt, pointOfSale: (() => { const point = pointsOfSale.find((p) => p.id === pointOfSaleId); return point ? { name: point.name, code: point.code } : null })(), items: receipt.items })); el.contentDocument?.close(); } catch {} } }}
+                    title="Aper�u ticket"
                     className="h-[360px] w-full rounded border-0 sm:h-[420px]"
                   />
                 </div>
@@ -1421,7 +1430,11 @@ export default function VentesPage() {
                   <div className="flex items-center gap-4 sm:text-right">
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{formatPrice(sale.total)}</p>
-                      <p className="text-xs text-gray-500">{new Date(sale.createdAt).toLocaleDateString("fr-FR")} {new Date(sale.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</p>
+                      {Number(sale.balance ?? 0) > 0.005 ? (
+                        <p className="text-xs font-medium text-amber-700">Reste � payer {formatPrice(Number(sale.balance ?? 0))}</p>
+                      ) : (
+                        <p className="text-xs text-gray-500">{new Date(sale.createdAt).toLocaleDateString("fr-FR")} {new Date(sale.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</p>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -1466,7 +1479,8 @@ export default function VentesPage() {
                       {sale.seller?.name && <p><span className="text-gray-500">Vendeur :</span> <span className="font-medium">{sale.seller.name}</span></p>}
                       {sale.cashier?.name && <p><span className="text-gray-500">Encaissée par :</span> <span className="font-medium">{sale.cashier.name}</span></p>}
                       <p><span className="text-gray-500">Paiement :</span> <span className="font-medium">{paymentLabels[sale.paymentMethod] || sale.paymentMethod}</span></p>
-                      <p><span className="text-gray-500">Statut :</span> {sale.paymentStatus === "PAID" ? <span className="font-medium text-green-600">Payé</span> : <span className="font-medium text-amber-700">En attente (solde {formatPrice(Number(sale.balance ?? 0))})</span>}</p>
+                      <p><span className="text-gray-500">Montant reçu :</span> <span className="font-medium">{formatPrice(Number(sale.amountReceived ?? (sale.total - Number(sale.balance ?? 0))))}</span></p>
+                      <p><span className="text-gray-500">Statut :</span> {Number(sale.balance ?? 0) > 0.005 ? <span className="font-medium text-amber-700">Reste à payer {formatPrice(Number(sale.balance ?? 0))}</span> : <span className="font-medium text-green-600">Payé</span>}</p>
                       {sale.pointOfSale && <p><span className="text-gray-500">Point de vente :</span> <span className="font-medium">{sale.pointOfSale.name} ({sale.pointOfSale.code})</span></p>}
                       {sale.notes && <p><span className="text-gray-500">Notes :</span> <span className="font-medium">{sale.notes}</span></p>}
                       {sale.paymentStatus !== "PAID" && Number(sale.balance ?? 0) > 0.005 && (
