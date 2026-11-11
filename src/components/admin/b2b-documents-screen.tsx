@@ -231,8 +231,29 @@ export function B2bDocumentsScreen({ title, subtitle, types, creatable }: { titl
   const [formError, setFormError] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
-  // lu par l'effet du contrat : les prix d'un brouillon rouvert ne sont pas recalculés
+  // lu par l'effet du contrat : les prix d'un brouillon rouvert ne sont pas recalcul�s
   const quoteRef = useRef("")
+
+  const removeDoc = async (doc: B2bDocument) => {
+    if (deleting || !confirm(`Supprimer ${doc.reference} ? Cette action est irréversible.`)) return
+    setDeleting(doc.id)
+    setError("")
+    setMessage("")
+    try {
+      const res = await fetch(`/api/b2b-documents/${doc.id}`, { method: "DELETE" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setError(data?.error || "Suppression impossible")
+        return
+      }
+      setMessage(`Document ${doc.reference} supprimé`)
+      setReload((r) => r + 1)
+    } catch {
+      setError("Connexion au serveur impossible")
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController()
