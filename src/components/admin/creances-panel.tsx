@@ -378,7 +378,7 @@ export function CreancesPanel() {
                                 <HandCoins className="h-4 w-4" /> Encaisser
                               </button>
                             )}
-                            <a href={`/admin/commandes/${c.id}`} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                            <a href={`/admin/commandes/${c.id}/facture`} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                               Voir commande
                             </a>
                           </div>
